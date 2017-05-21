@@ -1,0 +1,34 @@
+syntax = "proto3";
+import "google/protobuf/timestamp.proto";
+
+package message;
+
+service job {
+    rpc GetJob(Name) returns (Job) {}
+    rpc ExecDone(Execution) returns (Result) {}
+}
+
+message Name {
+    string jobName = 1;
+}
+
+message Job {
+    string jobName = 1;
+    string cmd = 2;
+    bool shell = 3;
+    bool running = 4;
+    bool enabled = 5;
+}
+
+message Execution {
+    string name = 1;
+    string cmd = 2;
+    string output = 3;
+    bool succeed = 4;
+    google.protobuf.Timestamp startTime = 5;
+    google.protobuf.Timestamp finishTime = 6;
+}
+
+message Result {
+    bool err = 1;
+}
