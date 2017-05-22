@@ -9,6 +9,7 @@ import (
 	"errors"
 	"encoding/base64"
 	"local/djob/cmd"
+	"path/filepath"
 )
 
 type Config struct {
@@ -36,17 +37,19 @@ type Config struct {
 	RpcBindPort       int
 	RpcAdcertiseIP    string // sames to serf advertise addr
 	RpcAdcertisePort  int
+	SerfSnapshotPath  string //serf use this path to save snapshot of joined server
 }
 
 const (
-	DefaultRegion     string = "MARS"
-	DefaultSerfPort   int    = 8998
-	DefaultHttpPort   int    = 8088
-	DefaultRPCPort    int    = 7979
-	DefaultConfigFile string = "./conf/djob.yml"
-	DefaultPidFile    string = "./djob.pid"
-	DefaultLogFile    string = "./djob.log"
-	DefaultKeySpeace  string = "djob"
+	DefaultRegion       string = "MARS"
+	DefaultSerfPort     int    = 8998
+	DefaultHttpPort     int    = 8088
+	DefaultRPCPort      int    = 7979
+	DefaultSnapshotPath string = "./snapshot"
+	DefaultConfigFile   string = "./conf/djob.yml"
+	DefaultPidFile      string = "./djob.pid"
+	DefaultLogFile      string = "./djob.log"
+	DefaultKeySpeace    string = "djob"
 )
 
 //func init() {
@@ -56,10 +59,15 @@ const (
 //}
 
 func NewConfig(args []string) (*Config, error) {
+	runRoot, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err != nil {
+		return nil, err
+	}
+
 	cmdFlags := flag.NewFlagSet("agent", flag.ContinueOnError)
-	cmdFlags.String("config", DefaultConfigFile, "config file path")
-	cmdFlags.String("pid", DefaultPidFile, "pid file path")
-	cmdFlags.String("logfile", DefaultLogFile, "log file path")
+	cmdFlags.String("config", filepath.Join(runRoot, DefaultConfigFile), "config file path")
+	cmdFlags.String("pid", filepath.Join(runRoot, DefaultPidFile), "pid file path")
+	cmdFlags.String("logfile", filepath.Join(runRoot, DefaultLogFile), "log file path")
 
 	if err := cmdFlags.Parse(args); err != nil {
 		return nil, err
@@ -74,6 +82,7 @@ func NewConfig(args []string) (*Config, error) {
 	viper.SetDefault("rpc_tls", false)
 	viper.SetDefault("region", DefaultRegion)
 	viper.SetDefault("server", false)
+	viper.SetDefault("serf_snapshot_dir", filepath.Join(runRoot, DefaultSnapshotPath))
 
 	return ReadConfig()
 }
@@ -97,6 +106,7 @@ func ReadConfig() (*Config, error) {
 
 	tags["version"] = cmd.Version
 	tags["node"] = nodeName
+	tags["region"] = viper.GetString("region")
 
 	withTls := viper.GetBool("rpc_tls")
 	keyFile := viper.GetString("rpc_key_file")
@@ -139,7 +149,7 @@ func ReadConfig() (*Config, error) {
 
 	return &Config{
 		Server:            server,
-		Region:            viper.GetString("region"),
+		Region:            tags["region"],
 		Tags:              tags,
 		SerfBindIp:        serfBindip,
 		SerfBindPort:      serfBindport,
@@ -161,11 +171,12 @@ func ReadConfig() (*Config, error) {
 		JobStoreKeyspace:  viper.GetString("job_store_keyspeace"),
 		SerfJoin:          viper.GetStringSlice("join"),
 		Nodename:          nodeName,
-		encryptKey:viper.GetString("encrypt_key"),
+		encryptKey:        viper.GetString("encrypt_key"),
+		SerfSnapshotPath:  viper.GetString("serf_snapshot_dir"),
 	}, nil
 }
 
-func (c *Config)EncryptKey() ([]byte, error){
+func (c *Config) EncryptKey() ([]byte, error) {
 	return base64.StdEncoding.DecodeString(c.encryptKey)
 }
 

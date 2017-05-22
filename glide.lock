@@ -1,12 +1,18 @@
-hash: dac73c3dc483dddd4958fe70a6e32a062f821c5b6a873ca4f7c542520be9a452
-updated: 2017-05-19T17:28:10.081143972+08:00
+hash: b535c936f36e2215f30b03bc00f55aab1d1d94b207e54d7a5a394092f3215b97
+updated: 2017-05-22T17:04:34.197073197+08:00
 imports:
-- name: github.com/armon/go-radix
-  version: 4239b77079c7b5d1243b7b4736304ce8ddb6f0f2
-- name: github.com/bgentry/speakeasy
-  version: 4aabc24848ce5fd31929f7d1e4ea74d3709c14cd
+- name: bitbucket.org/tebeka/strftime
+  version: 2194253a23c090a4d5953b152a3c63fb5da4f5a4
+- name: github.com/armon/go-metrics
+  version: 93f237eba9b0602f3e73710416558854a81d9337
+- name: github.com/docker/libkv
+  version: aabc039ad04deb721e234f99cd1b4aa28ac71a40
+  subpackages:
+  - store
 - name: github.com/fsnotify/fsnotify
   version: 4da3e2cfbabc9f751898f250b49f2439785783a1
+- name: github.com/go-martini/martini
+  version: 49411a5b646861ad29a6ddd5351717a0a9c49b94
 - name: github.com/golang/protobuf
   version: fec3b39b059c0f88fa6b20f5ed012b1aa203a8b4
   subpackages:
@@ -15,6 +21,16 @@ imports:
   - ptypes/any
   - ptypes/duration
   - ptypes/timestamp
+- name: github.com/hashicorp/errwrap
+  version: 7554cd9344cec97297fa6649b055a8c98c2a1e55
+- name: github.com/hashicorp/go-msgpack
+  version: fa3f63826f7c23912c15263591e65d54d080b458
+  subpackages:
+  - codec
+- name: github.com/hashicorp/go-multierror
+  version: ed905158d87462226a13fe39ddf685ea65f1c11f
+- name: github.com/hashicorp/go-sockaddr
+  version: acd314c5781ea706c710d9ea70069fd2e110d61d
 - name: github.com/hashicorp/hcl
   version: 392dba7d905ed5d04a5794ba89f558b27e2ba1ca
   subpackages:
@@ -26,12 +42,19 @@ imports:
   - json/parser
   - json/scanner
   - json/token
+- name: github.com/hashicorp/memberlist
+  version: 679583836ce521ac7a4cd6e6806bab9dba8fbdb8
+- name: github.com/hashicorp/serf
+  version: d6574a5bb1226678d7010325fb6c985db20ee458
+  subpackages:
+  - coordinate
+  - serf
 - name: github.com/lestrrat/go-file-rotatelogs
   version: ab335c655133cea61d8164853c1ed0e97d6c77cb
 - name: github.com/magiconair/properties
   version: 51463bfca2576e06c62a8504b5c0f06d61312647
-- name: github.com/mattn/go-isatty
-  version: fc9e8d8ef48496124e79ae0df75490096eccf6fe
+- name: github.com/miekg/dns
+  version: f282f80e243cc2bf8f6410c30d821b93b794e168
 - name: github.com/mitchellh/cli
   version: ee8578a9c12a5bb9d55303b9665cc448772c81b8
 - name: github.com/mitchellh/mapstructure
@@ -42,6 +65,8 @@ imports:
   version: 685a1f1cb7a66b9cadbe8f1ac49d9f8f567d6a9d
 - name: github.com/rifflock/lfshook
   version: 2adb3e0c4ddd8778c4adde609d2dfd4fbe6096ea
+- name: github.com/sean-/seed
+  version: e2103e2c35297fb7e17febb81e49b312087a2372
 - name: github.com/Sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/spf13/afero
