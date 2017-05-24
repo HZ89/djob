@@ -3,8 +3,8 @@ package djob
 import (
 	"github.com/Sirupsen/logrus"
 	"github.com/lestrrat/go-file-rotatelogs"
-	"time"
 	"github.com/rifflock/lfshook"
+	"time"
 )
 
 var Log = logrus.NewEntry(logrus.New())
@@ -14,19 +14,19 @@ func InitLogger(logLevel string, node string, file string) {
 	formattedLogger := logrus.New()
 	formattedLogger.Formatter = &logrus.TextFormatter{FullTimestamp: true}
 
-	if file != ""{
+	if file != "" {
 		writer := rotatelogs.New(
 			file,
 			rotatelogs.WithLinkName(file),
-			rotatelogs.WithRotationTime(time.Duration(2073600) * time.Second),
+			rotatelogs.WithRotationTime(time.Duration(2073600)*time.Second),
 		)
 		formattedLogger.Hooks.Add(lfshook.NewHook(lfshook.WriterMap{
-			logrus.InfoLevel: writer,
+			logrus.InfoLevel:  writer,
 			logrus.DebugLevel: writer,
 			logrus.PanicLevel: writer,
 			logrus.ErrorLevel: writer,
 			logrus.FatalLevel: writer,
-			logrus.WarnLevel: writer,
+			logrus.WarnLevel:  writer,
 		}))
 	}
 

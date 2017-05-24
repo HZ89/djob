@@ -1,14 +1,14 @@
 package djob
 
 import (
+	"encoding/base64"
+	"errors"
 	"flag"
-	"github.com/spf13/viper"
 	"fmt"
+	"github.com/spf13/viper"
+	"local/djob/cmd"
 	"net"
 	"os"
-	"errors"
-	"encoding/base64"
-	"local/djob/cmd"
 	"path/filepath"
 )
 
@@ -104,7 +104,7 @@ func ReadConfig() (*Config, error) {
 		tags["server"] = "true"
 	}
 
-	tags["version"] = cmd.Version
+	tags["version"] = cmd.VERSION
 	tags["node"] = nodeName
 	tags["region"] = viper.GetString("region")
 

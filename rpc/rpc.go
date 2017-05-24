@@ -1,14 +1,14 @@
 package rpc
 
 import (
-	pb "local/djob/message"
-	"local/djob/job"
-	"github.com/golang/protobuf/ptypes"
-	"google.golang.org/grpc"
-	"net"
 	"fmt"
-	"google.golang.org/grpc/credentials"
+	"github.com/golang/protobuf/ptypes"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"local/djob/job"
+	pb "local/djob/message"
+	"net"
 	"time"
 )
 
@@ -178,8 +178,8 @@ func (c *RpcClient) Shutdown() error {
 	return nil
 }
 
-func (c *RpcClient)GotJob(jobName string) (*job.Job, error)  {
-	pbName := pb.Name{JobName:jobName}
+func (c *RpcClient) GotJob(jobName string) (*job.Job, error) {
+	pbName := pb.Name{JobName: jobName}
 	pbjob, err := c.client.GetJob(context.Background(), &pbName)
 	if err != nil {
 		return nil, err
@@ -190,16 +190,16 @@ func (c *RpcClient)GotJob(jobName string) (*job.Job, error)  {
 	}, nil
 }
 
-func (c *RpcClient)ExecDone(execution *job.Execution) (bool, error) {
+func (c *RpcClient) ExecDone(execution *job.Execution) (bool, error) {
 	pstime, _ := ptypes.TimestampProto(execution.StartTime)
 	pftime, _ := ptypes.TimestampProto(execution.FinishTime)
 	pbexecution := &pb.Execution{
-		Name: execution.Name,
-		Cmd: execution.Cmd,
-		Output: string(execution.Output),
-		StartTime: pstime,
+		Name:       execution.Name,
+		Cmd:        execution.Cmd,
+		Output:     string(execution.Output),
+		StartTime:  pstime,
 		FinishTime: pftime,
-		Succeed: execution.Succeed,
+		Succeed:    execution.Succeed,
 	}
 
 	pbresutl, err := c.client.ExecDone(context.Background(), pbexecution)

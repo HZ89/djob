@@ -1,22 +1,23 @@
 package djob
 
 import (
-	"github.com/hashicorp/serf/serf"
-	"time"
 	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/memberlist"
+	"github.com/hashicorp/serf/serf"
+	"local/djob/rpc"
+	"time"
 )
 
-
 type Agent struct {
-	ShutdownCh <- chan struct{}
+	ShutdownCh <-chan struct{}
 
-	config *Config
-	serf *serf.Serf
-	eventCh chan serf.Event
-	ready bool
+	schedulerCh chan string
+	config    *Config
+	serf      *serf.Serf
+	eventCh   chan serf.Event
+	ready     bool
+	rpcServer *rpc.RpcServer
 }
-
 
 func (a *Agent) setupSerf() *serf.Serf {
 	encryptKey, err := a.config.EncryptKey()
@@ -24,7 +25,6 @@ func (a *Agent) setupSerf() *serf.Serf {
 		Log.Fatal(err)
 		return nil
 	}
-
 
 	serfConfig := serf.DefaultConfig()
 
@@ -71,43 +71,62 @@ func (a *Agent) eventLoop() {
 			if failed, ok := e.(serf.MemberEvent); ok {
 				for _, member := range failed.Members {
 					Log.WithFields(logrus.Fields{
-						"node": a.config.Nodename,
+						"node":   a.config.Nodename,
 						"member": member.Name,
-						"event": e.EventType(),
+						"event":  e.EventType(),
 					}).Debug("agent: Member event")
 				}
 			}
 
+			// handle custom query event
 			if e.EventType() == serf.EventQuery {
 				query := e.(*serf.Query)
 
 				switch qname := query.Name; qname {
 				case QueryNewJob:
-					if a.config.Server{
+					if a.config.Server {
 						Log.WithFields(logrus.Fields{
-							"query": query.Name,
+							"query":   query.Name,
 							"payload": string(query.Payload),
-							"at": query.LTime,
+							"at":      query.LTime,
 						}).Debug("agent: Server receive a add new job event")
+
 						err := a.receiveNewJobQuery(query)
+
 						if err != nil {
 							Log.WithFields(logrus.Fields{
-								"query": query.Name,
+								"query":   query.Name,
 								"payload": string(query.Payload),
+								"error":   err.Error(),
 							}).Error("agent: Server add new job failed")
 						}
-					} else{
+					} else {
 						continue
 					}
 				case QueryRunJob:
 					Log.WithFields(logrus.Fields{
-						"query": query.Name,
+						"query":   query.Name,
 						"payload": string(query.Payload),
-						"at": query.LTime,
+						"at":      query.LTime,
 					}).Debug("agent: Running job")
 					continue
 				case QueryRPCConfig:
-					continue
+					if a.config.Server {
+						Log.WithFields(logrus.Fields{
+							"query":   query.Name,
+							"payload": string(query.Payload),
+							"at":      query.LTime,
+						}).Debug("agent: Server receive a rpc config query")
+					} else {
+						continue
+					}
+				default:
+					Log.Warn("agent: get a unknow message")
+					Log.WithFields(logrus.Fields{
+						"query":   query.Name,
+						"payload": string(query.Payload),
+						"at":      query.LTime,
+					}).Debug("agent: get a unknow message")
 				}
 			}
 

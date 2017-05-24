@@ -1,9 +1,9 @@
 package job
 
 import (
-	"time"
-	"sync"
 	"github.com/docker/libkv/store"
+	"sync"
+	"time"
 )
 
 type Job struct {
@@ -46,12 +46,11 @@ type Job struct {
 	Failover string `json:"failover"`
 }
 
-
 type Execution struct {
-	Name string
-	Cmd string
-	Output []byte
-	Succeed bool
-	StartTime time.Time
+	Name       string
+	Cmd        string
+	Output     []byte
+	Succeed    bool
+	StartTime  time.Time
 	FinishTime time.Time
 }
