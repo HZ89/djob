@@ -22,3 +22,9 @@ import:
 - package: golang.org/x/net
 - package: github.com/go-martini/martini
   version: ~1.0.0
+- package: github.com/hashicorp/consul
+  version: ~0.8.3
+  subpackages:
+  - api
+- package: github.com/Knetic/govaluate
+  version: ~3.0.0

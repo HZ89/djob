@@ -1,26 +1,30 @@
 package scheduler
 
-import "errors"
+import (
+	"time"
+)
 
-// A map of registered scheduler
-var schedulers = make(map[string]Scheduler)
-var ErrAlreadyExists = errors.New("Scheduler already registered")
 
-type Scheduler interface {
+type analyzer interface {
+	Next() time.Time
 }
 
-func Register(schedulerName string, scheduler Scheduler) error {
-	if _, exists := schedulers[schedulerName]; exists {
-		return ErrAlreadyExists
-	}
-	schedulers[schedulerName] = scheduler
-	return nil
+type Job interface {
+	IsDisposable() bool
 }
 
-func ListsAllSchedulers() *[]string {
-	keys := make([]string, 0, len(schedulers))
-	for k := range schedulers {
-		keys = append(keys, k)
-	}
-	return &keys
+type entry struct{
+	Job Job
+	Next time.Time
+	Perv time.Time
+	Analyzer analyzer
+}
+
+type Scheduler struct {
+	NewJobCh <-chan *Job
+	RunJobCh chan<- *Job
+	StopCh <-chan struct{}
+
+	addEntry chan *entry
+	running bool
 }

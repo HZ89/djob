@@ -12,14 +12,15 @@ import (
 	"path/filepath"
 )
 
+// agent config
 type Config struct {
 	Server            bool              // start as server or just agent
 	Region            string            // agent region
 	Nodename          string            //serf node name
 	Tags              map[string]string // agent tags used to filter agent
-	SerfBindIp        string            // serf system bind address ip
+	SerfBindIP        string            // serf system bind address ip
 	SerfBindPort      int
-	SerfAdvertiseIp   string // serf system advertise address ip used for agent behind a firewall
+	SerfAdvertiseIP   string // serf system advertise address ip used for agent behind a firewall
 	SerfAdvertisePort int
 	SerfJoin          []string
 	APIBindIp         string // HTTP API PORT just effect when server is true
@@ -72,7 +73,7 @@ func NewConfig(args []string) (*Config, error) {
 	if err := cmdFlags.Parse(args); err != nil {
 		return nil, err
 	}
-	viper.SetConfigFile(string(cmdFlags.Lookup("config").Value))
+	viper.SetConfigFile(cmdFlags.Lookup("config").Value.String())
 	viper.SetDefault("serf_bind_addr", fmt.Sprintf("%s:%d", "0.0.0.0", DefaultSerfPort))
 	viper.SetDefault("http_api_addr", fmt.Sprintf("%s:%d", "0.0.0.0", DefaultHttpPort))
 	viper.SetDefault("rpc_bind_addr", fmt.Sprintf("%s:%d", "0.0.0.0", DefaultRPCPort))
@@ -124,7 +125,7 @@ func ReadConfig() (*Config, error) {
 		}
 	}
 
-	serfBindip, serfBindport, err := splitNetAddr(viper.GetString("serf_bind_addr"), DefaultSerfPort)
+	SerfBindIP, serfBindport, err := splitNetAddr(viper.GetString("serf_bind_addr"), DefaultSerfPort)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +138,7 @@ func ReadConfig() (*Config, error) {
 		return nil, err
 	}
 
-	serfAdip, serfAdport, err := handleAdvertise(viper.GetString("serf_advertise_addr"), fmt.Sprintf("%s:%d", serfBindip, serfBindport))
+	serfAdip, serfAdport, err := handleAdvertise(viper.GetString("serf_advertise_addr"), fmt.Sprintf("%s:%d", SerfBindIP, serfBindport))
 	if err != nil {
 		return nil, err
 	}
@@ -151,13 +152,13 @@ func ReadConfig() (*Config, error) {
 		Server:            server,
 		Region:            tags["region"],
 		Tags:              tags,
-		SerfBindIp:        serfBindip,
+		SerfBindIP:        SerfBindIP,
 		SerfBindPort:      serfBindport,
 		APIBindIp:         apiBindip,
 		APIBindPort:       apiBindport,
 		RpcBindIp:         rpcBindip,
 		RpcBindPort:       rpcBindport,
-		SerfAdvertiseIp:   serfAdip,
+		SerfAdvertiseIP:   serfAdip,
 		SerfAdvertisePort: serfAdport,
 		RpcAdcertiseIP:    rpcAdip,
 		RpcAdcertisePort:  rpcAdport,

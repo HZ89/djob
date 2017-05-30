@@ -1,22 +1,36 @@
 package djob
 
 import (
+	"local/djob/rpc"
+	pb "local/djob/message"
+	"time"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/memberlist"
 	"github.com/hashicorp/serf/serf"
-	"local/djob/rpc"
-	"time"
+	"fmt"
+	"github.com/docker/libkv/store"
+	"sync"
+	"errors"
+)
+var (
+	ErrLockTimeout = errors.New("locking timeout")
+	LockTimeout = 2*time.Second
 )
 
 type Agent struct {
 	ShutdownCh <-chan struct{}
+	jobLockers map[string]store.Locker
 
-	schedulerCh chan string
-	config    *Config
-	serf      *serf.Serf
-	eventCh   chan serf.Event
-	ready     bool
-	rpcServer *rpc.RpcServer
+	newJobCh chan<- *pb.Job
+	config      *Config
+	serf        *serf.Serf
+	eventCh     chan serf.Event
+	ready       bool
+	rpcServer   *rpc.RpcServer
+	store       *Store
+	membercache map[string]map[string]string
+	mutex sync.Mutex
 }
 
 func (a *Agent) setupSerf() *serf.Serf {
@@ -31,9 +45,9 @@ func (a *Agent) setupSerf() *serf.Serf {
 	//noinspection GoBinaryAndUnaryExpressionTypesCompatibility
 	serfConfig.MemberlistConfig = memberlist.DefaultWANConfig()
 
-	serfConfig.MemberlistConfig.BindAddr = a.config.SerfBindIp
+	serfConfig.MemberlistConfig.BindAddr = a.config.SerfBindIP
 	serfConfig.MemberlistConfig.BindPort = a.config.SerfBindPort
-	serfConfig.MemberlistConfig.AdvertiseAddr = a.config.SerfAdvertiseIp
+	serfConfig.MemberlistConfig.AdvertiseAddr = a.config.SerfAdvertiseIP
 	serfConfig.MemberlistConfig.AdvertisePort = a.config.SerfAdvertisePort
 	serfConfig.MemberlistConfig.SecretKey = encryptKey
 	serfConfig.NodeName = a.config.Nodename
@@ -55,28 +69,74 @@ func (a *Agent) setupSerf() *serf.Serf {
 		Log.Fatal(err)
 		return nil
 	}
+	a.membercache = make(map[string]map[string]string)
+
 	return serf
 }
 
-func (a *Agent) eventLoop() {
+func (a *Agent) lockJob(jobName string) (store.Locker, error) {
+
+	//reNewCh := make(chan struct{})
+
+	lockkey := fmt.Sprintf("%s/job_locks/%s", a.store.keyspace, jobName)
+
+	//l, err := a.store.Client.NewLock(lockkey, &store.LockOptions{RenewLock:reNewCh})
+	l, err := a.store.Client.NewLock(lockkey, &store.LockOptions{})
+	if err != nil {
+		Log.WithField("jobName", jobName).WithError(err).Fatal("agent: New lock failed")
+	}
+
+	errCh := make(chan error)
+	freeCh := make(chan struct{})
+	timeoutCh := time.After(LockTimeout)
+	stoplockingCh := make(chan struct{})
+
+	go func(){
+		_, err = l.Lock(stoplockingCh)
+		if err != nil {
+			errCh<-err
+			return
+		}
+		freeCh<- struct{}{}
+	}()
+
+	select {
+	case <-freeCh:
+		return l, nil
+	case err:=<-errCh:
+		return nil, err
+	case <-timeoutCh:
+		stoplockingCh<- struct{}{}
+		return nil, ErrLockTimeout
+	}
+}
+
+func (a *Agent) mainLoop() {
 	serfShutdownCh := a.serf.ShutdownCh()
-	Log.Info("agent: Listen for Serf event")
+	Log.Info("agent: Listen for event")
 	for {
+
 		select {
+		// handle serf event
 		case e := <-a.eventCh:
 			Log.WithFields(logrus.Fields{
 				"event": e.String(),
 			}).Debug("agent: Received event")
 
-			if failed, ok := e.(serf.MemberEvent); ok {
-				for _, member := range failed.Members {
-					Log.WithFields(logrus.Fields{
-						"node":   a.config.Nodename,
-						"member": member.Name,
-						"event":  e.EventType(),
-					}).Debug("agent: Member event")
+			if memberevent, ok := e.(serf.MemberEvent); ok {
+				var memberNames []string
+				for _, member := range memberevent.Members {
+					memberNames = append(memberNames, member.Name)
 				}
+				Log.WithFields(logrus.Fields{
+					"node": a.config.Nodename,
+					"members": memberNames,
+					"event": e.EventType(),
+				}).Debug("agent: Member event got")
+
+				go a.handleMemberCache(memberevent.Type, memberevent.Members)
 			}
+
 
 			// handle custom query event
 			if e.EventType() == serf.EventQuery {
@@ -91,17 +151,7 @@ func (a *Agent) eventLoop() {
 							"at":      query.LTime,
 						}).Debug("agent: Server receive a add new job event")
 
-						err := a.receiveNewJobQuery(query)
-
-						if err != nil {
-							Log.WithFields(logrus.Fields{
-								"query":   query.Name,
-								"payload": string(query.Payload),
-								"error":   err.Error(),
-							}).Error("agent: Server add new job failed")
-						}
-					} else {
-						continue
+						go a.receiveNewJobQuery(query)
 					}
 				case QueryRunJob:
 					Log.WithFields(logrus.Fields{
@@ -109,7 +159,6 @@ func (a *Agent) eventLoop() {
 						"payload": string(query.Payload),
 						"at":      query.LTime,
 					}).Debug("agent: Running job")
-					continue
 				case QueryRPCConfig:
 					if a.config.Server {
 						Log.WithFields(logrus.Fields{
@@ -117,8 +166,6 @@ func (a *Agent) eventLoop() {
 							"payload": string(query.Payload),
 							"at":      query.LTime,
 						}).Debug("agent: Server receive a rpc config query")
-					} else {
-						continue
 					}
 				default:
 					Log.Warn("agent: get a unknow message")
@@ -129,6 +176,7 @@ func (a *Agent) eventLoop() {
 					}).Debug("agent: get a unknow message")
 				}
 			}
+
 
 		case <-serfShutdownCh:
 			Log.Warn("agent: Serf shutdown detected, quitting")

@@ -6,15 +6,15 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"local/djob/job"
 	pb "local/djob/message"
 	"net"
 	"time"
+	"local/djob/djob"
 )
 
 type DjobServer interface {
-	JobInfo(jobName string) (*job.Job, error)
-	ExecDone(execution *job.Execution) error
+	JobInfo(jobName string) (*djob.Job, error)
+	ExecDone(execution *djob.Execution) error
 }
 
 type RpcServer struct {
@@ -45,7 +45,7 @@ func (s *RpcServer) GetJob(ctx context.Context, name *pb.Name) (*pb.Job, error) 
 	}
 
 	pjob := &pb.Job{
-		JobName: jobInfo.Name,
+		Name: jobInfo.Name,
 	}
 
 	return pjob, nil
@@ -54,7 +54,7 @@ func (s *RpcServer) GetJob(ctx context.Context, name *pb.Name) (*pb.Job, error) 
 func (s *RpcServer) ExecDone(ctx context.Context, execution *pb.Execution) (*pb.Result, error) {
 	stime, _ := ptypes.Timestamp(execution.StartTime)
 	ftime, _ := ptypes.Timestamp(execution.FinishTime)
-	et := job.Execution{
+	et := djob.Execution{
 		Name:       execution.Name,
 		Cmd:        execution.Cmd,
 		Output:     []byte(execution.Output),
@@ -178,31 +178,19 @@ func (c *RpcClient) Shutdown() error {
 	return nil
 }
 
-func (c *RpcClient) GotJob(jobName string) (*job.Job, error) {
+func (c *RpcClient) GotJob(jobName string) (*pb.Job, error) {
 	pbName := pb.Name{JobName: jobName}
 	pbjob, err := c.client.GetJob(context.Background(), &pbName)
 	if err != nil {
 		return nil, err
 	}
 
-	return &job.Job{
-		Name: pbjob.JobName,
-	}, nil
+	return pbjob, nil
 }
 
-func (c *RpcClient) ExecDone(execution *job.Execution) (bool, error) {
-	pstime, _ := ptypes.TimestampProto(execution.StartTime)
-	pftime, _ := ptypes.TimestampProto(execution.FinishTime)
-	pbexecution := &pb.Execution{
-		Name:       execution.Name,
-		Cmd:        execution.Cmd,
-		Output:     string(execution.Output),
-		StartTime:  pstime,
-		FinishTime: pftime,
-		Succeed:    execution.Succeed,
-	}
+func (c *RpcClient) ExecDone(execution *pb.Execution) (bool, error) {
 
-	pbresutl, err := c.client.ExecDone(context.Background(), pbexecution)
+	pbresutl, err := c.client.ExecDone(context.Background(), execution)
 	if err != nil {
 		return false, err
 	}
