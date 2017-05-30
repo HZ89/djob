@@ -7,12 +7,15 @@ Package message is a generated protocol buffer package.
 
 It is generated from these files:
 	job.proto
+	serfQueryParams.proto
 
 It has these top-level messages:
 	Name
 	Job
 	Execution
 	Result
+	NewJobQueryParams
+	RunJobQueryParams
 */
 package message
 
