@@ -53,7 +53,7 @@ func (a *Agent) sendNewJobQuery(jobName string) {
 		//}
 	}
 	qp := &pb.NewJobQueryParams{
-		JobName: job.Name,
+		Name: job.Name,
 		Region: job.Region,
 	}
 	qpPb, _ := proto.Marshal(qp)

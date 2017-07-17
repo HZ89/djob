@@ -1,7 +1,6 @@
 package djob
 
 import (
-	"encoding/json"
 	pb "local/djob/message"
 
 	"github.com/Sirupsen/logrus"

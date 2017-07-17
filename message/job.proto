@@ -5,41 +5,46 @@ package message;
 
 service job {
     rpc GetJob(Name) returns (Job) {}
+    rpc GetExecution(Name) returns (Execution) {}
     rpc ExecDone(Execution) returns (Result) {}
 }
 
 message Name {
-    string jobName = 1;
+    string Name = 1;
 }
 
 message Job {
     string Name = 1; // Job name. Must bt unique
     string Region = 2; // Job run in this region normally.
-    bool Shell = 3; // Use shell to run command
-    string Command = 4; // Command to run
-    int64 SuccessCount = 5; // Number of successful executions of this job
-    int64 ErrorCount = 6; // Number of errors of this job
-    google.protobuf.Timestamp LastSuccess = 7; // Last time this jon executed successful
-    google.protobuf.Timestamp LastError = 8; // Last time this job failed
-    string Expression = 9; // A expression used for filter agent node, job will run in the node when this expression is true
-    int64 Retries = 10; // Number of times to retry a job that failed an execution
-    repeated string BeingDependentJobs = 11; // Other jobs that depend on this job.
-    string ParentJob = 12; // This job depends on the job.
-    bool Parallel = 13; // Parallel policy for this job. if true, this job will run in all target node.
-    bool Concurrent = 14; // Concurrent or not. if true, the next job will start regardless of whether or not the last time the execution is complete
-    string LastHandleAgent = 15;
-    bool Disposable = 16; // if true, job just run once a time
-    string SchedulerNodeName = 17; // which node schedule this job
+    string schedule = 3;
+    bool Shell = 4; // Use shell to run command
+    string Command = 5; // Command to run
+    int64 SuccessCount = 6; // Number of successful executions of this job
+    int64 ErrorCount = 7; // Number of errors of this job
+    google.protobuf.Timestamp LastSuccess = 8; // Last time this jon executed successful
+    google.protobuf.Timestamp LastError = 9; // Last time this job failed
+    string Expression = 10; // A expression used for filter agent node, job will run in the node when this expression is true
+    int64 Retries = 11; // Number of times to retry a job that failed an execution
+    repeated string BeingDependentJobs = 12; // Other jobs that depend on this job.
+    string ParentJob = 13; // This job depends on the job.
+    bool Parallel = 14; // Parallel policy for this job. if true, this job will run in all target node.
+    bool Concurrent = 15; // Concurrent or not. if true, the next job will start regardless of whether or not the last time the execution is complete
+    string LastHandleAgent = 16;
+    bool Disposable = 17; // if true, job just run once a time
+    string SchedulerNodeName = 18; // which node schedule this job
 
 }
 
 message Execution {
-    string name = 1;
-    string cmd = 2;
-    string output = 3;
-    bool succeed = 4;
-    google.protobuf.Timestamp startTime = 5;
-    google.protobuf.Timestamp finishTime = 6;
+    string Name = 1;
+    string Cmd = 2;
+    bytes Output = 3;
+    bool Succeed = 4;
+    google.protobuf.Timestamp StartTime = 5;
+    google.protobuf.Timestamp FinishTime = 6;
+    string NodeName = 7;
+    string JobName = 8;
+
 }
 
 message Result {

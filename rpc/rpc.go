@@ -2,39 +2,41 @@ package rpc
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/ptypes"
+	//	"github.com/golang/protobuf/ptypes"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	pb "local/djob/message"
 	"net"
 	"time"
-	"local/djob/djob"
 )
 
 type DjobServer interface {
-	JobInfo(jobName string) (*djob.Job, error)
-	ExecDone(execution *djob.Execution) error
+	JobInfo(jobName string) (*pb.Job, error)
+	ExecDone(execution *pb.Execution) error
 }
 
 type RpcServer struct {
 	bindIp    string
 	rpcPort   int
-	tls       bool
-	certFile  string
-	keyFile   string
+	tlsopt    *TlsOpt
 	dserver   DjobServer
 	rpcServer *grpc.Server
 }
 
-func NewRPCserver(bindIp string, port int, tls bool, server DjobServer, certFile string, keyFile string) *RpcServer {
+type TlsOpt struct {
+	CertFile   string
+	KeyFile    string
+	CaFile     string
+	ServerHost string //The server name use to verify the hostname returned by TLS handshake
+}
+
+func NewRPCserver(bindIp string, port int, server DjobServer, tlsopt *TlsOpt) *RpcServer {
 	return &RpcServer{
-		bindIp:   bindIp,
-		rpcPort:  port,
-		tls:      tls,
-		dserver:  server,
-		certFile: certFile,
-		keyFile:  keyFile,
+		bindIp:  bindIp,
+		rpcPort: port,
+		dserver: server,
+		tlsopt:  tlsopt,
 	}
 }
 
@@ -52,16 +54,7 @@ func (s *RpcServer) GetJob(ctx context.Context, name *pb.Name) (*pb.Job, error) 
 }
 
 func (s *RpcServer) ExecDone(ctx context.Context, execution *pb.Execution) (*pb.Result, error) {
-	stime, _ := ptypes.Timestamp(execution.StartTime)
-	ftime, _ := ptypes.Timestamp(execution.FinishTime)
-	et := djob.Execution{
-		Name:       execution.Name,
-		Cmd:        execution.Cmd,
-		Output:     []byte(execution.Output),
-		StartTime:  stime,
-		FinishTime: ftime,
-	}
-	if err := s.dserver.ExecDone(&et); err != nil {
+	if err := s.dserver.ExecDone(execution); err != nil {
 		return &pb.Result{
 			Err: false,
 		}, nil
@@ -79,8 +72,8 @@ func (s *RpcServer) listen() error {
 
 	var opts []grpc.ServerOption
 
-	if s.tls {
-		creds, err := credentials.NewServerTLSFromFile(s.certFile, s.keyFile)
+	if s.tlsopt {
+		creds, err := credentials.NewServerTLSFromFile(s.tlsopt.CaFile, s.tlsopt.KeyFile)
 		if err != nil {
 			return err
 		}
@@ -127,31 +120,27 @@ func (s *RpcServer) Shutdown(timeout time.Duration) error {
 type RpcClient struct {
 	serverIp   string
 	serverPort int
-	withTls    bool
-	caFile     string
-	serverHost string //The server name use to verify the hostname returned by TLS handshake
+	tlsopt     *TlsOpt
 	client     pb.JobClient
 	conn       *grpc.ClientConn
 }
 
-func NewRpcClient(serveraddr string, serverport int, tls bool, cafile string, serverhost string) (*RpcClient, error) {
+func NewRpcClient(serveraddr string, serverport int, tlsopt *TlsOpt) (*RpcClient, error) {
 	var opts []grpc.DialOption
 	client := &RpcClient{
 		serverIp:   serveraddr,
 		serverPort: serverport,
-		withTls:    tls,
-		caFile:     cafile,
-		serverHost: serverhost,
+		tlsopt:     tlsopt,
 	}
-	if client.withTls {
+	if client.tlsopt {
 		var sn string
-		if client.serverHost != "" {
-			sn = client.serverHost
+		if client.tlsopt.ServerHost != "" {
+			sn = client.tlsopt.ServerHost
 		}
 		var creds credentials.TransportCredentials
-		if client.caFile != "" {
+		if client.tlsopt.CaFile != "" {
 			var err error
-			creds, err = credentials.NewClientTLSFromFile(client.caFile, sn)
+			creds, err = credentials.NewClientTLSFromFile(client.tlsopt.CaFile, sn)
 			if err != nil {
 				return nil, err
 			}

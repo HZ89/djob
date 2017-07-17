@@ -2,11 +2,11 @@ syntax="proto3";
 package message;
 
 message NewJobQueryParams {
-    string JobName = 1;
+    string Name = 1;
     string Region = 2;
 }
 
 message RunJobQueryParams {
-    string JobName = 1;
+    string Name = 1;
     string SchedulerNodename = 2;
 }
