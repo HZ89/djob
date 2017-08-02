@@ -1,22 +1,18 @@
 package scheduler
 
 import (
-	"time"
-	pb "local/djob/message"
 	"errors"
+	pb "local/djob/message"
 	"sort"
+	"time"
 )
 
-var nameToIndex map[string]int
-
-const DELETEJOB string = "DELETE"
-const UPDATEJOB string = "UPDATE"
 
 type analyzer interface {
 	Next(time.Time) time.Time
 }
 
-type JobEvent struct {
+type jobEvent struct {
 	event string
 	job   *pb.Job
 }
@@ -29,12 +25,14 @@ type entry struct {
 }
 
 type Scheduler struct {
-	JobEventCh <-chan *JobEvent
-	RunJobCh   chan *pb.Execution
-	stopCh     chan struct{}
+	addEntry    chan *entry
+	deleteEntry chan string
+	RunJobCh    chan *pb.Job
+	stopCh      chan struct{}
 
-	running bool
-	entries []*entry
+	running     bool
+	entries     []*entry
+	nameToIndex map[string]int
 }
 
 type byTime []*entry
@@ -51,41 +49,46 @@ func (b byTime) Less(i, j int) bool {
 	return b[i].Next.Before(b[j].Next)
 }
 
-func deleteEntryByName(b byTime, name string) (byTime, error) {
-	i, exists := nameToIndex[name]
-	if exists {
-		if i < b.Len() && b[i].Job.Name == name {
-			// delete i
-			copy(b[i:], b[i+1:])
-			b[b.Len()-1] = nil
-			b = b[:b.Len()-1]
-		}
-		delete(nameToIndex, name)
-		return b, nil
+func newEntery(job *pb.Job) (*entry, error) {
+	analyzer, err := prepare(job.Schedule)
+	if err != nil {
+		return nil, err
 	}
-	return nil, errors.New("Con't find job")
-}
-
-func newEntery(job *pb.Job) *entry {
-	analyzer, _ := prepare(job.Schedule)
 	return &entry{
 		Job:      job,
 		Analyzer: analyzer,
+	}, nil
+}
+
+func New(runjobCh chan *pb.Job) *Scheduler {
+	return &Scheduler{
+		addEntry:    make(chan *entry),
+		deleteEntry: make(chan string),
+		RunJobCh:    runjobCh,
+		stopCh:      make(chan struct{}),
+		entries:     nil,
+		nameToIndex: make(map[string]int),
+		running:     false,
 	}
 }
 
-func New(jobeventCh <-chan *JobEvent, runjobCh chan *pb.Execution) *Scheduler{
-	return &Scheduler{
-		JobEventCh: jobeventCh,
-		RunJobCh: runjobCh,
-		stopCh: make(chan struct{}),
-		entries: nil,
-		running: false,
+func (s *Scheduler) deleteEntryByName(name string) error {
+	i, exists := s.nameToIndex[name]
+	if exists {
+		if i < len(s.entries) && s.entries[i].Job.Name == name {
+			// delete i
+			copy(s.entries[i:], s.entries[i+1:])
+			s.entries[len(s.entries)-1] = nil
+			s.entries = s.entries[:len(s.entries)-1]
+		}
+		delete(s.nameToIndex, name)
+		return nil
 	}
+	return errors.New("Con't find job")
 }
 
 func (s *Scheduler) send(job *pb.Job) {
-
+	s.RunJobCh <- job
 }
 
 func (s *Scheduler) run() {
@@ -97,8 +100,9 @@ func (s *Scheduler) run() {
 	for {
 		sort.Sort(byTime(s.entries))
 		for i, e := range s.entries {
-			nameToIndex[e.Job.Name] = i
+			s.nameToIndex[e.Job.Name] = i
 		}
+
 		var movement time.Time
 		if len(s.entries) == 0 || s.entries[0].Next.IsZero() {
 			movement = now.AddDate(10, 0, 0)
@@ -115,18 +119,16 @@ func (s *Scheduler) run() {
 				go s.send(e.Job)
 				e.Perv = e.Next
 				e.Next = e.Analyzer.Next(movement)
+				if e.Next.IsZero() {
+					s.deleteEntryByName(e.Job.Name)
+				}
 			}
 			continue
-		case jobevent := <-s.JobEventCh:
-			if jobevent.event == UPDATEJOB {
-				newEntery := newEntery(jobevent.job)
-				// delete the job if it exits
-				s.entries, _ = deleteEntryByName(s.entries, jobevent.job.Name)
-				s.entries = append(s.entries, newEntery)
-			}
-			if jobevent.event == DELETEJOB {
-				s.entries, _ = deleteEntryByName(s.entries, jobevent.job.Name)
-			}
+		case e := <-s.addEntry:
+			s.deleteEntryByName(e.Job.Name)
+			s.entries = append(s.entries, e)
+		case name := <-s.deleteEntry:
+			s.deleteEntryByName(name)
 		case <-s.stopCh:
 			return
 		}
@@ -141,5 +143,20 @@ func (s *Scheduler) Stop() {
 
 func (s *Scheduler) Start() {
 	s.running = true
-	s.run()
+	go s.run()
+}
+
+func (s *Scheduler) AddJob(job *pb.Job) error {
+	now := time.Now().Local()
+	e, err := newEntery(job)
+	if err != nil {
+		return err
+	}
+	e.Next = e.Analyzer.Next(now)
+	s.addEntry <- e
+	return nil
+}
+
+func (s *Scheduler) DeleteJob(name string) {
+	s.deleteEntry <- name
 }
