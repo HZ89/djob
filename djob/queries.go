@@ -1,11 +1,12 @@
 package djob
 
 import (
+	pb "local/djob/message"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/libkv/store"
-	"github.com/hashicorp/serf/serf"
-	pb "local/djob/message"
 	"github.com/gogo/protobuf/proto"
+	"github.com/hashicorp/serf/serf"
 )
 
 const (
@@ -24,6 +25,7 @@ const (
 //	SchedulerNodeName string
 //}
 
+// sendNreJobQuery func used to notice all server there is a now job need to be add
 func (a *Agent) sendNewJobQuery(jobName string) {
 	var params *serf.QueryParam
 	job, err := a.store.GetJob(jobName)
@@ -38,9 +40,9 @@ func (a *Agent) sendNewJobQuery(jobName string) {
 	if err != nil {
 		if err == ErrCanNotFoundNode {
 			Log.WithFields(logrus.Fields{
-				"jobName": job.Name,
+				"jobName":   job.Name,
 				"jobRegion": job.Region,
-				"jobExp": job.Expression,
+				"jobExp":    job.Expression,
 			}).Debug(err)
 		}
 		Log.Warn(err)
@@ -53,16 +55,16 @@ func (a *Agent) sendNewJobQuery(jobName string) {
 		//}
 	}
 	qp := &pb.NewJobQueryParams{
-		Name: job.Name,
+		Name:   job.Name,
 		Region: job.Region,
 	}
 	qpPb, _ := proto.Marshal(qp)
 
 	Log.WithFields(logrus.Fields{
 		"query_name": QueryNewJob,
-		"job_name": job.Name,
+		"job_name":   job.Name,
 		"job_region": job.Region,
-		"playload": qp.String(),
+		"playload":   qp.String(),
 	}).Debug("agent: Sending query")
 
 	qr, err := a.serf.Query(QueryNewJob, qpPb, params)
@@ -79,14 +81,14 @@ func (a *Agent) sendNewJobQuery(jobName string) {
 			if ok {
 				Log.WithFields(logrus.Fields{
 					"query": QueryRunJob,
-					"from": ack,
+					"from":  ack,
 				}).Debug("agent: Received ack")
 			}
 
-		case resp, ok:=<-respCh:
+		case resp, ok := <-respCh:
 			if ok {
 				Log.WithFields(logrus.Fields{
-					"query": QueryRunJob,
+					"query":   QueryRunJob,
 					"payload": string(resp.Payload),
 				}).Debug("agent: Received response")
 			}
@@ -96,14 +98,14 @@ func (a *Agent) sendNewJobQuery(jobName string) {
 }
 
 func (a *Agent) receiveNewJobQuery(query *serf.Query) {
-	var params pb.NewJobQueryParams
+	var params *pb.NewJobQueryParams
 	if err := proto.Unmarshal(query.Payload, params); err != nil {
 		Log.WithFields(logrus.Fields{
 			"query":   query.Name,
 			"payload": string(query.Payload),
 		}).WithError(err).Error("agent: Server add new job memberevent")
 	}
-	job, err := a.store.GetJob(params.JobName)
+	job, err := a.store.GetJob(params.Name)
 	if err != nil {
 		Log.WithFields(logrus.Fields{
 			"query":   query.Name,
@@ -114,7 +116,7 @@ func (a *Agent) receiveNewJobQuery(query *serf.Query) {
 	locker, err := a.lockJob(job.Name)
 
 	if err != nil {
-		if err == ErrLockTimeout{
+		if err == ErrLockTimeout {
 			Log.WithField("jobName:", job.Name).WithError(err).Debug("agent: try lock a job")
 		}
 		Log.WithFields(logrus.Fields{
@@ -126,14 +128,25 @@ func (a *Agent) receiveNewJobQuery(query *serf.Query) {
 
 	a.jobLockers[job.Name] = locker
 
-	a.newJobCh <- job
+	// add job
+	err = a.scheduler.AddJob(job)
+	if err != nil {
+		Log.WithFields(logrus.Fields{
+			"job_name":  job.Name,
+			"scheduler": job.Schedule,
+		}).WithError(err).Error("Add Job to scheduler failed")
+	}
 	Log.Infof("agent: send job %s to newJobCh", job.Name)
 	Log.WithFields(logrus.Fields{
-		"query": query.Name,
+		"query":   query.Name,
 		"payload": string(query.Payload),
 	}).Debug("agent: send job to newJobCh")
 }
 
 func (a *Agent) sendRunJobQuery(job *pb.Job) {
+
+}
+
+func (a *Agent) receiveRunJobQuery(query *serf.Query) {
 
 }

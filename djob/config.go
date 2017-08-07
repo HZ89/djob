@@ -23,21 +23,22 @@ type Config struct {
 	SerfAdvertiseIP   string // serf system advertise address ip used for agent behind a firewall
 	SerfAdvertisePort int
 	SerfJoin          []string
-	APIBindIp         string // HTTP API PORT just effect when server is true
+	APIBindIP         string // HTTP API PORT just effect when server is true
 	APIBindPort       int
 	JobStore          string   // key value storage type etd/zookeeper etc.
 	JobStoreServers   []string // k/v storage server list [ip:port]
 	JobStoreKeyspace  string   // keyspace in the storage
 	encryptKey        string   // serf encrypt key
 	LogLevel          string   // info debug error
-	RpcTls            bool     // grpc enable tls or not
-	RpcCAfile         string   // tls ca file used in agent
-	RpcKeyFile        string   // key file used in server
-	RpcCertFile       string   // cert file used in server
-	RpcBindIp         string   // grcp bind addr ip
-	RpcBindPort       int
-	RpcAdcertiseIP    string // sames to serf advertise addr
-	RpcAdcertisePort  int
+	LogFile           string   // log file path
+	RPCTls            bool     // grpc enable tls or not
+	RPCCAfile         string   // tls ca file used in agent
+	RPCKeyFile        string   // key file used in server
+	RPCCertFile       string   // cert file used in server
+	RPCBindIP         string   // grcp bind addr ip
+	RPCBindPort       int
+	RPCAdcertiseIP    string // sames to serf advertise addr
+	RPCAdcertisePort  int
 	SerfSnapshotPath  string //serf use this path to save snapshot of joined server
 }
 
@@ -60,7 +61,7 @@ const (
 //}
 
 func NewConfig(args []string) (*Config, error) {
-	runRoot, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	runRoot, err := filepath.Abs(filepath.Dir(args[0]))
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +71,7 @@ func NewConfig(args []string) (*Config, error) {
 	cmdFlags.String("pid", filepath.Join(runRoot, DefaultPidFile), "pid file path")
 	cmdFlags.String("logfile", filepath.Join(runRoot, DefaultLogFile), "log file path")
 
-	if err := cmdFlags.Parse(args); err != nil {
+	if err := cmdFlags.Parse(args[1:]); err != nil {
 		return nil, err
 	}
 	viper.SetConfigFile(cmdFlags.Lookup("config").Value.String())
@@ -84,6 +85,8 @@ func NewConfig(args []string) (*Config, error) {
 	viper.SetDefault("region", DefaultRegion)
 	viper.SetDefault("server", false)
 	viper.SetDefault("serf_snapshot_dir", filepath.Join(runRoot, DefaultSnapshotPath))
+	viper.SetDefault("pid", cmdFlags.Lookup("pid").Value.String())
+	viper.SetDefault("logfile", cmdFlags.Lookup("logfile").Value.String())
 
 	return ReadConfig()
 }
@@ -124,6 +127,8 @@ func ReadConfig() (*Config, error) {
 			}
 		}
 	}
+	// init logger
+	InitLogger(viper.GetString("log_level"), nodeName, viper.GetString("logfile"))
 
 	SerfBindIP, serfBindport, err := splitNetAddr(viper.GetString("serf_bind_addr"), DefaultSerfPort)
 	if err != nil {
@@ -154,19 +159,20 @@ func ReadConfig() (*Config, error) {
 		Tags:              tags,
 		SerfBindIP:        SerfBindIP,
 		SerfBindPort:      serfBindport,
-		APIBindIp:         apiBindip,
+		APIBindIP:         apiBindip,
 		APIBindPort:       apiBindport,
-		RpcBindIp:         rpcBindip,
-		RpcBindPort:       rpcBindport,
+		RPCBindIP:         rpcBindip,
+		RPCBindPort:       rpcBindport,
 		SerfAdvertiseIP:   serfAdip,
 		SerfAdvertisePort: serfAdport,
-		RpcAdcertiseIP:    rpcAdip,
-		RpcAdcertisePort:  rpcAdport,
+		RPCAdcertiseIP:    rpcAdip,
+		RPCAdcertisePort:  rpcAdport,
 		LogLevel:          viper.GetString("log_level"),
-		RpcCAfile:         caFile,
-		RpcCertFile:       certFile,
-		RpcKeyFile:        keyFile,
-		RpcTls:            withTls,
+		LogFile:           viper.GetString("logfile"),
+		RPCCAfile:         caFile,
+		RPCCertFile:       certFile,
+		RPCKeyFile:        keyFile,
+		RPCTls:            withTls,
 		JobStore:          viper.GetString("job_store"),
 		JobStoreServers:   viper.GetStringSlice("job_store_servers"),
 		JobStoreKeyspace:  viper.GetString("job_store_keyspeace"),

@@ -14,6 +14,7 @@ import (
 type DjobServer interface {
 	JobInfo(jobName string) (*pb.Job, error)
 	ExecDone(execution *pb.Execution) error
+	ExecutionInfo(executionName string) (*pb.Execution, error)
 }
 
 type RpcServer struct {
@@ -41,7 +42,7 @@ func NewRPCserver(bindIp string, port int, server DjobServer, tlsopt *TlsOpt) *R
 }
 
 func (s *RpcServer) GetJob(ctx context.Context, name *pb.Name) (*pb.Job, error) {
-	jobInfo, err := s.dserver.JobInfo(name.JobName)
+	jobInfo, err := s.dserver.JobInfo(name.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -51,6 +52,10 @@ func (s *RpcServer) GetJob(ctx context.Context, name *pb.Name) (*pb.Job, error) 
 	}
 
 	return pjob, nil
+}
+
+func (s *RpcServer) GetExecution(ctx context.Context, name *pb.Name) (*pb.Execution, error) {
+	return nil, nil
 }
 
 func (s *RpcServer) ExecDone(ctx context.Context, execution *pb.Execution) (*pb.Result, error) {
@@ -168,7 +173,7 @@ func (c *RpcClient) Shutdown() error {
 }
 
 func (c *RpcClient) GotJob(jobName string) (*pb.Job, error) {
-	pbName := pb.Name{JobName: jobName}
+	pbName := pb.Name{Name: jobName}
 	pbjob, err := c.client.GetJob(context.Background(), &pbName)
 	if err != nil {
 		return nil, err

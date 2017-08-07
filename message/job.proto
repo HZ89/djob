@@ -1,5 +1,5 @@
 syntax = "proto3";
-import "google/protobuf/timestamp.proto";
+// import "google/protobuf/timestamp.proto";
 
 package message;
 
@@ -19,20 +19,24 @@ message Job {
     string schedule = 3;
     bool Shell = 4; // Use shell to run command
     string Command = 5; // Command to run
-    int64 SuccessCount = 6; // Number of successful executions of this job
-    int64 ErrorCount = 7; // Number of errors of this job
-    google.protobuf.Timestamp LastSuccess = 8; // Last time this jon executed successful
-    google.protobuf.Timestamp LastError = 9; // Last time this job failed
-    string Expression = 10; // A expression used for filter agent node, job will run in the node when this expression is true
-    int64 Retries = 11; // Number of times to retry a job that failed an execution
-    repeated string BeingDependentJobs = 12; // Other jobs that depend on this job.
-    string ParentJob = 13; // This job depends on the job.
-    bool Parallel = 14; // Parallel policy for this job. if true, this job will run in all target node.
-    bool Concurrent = 15; // Concurrent or not. if true, the next job will start regardless of whether or not the last time the execution is complete
-    string LastHandleAgent = 16;
-    bool Disposable = 17; // if true, job just run once a time
-    string SchedulerNodeName = 18; // which node schedule this job
+    string Expression = 6; // A expression used for filter agent node, job will run in the node when this expression is true
+    int64 Retries = 7; // Number of times to retry a job that failed an execution
+    repeated string BeingDependentJobs = 8; // Other jobs that depend on this job.
+    string ParentJob = 9; // This job depends on the job.
+    bool Parallel = 10; // Parallel policy for this job. if true, this job will run in all target node.
+    bool Concurrent = 11; // Concurrent or not. if true, the next job will start regardless of whether or not the last time the execution is complete
+    bool Disposable = 12; // if true, job just run once a time
+    string SchedulerNodeName = 13; // which node schedule this job
 
+}
+
+message JobStatus {
+    string Name = 1;
+    int64 SuccessCount = 2; // Number of successful executions of this job
+    int64 ErrorCount = 3; // Number of errors of this job
+    string LastHandleAgent = 4; // The agent node name which exec the job last time
+    string LastSuccess = 5; // Last time this jon executed successful in rfc 3339
+    string LastError = 6; // Last time this job failed
 }
 
 message Execution {
@@ -40,8 +44,8 @@ message Execution {
     string Cmd = 2;
     bytes Output = 3;
     bool Succeed = 4;
-    google.protobuf.Timestamp StartTime = 5;
-    google.protobuf.Timestamp FinishTime = 6;
+    string StartTime = 5;
+    string FinishTime = 6;
     string NodeName = 7;
     string JobName = 8;
 
@@ -49,4 +53,9 @@ message Execution {
 
 message Result {
     bool err = 1;
+}
+
+message Resp {
+    string error = 1;
+    repeated Job data = 2;
 }

@@ -1,12 +1,12 @@
-hash: 661159ed3cb496d5cc4aa130cfc451096583833d6fbf4fed087dc19f17f25c91
-updated: 2017-05-25T12:08:30.890334324+08:00
+hash: 56115c3b47c448e74aef89128fbc4f377a5ef2f357498179387013b2d3c5d255
+updated: 2017-07-24T12:36:28.940919751+08:00
 imports:
 - name: bitbucket.org/tebeka/strftime
   version: 2194253a23c090a4d5953b152a3c63fb5da4f5a4
 - name: github.com/armon/go-metrics
-  version: 93f237eba9b0602f3e73710416558854a81d9337
+  version: f036747b9d0e8590f175a5d654a2194a7d9df4b5
 - name: github.com/coreos/etcd
-  version: 4a8d32eaa62a877dc163c28675c9bf5a9bd8e430
+  version: e9a7f3551bce5b90522345f71e52d04b08090928
   subpackages:
   - client
   - pkg/pathutil
@@ -14,7 +14,7 @@ imports:
   - pkg/types
   - version
 - name: github.com/coreos/go-semver
-  version: 568e959cd89871e61434c1143528d9162da89ef2
+  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
   subpackages:
   - semver
 - name: github.com/docker/libkv
@@ -26,18 +26,32 @@ imports:
   - store/zookeeper
 - name: github.com/fsnotify/fsnotify
   version: 4da3e2cfbabc9f751898f250b49f2439785783a1
-- name: github.com/go-martini/martini
-  version: 49411a5b646861ad29a6ddd5351717a0a9c49b94
+- name: github.com/gin-contrib/gzip
+  version: 93bb0f0ed1109c1091b0c062c1ff1a4070e1906f
+- name: github.com/gin-contrib/sse
+  version: 22d885f9ecc78bf4ee5d72b937e4bbcdc58e8cae
+- name: github.com/gin-gonic/contrib
+  version: d4fc5a96cc0d29cb0e862bb1312dd6f4fedfcaee
+  subpackages:
+  - jwt
+- name: github.com/gin-gonic/gin
+  version: d459835d2b077e44f7c9b453505ee29881d5d12d
+  subpackages:
+  - binding
+  - render
+- name: github.com/gogo/protobuf
+  version: 7b6c6391c4ff245962047fc1e2c6e08b1cdfa0e8
+  subpackages:
+  - proto
 - name: github.com/golang/protobuf
-  version: fec3b39b059c0f88fa6b20f5ed012b1aa203a8b4
+  version: 5a0f697c9ed9d68fef0116532c6e05cfeae00e55
   subpackages:
   - proto
   - ptypes
   - ptypes/any
-  - ptypes/duration
   - ptypes/timestamp
 - name: github.com/hashicorp/consul
-  version: ea2a82b221c3e0a466a4f38ab4e8718ad8c60621
+  version: 2c7715154d8d4568524b76d2d4deb7ca6fd1b285
   subpackages:
   - api
 - name: github.com/hashicorp/errwrap
@@ -49,11 +63,11 @@ imports:
   subpackages:
   - codec
 - name: github.com/hashicorp/go-multierror
-  version: ed905158d87462226a13fe39ddf685ea65f1c11f
+  version: 83588e72410abfbe4df460eeb6f30841ae47d4c4
 - name: github.com/hashicorp/go-rootcerts
   version: 6bb64b370b90e7ef1fa532be9e591a81c3493e00
 - name: github.com/hashicorp/go-sockaddr
-  version: 2d10d7c10258d11196c0ebf2943509e4afd06cd4
+  version: 41949a141473f6340abc6ba0fcd0f89da6f6f837
 - name: github.com/hashicorp/hcl
   version: 392dba7d905ed5d04a5794ba89f558b27e2ba1ca
   subpackages:
@@ -66,7 +80,7 @@ imports:
   - json/scanner
   - json/token
 - name: github.com/hashicorp/memberlist
-  version: 679583836ce521ac7a4cd6e6806bab9dba8fbdb8
+  version: 99594a4f171a77cb7cff01f143ccf608ac577c47
 - name: github.com/hashicorp/serf
   version: d6574a5bb1226678d7010325fb6c985db20ee458
   subpackages:
@@ -78,8 +92,10 @@ imports:
   version: ab335c655133cea61d8164853c1ed0e97d6c77cb
 - name: github.com/magiconair/properties
   version: 51463bfca2576e06c62a8504b5c0f06d61312647
+- name: github.com/mattn/go-isatty
+  version: fc9e8d8ef48496124e79ae0df75490096eccf6fe
 - name: github.com/miekg/dns
-  version: 193f91db0b8cd713863aeab710f35381472b2e8e
+  version: 0f3adef2e2201d72e50309a36fc99d8a9d1a4960
 - name: github.com/mitchellh/cli
   version: ee8578a9c12a5bb9d55303b9665cc448772c81b8
 - name: github.com/mitchellh/go-homedir
@@ -127,7 +143,7 @@ imports:
   - lex/httplex
   - trace
 - name: golang.org/x/sys
-  version: f845067cf72a21fb4929b0e6a35273bd83b56396
+  version: e48874b42435b4347fc52bdee0424a52abc974d7
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -157,6 +173,8 @@ imports:
   - status
   - tap
   - transport
+- name: gopkg.in/go-playground/validator.v8
+  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
 - name: gopkg.in/yaml.v2
   version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
 testImports: []

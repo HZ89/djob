@@ -2,35 +2,36 @@ package djob
 
 import (
 	"local/djob/rpc"
-	pb "local/djob/message"
 	"time"
 
+	"errors"
+	"fmt"
+	"sync"
+
 	"github.com/Sirupsen/logrus"
+	"github.com/docker/libkv/store"
 	"github.com/hashicorp/memberlist"
 	"github.com/hashicorp/serf/serf"
-	"fmt"
-	"github.com/docker/libkv/store"
-	"sync"
-	"errors"
+	"local/djob/scheduler"
 )
+
 var (
 	ErrLockTimeout = errors.New("locking timeout")
-	LockTimeout = 2*time.Second
+	LockTimeout    = 2 * time.Second
 )
 
 type Agent struct {
-	ShutdownCh <-chan struct{}
-	jobLockers map[string]store.Locker
-
-	newJobCh chan<- *pb.Job
+	ShutdownCh  <-chan struct{}
+	jobLockers  map[string]store.Locker
 	config      *Config
 	serf        *serf.Serf
 	eventCh     chan serf.Event
 	ready       bool
 	rpcServer   *rpc.RpcServer
-	store       *Store
+	store       *KVStore
 	membercache map[string]map[string]string
-	mutex sync.Mutex
+	mutex       sync.Mutex
+	scheduler   *scheduler.Scheduler
 }
 
 func (a *Agent) setupSerf() *serf.Serf {
@@ -69,9 +70,23 @@ func (a *Agent) setupSerf() *serf.Serf {
 		Log.Fatal(err)
 		return nil
 	}
-	a.membercache = make(map[string]map[string]string)
+	//a.membercache = make(map[string]map[string]string)
 
 	return serf
+}
+
+// serfJion let serf intence jion a serf clust
+func (a *Agent) serfJion(addrs []string, replay bool) (n int, err error) {
+	Log.Infof("agent: joining: %v replay: %v", addrs, replay)
+	ignoreOld := !replay
+	n, err = a.serf.Join(addrs, ignoreOld)
+	if n > 0 {
+		Log.Infof("agent: joined: %d nodes", n)
+	}
+	if err != nil {
+		Log.Warnf("agent: error joining: %v", err)
+	}
+	return
 }
 
 func (a *Agent) lockJob(jobName string) (store.Locker, error) {
@@ -91,22 +106,22 @@ func (a *Agent) lockJob(jobName string) (store.Locker, error) {
 	timeoutCh := time.After(LockTimeout)
 	stoplockingCh := make(chan struct{})
 
-	go func(){
+	go func() {
 		_, err = l.Lock(stoplockingCh)
 		if err != nil {
-			errCh<-err
+			errCh <- err
 			return
 		}
-		freeCh<- struct{}{}
+		freeCh <- struct{}{}
 	}()
 
 	select {
 	case <-freeCh:
 		return l, nil
-	case err:=<-errCh:
+	case err := <-errCh:
 		return nil, err
 	case <-timeoutCh:
-		stoplockingCh<- struct{}{}
+		stoplockingCh <- struct{}{}
 		return nil, ErrLockTimeout
 	}
 }
@@ -129,14 +144,13 @@ func (a *Agent) mainLoop() {
 					memberNames = append(memberNames, member.Name)
 				}
 				Log.WithFields(logrus.Fields{
-					"node": a.config.Nodename,
+					"node":    a.config.Nodename,
 					"members": memberNames,
-					"event": e.EventType(),
+					"event":   e.EventType(),
 				}).Debug("agent: Member event got")
 
-				go a.handleMemberCache(memberevent.Type, memberevent.Members)
+				/* go a.handleMemberCache(memberevent.Type, memberevent.Members) */
 			}
-
 
 			// handle custom query event
 			if e.EventType() == serf.EventQuery {
@@ -177,10 +191,53 @@ func (a *Agent) mainLoop() {
 				}
 			}
 
-
 		case <-serfShutdownCh:
 			Log.Warn("agent: Serf shutdown detected, quitting")
 			return
 		}
+	}
+}
+
+// Run func start a Agent process
+func (a *Agent) Run(args []string) int {
+	var err error
+	a.config, err = NewConfig(args)
+	if err != nil {
+		Log.Fatalln(err)
+	}
+	if a.serf = a.setupSerf(); a.serf == nil {
+		Log.Fatalln("Start serf failed!")
+	}
+	a.serfJion(a.config.SerfJoin, true)
+
+	// TODO: add prometheus support
+	// start prometheus client
+	var tls rpc.TlsOpt
+	if a.config.RPCTls {
+		tls = rpc.TlsOpt{
+			CertFile: a.config.RPCCertFile,
+			KeyFile:  a.config.RPCKeyFile,
+			CaFile:   a.config.RPCCAfile,
+		}
+	}
+
+	if a.config.Server {
+		a.store, err = NewStore(a.config.JobStore, a.config.JobStoreServers, a.config.JobStoreKeyspace)
+		if err != nil {
+			Log.WithFields(logrus.Fields{
+				"backend":  a.config.JobStore,
+				"servers":  a.config.JobStoreServers,
+				"keyspace": a.config.JobStoreKeyspace,
+			}).Debug("Connect Backend Failed")
+			Log.Fatalf("Connent Backend Failed: %s", err)
+		}
+		// run rpc server
+		a.rpcServer = rpc.NewRPCserver(a.config.RPCBindIP, a.config.RPCBindPort, a, &tls)
+		err = a.rpcServer.Run()
+		if err != nil {
+			Log.Fatalf("Start rpc server Failed: %s", err)
+		}
+		a.scheduler = scheduler.New()
+
 	}
 }
