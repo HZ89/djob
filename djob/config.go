@@ -9,7 +9,6 @@ import (
 	"version.uuzu.com/zhuhuipeng/djob/cmd"
 	"net"
 	"os"
-	"path/filepath"
 )
 
 // agent config
@@ -61,15 +60,11 @@ const (
 //}
 
 func NewConfig(args []string) (*Config, error) {
-	runRoot, err := filepath.Abs(filepath.Dir(args[0]))
-	if err != nil {
-		return nil, err
-	}
 
 	cmdFlags := flag.NewFlagSet("agent", flag.ContinueOnError)
-	cmdFlags.String("config", filepath.Join(runRoot, DefaultConfigFile), "config file path")
-	cmdFlags.String("pid", filepath.Join(runRoot, DefaultPidFile), "pid file path")
-	cmdFlags.String("logfile", filepath.Join(runRoot, DefaultLogFile), "log file path")
+	cmdFlags.String("config", DefaultConfigFile, "config file path")
+	cmdFlags.String("pid", DefaultPidFile, "pid file path")
+	cmdFlags.String("logfile", DefaultLogFile, "log file path")
 
 	if err := cmdFlags.Parse(args[1:]); err != nil {
 		return nil, err
@@ -84,7 +79,7 @@ func NewConfig(args []string) (*Config, error) {
 	viper.SetDefault("rpc_tls", false)
 	viper.SetDefault("region", DefaultRegion)
 	viper.SetDefault("server", false)
-	viper.SetDefault("serf_snapshot_dir", filepath.Join(runRoot, DefaultSnapshotPath))
+	viper.SetDefault("serf_snapshot_dir", DefaultSnapshotPath)
 	viper.SetDefault("pid", cmdFlags.Lookup("pid").Value.String())
 	viper.SetDefault("logfile", cmdFlags.Lookup("logfile").Value.String())
 

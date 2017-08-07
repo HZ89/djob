@@ -1,28 +1,47 @@
 package main
 
 import (
+	"os"
+	"github.com/mitchellh/cli"
+	"version.uuzu.com/zhuhuipeng/djob/cmd"
 	"fmt"
-	pb "version.uuzu.com/zhuhuipeng/djob/message"
-	"version.uuzu.com/zhuhuipeng/djob/scheduler"
 )
 
+const VERSION string = "0.1.0"
+
 func main() {
-	ch := make(chan *pb.Job)
-	s := scheduler.New(ch)
-	s.Start()
-	err := s.AddJob(&pb.Job{Schedule: "@at 2017-07-62T11:15:00+08:00", Name: "once"})
+	args := os.Args[1:]
+	for _, arg := range args {
+		if arg == "-v" || arg == "--version" {
+			newArgs := make([]string, len(args)+1)
+			newArgs[0] = "version"
+			copy(newArgs[1:], args)
+			args = newArgs
+			break
+		}
+	}
+
+	c := cli.NewCLI("djob", VERSION)
+	c.Args = args
+	c.HelpFunc = cli.BasicHelpFunc("djob")
+
+	ui := &cli.BasicUi{Writer: os.Stdout}
+
+	c.Commands = map[string]cli.CommandFactory{
+		"version": func() (cli.Command, error) {
+			return &cmd.VersionCmd{
+				Version: VERSION,
+				Ui: ui,
+			}, nil
+		},
+	}
+
+	exitStatus, err := c.Run()
+
 	if err != nil {
-		fmt.Println(err.Error())
+		fmt.Fprintf(os.Stderr, "Error executing CLI: %s\n", err.Error())
+		os.Exit(1)
 	}
-	fmt.Println("add 1")
-	s.AddJob(&pb.Job{Schedule: "@every 10s", Name: "every10s"})
-	fmt.Println("add 2")
-	s.AddJob(&pb.Job{Schedule: "@minutely", Name: "everyminutely"})
-	fmt.Println("add 3")
-	s.AddJob(&pb.Job{Schedule: "1-10 * * * * *", Name: "cron"})
-	fmt.Println("add 4")
-	for {
-		job := <-ch
-		fmt.Printf("Job Name: %s, spec: %s,\n", job.Name, job.Schedule)
-	}
+
+	os.Exit(exitStatus)
 }

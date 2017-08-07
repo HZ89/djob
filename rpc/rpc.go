@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"fmt"
-	//	"github.com/golang/protobuf/ptypes"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -28,11 +27,11 @@ type RpcServer struct {
 type TlsOpt struct {
 	CertFile   string
 	KeyFile    string
-	CaFile     string
-	ServerHost string //The server name use to verify the hostname returned by TLS handshake
+	CaFile     string // Client use this root ca
+	ServerHost string // The server name use to verify the hostname returned by TLS handshake
 }
 
-func NewRPCserver(bindIp string, port int, server DjobServer, tlsopt *TlsOpt) *RpcServer {
+func NewRPCServer(bindIp string, port int, server DjobServer, tlsopt *TlsOpt) *RpcServer {
 	return &RpcServer{
 		bindIp:  bindIp,
 		rpcPort: port,
@@ -78,7 +77,7 @@ func (s *RpcServer) listen() error {
 	var opts []grpc.ServerOption
 
 	if s.tlsopt {
-		creds, err := credentials.NewServerTLSFromFile(s.tlsopt.CaFile, s.tlsopt.KeyFile)
+		creds, err := credentials.NewServerTLSFromFile(s.tlsopt.CertFile, s.tlsopt.KeyFile)
 		if err != nil {
 			return err
 		}

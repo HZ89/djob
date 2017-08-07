@@ -232,7 +232,7 @@ func (a *Agent) Run(args []string) int {
 			Log.Fatalf("Connent Backend Failed: %s", err)
 		}
 		// run rpc server
-		a.rpcServer = rpc.NewRPCserver(a.config.RPCBindIP, a.config.RPCBindPort, a, &tls)
+		a.rpcServer = rpc.NewRPCServer(a.config.RPCBindIP, a.config.RPCBindPort, a, &tls)
 		err = a.rpcServer.Run()
 		if err != nil {
 			Log.Fatalf("Start rpc server Failed: %s", err)
