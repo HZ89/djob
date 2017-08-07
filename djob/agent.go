@@ -1,7 +1,7 @@
 package djob
 
 import (
-	"local/djob/rpc"
+	"version.uuzu.com/zhuhuipeng/djob/rpc"
 	"time"
 
 	"errors"
@@ -12,7 +12,7 @@ import (
 	"github.com/docker/libkv/store"
 	"github.com/hashicorp/memberlist"
 	"github.com/hashicorp/serf/serf"
-	"local/djob/scheduler"
+	"version.uuzu.com/zhuhuipeng/djob/scheduler"
 )
 
 var (

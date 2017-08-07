@@ -1,7 +1,7 @@
 package djob
 
 import (
-	pb "local/djob/message"
+	pb "version.uuzu.com/zhuhuipeng/djob/message"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/libkv/store"

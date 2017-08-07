@@ -1,6 +1,6 @@
 package djob
 
-import pb "local/djob/message"
+import pb "version.uuzu.com/zhuhuipeng/djob/message"
 
 // implementation of DjobServer interface
 

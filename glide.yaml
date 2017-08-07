@@ -1,4 +1,4 @@
-package: local/djob
+package: version.uuzu.com/zhuhuipeng/djob
 import:
 - package: github.com/Sirupsen/logrus
 - package: github.com/golang/protobuf

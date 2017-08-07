@@ -6,7 +6,7 @@ import (
 	"github.com/Knetic/govaluate"
 	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/serf/serf"
-	pb "local/djob/message"
+	pb "version.uuzu.com/zhuhuipeng/djob/message"
 	"strings"
 	"unicode"
 )

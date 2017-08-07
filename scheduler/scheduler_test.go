@@ -1,7 +1,7 @@
 package scheduler
 
 import (
-	pb "local/djob/message"
+	pb "version.uuzu.com/zhuhuipeng/djob/message"
 	"reflect"
 	"testing"
 )

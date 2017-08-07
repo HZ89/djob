@@ -1,12 +1,12 @@
-hash: 56115c3b47c448e74aef89128fbc4f377a5ef2f357498179387013b2d3c5d255
-updated: 2017-07-24T12:36:28.940919751+08:00
+hash: 3b085cefb754494e91dd6f67edc6b890029729f66ed4ca710f0918d505373d88
+updated: 2017-08-07T10:06:30.050031907+08:00
 imports:
 - name: bitbucket.org/tebeka/strftime
   version: 2194253a23c090a4d5953b152a3c63fb5da4f5a4
 - name: github.com/armon/go-metrics
   version: f036747b9d0e8590f175a5d654a2194a7d9df4b5
 - name: github.com/coreos/etcd
-  version: e9a7f3551bce5b90522345f71e52d04b08090928
+  version: b39891eb454fa76f45783f117cdcada16b92a477
   subpackages:
   - client
   - pkg/pathutil
@@ -31,7 +31,7 @@ imports:
 - name: github.com/gin-contrib/sse
   version: 22d885f9ecc78bf4ee5d72b937e4bbcdc58e8cae
 - name: github.com/gin-gonic/contrib
-  version: d4fc5a96cc0d29cb0e862bb1312dd6f4fedfcaee
+  version: 0f937ce6d016f44b2f5b1f03787e055977e7c0b8
   subpackages:
   - jwt
 - name: github.com/gin-gonic/gin
@@ -40,15 +40,17 @@ imports:
   - binding
   - render
 - name: github.com/gogo/protobuf
-  version: 7b6c6391c4ff245962047fc1e2c6e08b1cdfa0e8
+  version: 15e5f49f11b8f01e78c402755dfdb51088f3b253
   subpackages:
   - proto
 - name: github.com/golang/protobuf
   version: 5a0f697c9ed9d68fef0116532c6e05cfeae00e55
   subpackages:
+  - jsonpb
   - proto
   - ptypes
   - ptypes/any
+  - ptypes/struct
   - ptypes/timestamp
 - name: github.com/hashicorp/consul
   version: 2c7715154d8d4568524b76d2d4deb7ca6fd1b285
@@ -109,7 +111,7 @@ imports:
 - name: github.com/rifflock/lfshook
   version: 2adb3e0c4ddd8778c4adde609d2dfd4fbe6096ea
 - name: github.com/samuel/go-zookeeper
-  version: 1d7be4effb13d2d908342d349d71a284a7542693
+  version: 8ac67fae881ed12e87206ba2243c75b079b419a4
   subpackages:
   - zk
 - name: github.com/sean-/seed
@@ -174,7 +176,7 @@ imports:
   - tap
   - transport
 - name: gopkg.in/go-playground/validator.v8
-  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
+  version: 5f1438d3fca68893a817e4a66806cea46a9e4ebf
 - name: gopkg.in/yaml.v2
   version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
 testImports: []

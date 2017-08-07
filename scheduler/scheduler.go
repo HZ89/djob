@@ -2,7 +2,7 @@ package scheduler
 
 import (
 	"errors"
-	pb "local/djob/message"
+	pb "version.uuzu.com/zhuhuipeng/djob/message"
 	"sort"
 	"time"
 )

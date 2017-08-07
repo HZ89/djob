@@ -6,7 +6,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	pb "local/djob/message"
+	pb "version.uuzu.com/zhuhuipeng/djob/message"
 	"net"
 	"time"
 )

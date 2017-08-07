@@ -6,7 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/spf13/viper"
-	"local/djob/cmd"
+	"version.uuzu.com/zhuhuipeng/djob/cmd"
 	"net"
 	"os"
 	"path/filepath"

@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
-	pb "local/djob/message"
+	pb "version.uuzu.com/zhuhuipeng/djob/message"
 	"net/http"
 	"time"
 )

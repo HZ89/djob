@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	pb "local/djob/message"
-	"local/djob/scheduler"
+	pb "version.uuzu.com/zhuhuipeng/djob/message"
+	"version.uuzu.com/zhuhuipeng/djob/scheduler"
 )
 
 func main() {
