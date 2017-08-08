@@ -34,6 +34,11 @@ func main() {
 				Ui: ui,
 			}, nil
 		},
+		"keygen": func() (cli.Command, error) {
+			return &cmd.KeygenCmd{
+				Ui: ui,
+			}, nil
+		},
 	}
 
 	exitStatus, err := c.Run()

@@ -40,7 +40,7 @@ func newConfig(args []string) *config {
 	var (
 		host     = flags.String("host", "", "Comma-separated hostnames and IPs to generate a certificate for")
 		validFor = flags.Duration("duration", 365*24, "Duration that certificate is valid for, unit is hour")
-		initCa   = flags.Bool("initCa", false, "Create a root ca keypair")
+		initCa   = flags.Bool("initca", false, "Create a root ca keypair")
 		ca       = flags.String("ca", "./ca.pem", "Ca public key")
 		caKey    = flags.String("cakey", "./ca-key.pem", "Ca private key")
 	)
@@ -99,10 +99,12 @@ func (c *KeygenCmd) genCert() int {
 		if err != nil {
 			c.Ui.Error(fmt.Sprintf("Failed to writing ca.pem: %s", err.Error()))
 		}
+		c.Ui.Output("Write root certificate ca.pem succeed")
 		err = ioutil.WriteFile("ca-key.pem", caPrivInPem, 0600)
 		if err != nil {
 			c.Ui.Error(fmt.Sprintf("Failed to writing ca-key.pem: %s", err.Error()))
 		}
+		c.Ui.Output("Write root key ca-key.pem succeed")
 
 	} else {
 		if len(c.config.ca) == 0 || len(c.config.caKey) == 0 {
@@ -159,10 +161,12 @@ func (c *KeygenCmd) genCert() int {
 		c.Ui.Error(fmt.Sprintf("Failed to writing file %s.pem: %s", hosts[0], err.Error()))
 		return 1
 	}
+	c.Ui.Output(fmt.Sprintf("Write certificate %s.pem succeed", hosts[0]))
 	err = ioutil.WriteFile(fmt.Sprintf("%s-key.pem", hosts[0]), pkInPem, 0600)
 	if err != nil {
 		c.Ui.Error(fmt.Sprintf("Failed to writing file %s.pem: %s", hosts[0], err.Error()))
 	}
+	c.Ui.Output(fmt.Sprintf("Write key file %s-key.pem succeed", hosts[0]))
 	return 0
 }
 
@@ -171,7 +175,7 @@ func (c *KeygenCmd) createKeypair(selfSign bool, template *x509.Certificate, par
 	var parent *x509.Certificate
 	newPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return
+		return pkInPem, certInPem, err
 	}
 	newPub := publicKey(newPriv)
 	if selfSign {
@@ -184,7 +188,7 @@ func (c *KeygenCmd) createKeypair(selfSign bool, template *x509.Certificate, par
 		}
 		priv, err = x509.ParseECPrivateKey(privBlock.Bytes)
 		if err != nil {
-			return
+			return pkInPem, certInPem, err
 		}
 		parentBlock, _ := pem.Decode(parentPem)
 		if privBlock == nil {
@@ -192,7 +196,7 @@ func (c *KeygenCmd) createKeypair(selfSign bool, template *x509.Certificate, par
 		}
 		cert, err := x509.ParseCertificate(parentBlock.Bytes)
 		if err != nil {
-			return
+			return pkInPem, certInPem, err
 		}
 		p := x509.Certificate{
 			SerialNumber:          cert.SerialNumber,
@@ -208,13 +212,13 @@ func (c *KeygenCmd) createKeypair(selfSign bool, template *x509.Certificate, par
 	}
 	derBytes, err := x509.CreateCertificate(rand.Reader, template, parent, newPub, priv)
 	if err != nil {
-		return
+		return pkInPem, certInPem, err
 	}
 	var certbuf, pkbuf bytes.Buffer
 	pem.Encode(&certbuf, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
-	certInPem = []byte(certbuf)
+	certInPem = certbuf.Bytes()
 	pem.Encode(&pkbuf, pemBlockForKey(newPriv))
-	pkInPem = []byte(pkbuf)
+	pkInPem = pkbuf.Bytes()
 	return
 }
 
@@ -240,7 +244,7 @@ func (c *KeygenCmd) Synopsis() string {
 func (c *KeygenCmd) Help() string {
 	helpText := `
 	Usage: djob keygen tls [options]
-	       djob keygen key
+	   djob keygen key
 	  Generates a new encryption that can be used to configure the agent to encrypt traffic.
 	  The output of key command is already in the proper format that the agent expects.
 	  Tls command will generates tls files. Include ca pk, pub key.

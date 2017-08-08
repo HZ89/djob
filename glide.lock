@@ -1,12 +1,16 @@
 hash: 3b085cefb754494e91dd6f67edc6b890029729f66ed4ca710f0918d505373d88
-updated: 2017-08-07T10:06:30.050031907+08:00
+updated: 2017-08-08T15:34:34.315947161+08:00
 imports:
 - name: bitbucket.org/tebeka/strftime
   version: 2194253a23c090a4d5953b152a3c63fb5da4f5a4
 - name: github.com/armon/go-metrics
-  version: f036747b9d0e8590f175a5d654a2194a7d9df4b5
+  version: efce74234d0fcaac1bd5b2a32d6d3afd108c4498
+- name: github.com/armon/go-radix
+  version: 4239b77079c7b5d1243b7b4736304ce8ddb6f0f2
+- name: github.com/bgentry/speakeasy
+  version: 4aabc24848ce5fd31929f7d1e4ea74d3709c14cd
 - name: github.com/coreos/etcd
-  version: b39891eb454fa76f45783f117cdcada16b92a477
+  version: a9b9ef5640a2d0df0e3b9a23360ecd85eac22604
   subpackages:
   - client
   - pkg/pathutil
@@ -27,7 +31,7 @@ imports:
 - name: github.com/fsnotify/fsnotify
   version: 4da3e2cfbabc9f751898f250b49f2439785783a1
 - name: github.com/gin-contrib/gzip
-  version: 93bb0f0ed1109c1091b0c062c1ff1a4070e1906f
+  version: ff223ab9f8e3e69d4eb333c90966e057c5a97873
 - name: github.com/gin-contrib/sse
   version: 22d885f9ecc78bf4ee5d72b937e4bbcdc58e8cae
 - name: github.com/gin-gonic/contrib
@@ -40,7 +44,7 @@ imports:
   - binding
   - render
 - name: github.com/gogo/protobuf
-  version: 15e5f49f11b8f01e78c402755dfdb51088f3b253
+  version: 1c2b16bc280d6635de6c52fc1471ab962dc36ec9
   subpackages:
   - proto
 - name: github.com/golang/protobuf
@@ -60,6 +64,8 @@ imports:
   version: 7554cd9344cec97297fa6649b055a8c98c2a1e55
 - name: github.com/hashicorp/go-cleanhttp
   version: 3573b8b52aa7b37b9358d966a898feb387f62437
+- name: github.com/hashicorp/go-immutable-radix
+  version: 8aac2701530899b64bdea735a1de8da899815220
 - name: github.com/hashicorp/go-msgpack
   version: fa3f63826f7c23912c15263591e65d54d080b458
   subpackages:
@@ -70,6 +76,10 @@ imports:
   version: 6bb64b370b90e7ef1fa532be9e591a81c3493e00
 - name: github.com/hashicorp/go-sockaddr
   version: 41949a141473f6340abc6ba0fcd0f89da6f6f837
+- name: github.com/hashicorp/golang-lru
+  version: 0a025b7e63adc15a622f29b0b2c4c3848243bbf6
+  subpackages:
+  - simplelru
 - name: github.com/hashicorp/hcl
   version: 392dba7d905ed5d04a5794ba89f558b27e2ba1ca
   subpackages:
@@ -82,7 +92,7 @@ imports:
   - json/scanner
   - json/token
 - name: github.com/hashicorp/memberlist
-  version: 99594a4f171a77cb7cff01f143ccf608ac577c47
+  version: ea4ef7f066304a8e6f28bdb958888fe899f3b44e
 - name: github.com/hashicorp/serf
   version: d6574a5bb1226678d7010325fb6c985db20ee458
   subpackages:
