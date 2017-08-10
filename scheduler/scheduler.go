@@ -87,7 +87,11 @@ func (s *Scheduler) deleteEntryByName(name string) error {
 	return errors.New("Con't find job")
 }
 
-func (s *Scheduler) send(job *pb.Job) {
+/*
+TODO: 重写runJob，添加一个backend interface，包含异步任务执行方法，同步任务执行方法和任务执行结果查询方法
+TODO: 添加 基于任务执行结果的调度
+ */
+func (s *Scheduler) runJob(job *pb.Job) {
 	s.RunJobCh <- job
 }
 
@@ -116,7 +120,7 @@ func (s *Scheduler) run() {
 				if e.Next != movement {
 					break
 				}
-				go s.send(e.Job)
+				go s.runJob(e.Job)
 				e.Perv = e.Next
 				e.Next = e.Analyzer.Next(movement)
 				if e.Next.IsZero() {

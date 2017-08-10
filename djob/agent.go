@@ -2,6 +2,7 @@ package djob
 
 import (
 	"version.uuzu.com/zhuhuipeng/djob/rpc"
+	pb "version.uuzu.com/zhuhuipeng/djob/message"
 	"time"
 
 	"errors"
@@ -37,6 +38,7 @@ type Agent struct {
 	scheduler   *scheduler.Scheduler
 	apiServer   *api.APIServer
 	version     string
+	runJobCh    chan *pb.Job
 }
 
 func (a *Agent) setupSerf() *serf.Serf {
@@ -70,14 +72,14 @@ func (a *Agent) setupSerf() *serf.Serf {
 
 	Log.Info("agent: Djob agent starting")
 
-	serf, err := serf.Create(serfConfig)
+	s, err := serf.Create(serfConfig)
 	if err != nil {
 		Log.Fatal(err)
 		return nil
 	}
 	//a.memberCache = make(map[string]map[string]string)
 
-	return serf
+	return s
 }
 
 // serfJion let serf intence jion a serf clust
@@ -213,44 +215,63 @@ func (a *Agent) Run() {
 		Log.Fatalln("Start serf failed!")
 	}
 	a.serfJion(a.config.SerfJoin, true)
-
 	// TODO: add prometheus support
 	// start prometheus client
 	var tls rpc.TlsOpt
-	var kayPair api.KayPair
+	var keyPair api.KayPair
 	if a.config.RPCTls {
 		tls = rpc.TlsOpt{
 			CertFile: a.config.CertFile,
 			KeyFile:  a.config.KeyFile,
 			CaFile:   a.config.CAFile,
 		}
-		kayPair = api.KayPair{
+		keyPair = api.KayPair{
 			Key:  a.config.KeyFile,
 			Cert: a.config.CertFile,
 		}
 	}
 
 	if a.config.Server {
+		a.scheduler = scheduler.New(a.runJobCh)
+		a.scheduler.Start()
 		a.store, err = NewStore(a.config.JobStore, a.config.JobStoreServers, a.config.JobStoreKeyspace)
 		if err != nil {
 			Log.WithFields(logrus.Fields{
 				"backend":  a.config.JobStore,
 				"servers":  a.config.JobStoreServers,
 				"keyspace": a.config.JobStoreKeyspace,
-			}).Debug("Connect Backend Failed")
-			Log.Fatalf("Connent Backend Failed: %s", err)
+			}).Debug("Agent: Connect Backend Failed")
+			Log.Fatalf("Agent: Connent Backend Failed: %s", err)
 		}
 		// run rpc server
 		a.rpcServer = rpc.NewRPCServer(a.config.RPCBindIP, a.config.RPCBindPort, a, &tls)
 		go func() {
 			if err := a.rpcServer.Run(); err != nil {
-				Log.Fatal(err)
+				Log.Fatalf("Agent: Start RPC Srever Failed: %s", err)
 			}
-			Log.Info("RPC Server started")
+			Log.Info("Agent: RPC Server started")
 		}()
-		a.scheduler = scheduler.New()
+
+		a.loadAllJob(a.config.Region)
+
+		a.apiServer, err = api.NewAPIServer(a.config.APIBindIP, a.config.APIBindPort, Log, make(map[string]string), a.config.RPCTls, &keyPair)
+		if err != nil {
+			Log.Fatalf("Agent: New API Server Failed: %s", err)
+		}
+		go func() {
+			if err := a.apiServer.Run(); err != nil {
+				Log.Fatalf("Agent: Start API Server Failed: %s", err)
+			}
+			Log.Info("Agent: API Server started")
+		}()
 
 	}
+
+	a.mainLoop()
+}
+
+func (a *Agent) loadAllJob(region string) {
+
 }
 
 func (a *Agent) Reload(args []string) {
@@ -330,6 +351,7 @@ func New(args []string, version string) *Agent {
 		jobLockers:  make(map[string]store.Locker),
 		eventCh:     make(chan serf.Event, 64),
 		memberCache: make(map[string]map[string]string),
+		runJobCh:    make(chan *pb.Job),
 		config:      config,
 		version:     version,
 	}
