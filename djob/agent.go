@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/memberlist"
 	"github.com/hashicorp/serf/serf"
 	"version.uuzu.com/zhuhuipeng/djob/scheduler"
+	"version.uuzu.com/zhuhuipeng/djob/web/api"
 )
 
 var (
@@ -20,18 +21,22 @@ var (
 	LockTimeout    = 2 * time.Second
 )
 
+const gracefulTime = 5 * time.Second
+
 type Agent struct {
-	ShutdownCh  <-chan struct{}
 	jobLockers  map[string]store.Locker
 	config      *Config
 	serf        *serf.Serf
 	eventCh     chan serf.Event
 	ready       bool
 	rpcServer   *rpc.RpcServer
+	rpcClient   *rpc.RpcClient
 	store       *KVStore
-	membercache map[string]map[string]string
+	memberCache map[string]map[string]string
 	mutex       sync.Mutex
 	scheduler   *scheduler.Scheduler
+	apiServer   *api.APIServer
+	version     string
 }
 
 func (a *Agent) setupSerf() *serf.Serf {
@@ -60,7 +65,7 @@ func (a *Agent) setupSerf() *serf.Serf {
 	serfConfig.UserQuiescentPeriod = time.Second
 	serfConfig.EnableNameConflictResolution = true
 
-	a.eventCh = make(chan serf.Event, 64)
+	//	a.eventCh = make(chan serf.Event, 64)
 	serfConfig.EventCh = a.eventCh
 
 	Log.Info("agent: Djob agent starting")
@@ -70,7 +75,7 @@ func (a *Agent) setupSerf() *serf.Serf {
 		Log.Fatal(err)
 		return nil
 	}
-	//a.membercache = make(map[string]map[string]string)
+	//a.memberCache = make(map[string]map[string]string)
 
 	return serf
 }
@@ -199,9 +204,8 @@ func (a *Agent) mainLoop() {
 }
 
 // Run func start a Agent process
-func (a *Agent) Run(args []string) int {
+func (a *Agent) Run() {
 	var err error
-	a.config, err = NewConfig(args)
 	if err != nil {
 		Log.Fatalln(err)
 	}
@@ -213,11 +217,16 @@ func (a *Agent) Run(args []string) int {
 	// TODO: add prometheus support
 	// start prometheus client
 	var tls rpc.TlsOpt
+	var kayPair api.KayPair
 	if a.config.RPCTls {
 		tls = rpc.TlsOpt{
-			CertFile: a.config.RPCCertFile,
-			KeyFile:  a.config.RPCKeyFile,
-			CaFile:   a.config.RPCCAfile,
+			CertFile: a.config.CertFile,
+			KeyFile:  a.config.KeyFile,
+			CaFile:   a.config.CAFile,
+		}
+		kayPair = api.KayPair{
+			Key:  a.config.KeyFile,
+			Cert: a.config.CertFile,
 		}
 	}
 
@@ -233,11 +242,97 @@ func (a *Agent) Run(args []string) int {
 		}
 		// run rpc server
 		a.rpcServer = rpc.NewRPCServer(a.config.RPCBindIP, a.config.RPCBindPort, a, &tls)
-		err = a.rpcServer.Run()
-		if err != nil {
-			Log.Fatalf("Start rpc server Failed: %s", err)
-		}
+		go func() {
+			if err := a.rpcServer.Run(); err != nil {
+				Log.Fatal(err)
+			}
+			Log.Info("RPC Server started")
+		}()
 		a.scheduler = scheduler.New()
 
 	}
 }
+
+func (a *Agent) Reload(args []string) {
+	newConf, err := newConfig(args, a.version)
+	if err != nil {
+		Log.Warn(err)
+		return
+	}
+	a.config = newConf
+
+	a.serf.SetTags(a.config.Tags)
+}
+
+func (a *Agent) Stop(graceful bool) int {
+
+	if !graceful {
+		return 0
+	}
+
+	gracefulCh := make(chan struct{})
+
+	Log.Info("agent: Gracefully shutting down agent...")
+	go func() {
+		var wg sync.WaitGroup
+		if a.config.Server {
+			// shutdown scheduler and unlock all jobs
+			go func() {
+				wg.Add(1)
+				a.scheduler.Stop()
+				for _, locker := range a.jobLockers {
+					locker.Unlock()
+				}
+				wg.Done()
+			}()
+			// graceful shutdown rpc server
+			go func() {
+				wg.Add(1)
+				a.rpcServer.Shutdown(gracefulTime)
+				wg.Done()
+			}()
+			// gracefull shutdown api server
+			go func() {
+				wg.Add(1)
+				if err := a.apiServer.Stop(gracefulTime); err != nil {
+					Log.Errorf("Agent:Graceful shutdown Api server failed: %s", err)
+				}
+				wg.Done()
+			}()
+		}
+		go func() {
+			wg.Add(1)
+			if err := a.serf.Leave(); err != nil {
+				Log.Errorf("Agent: Graceful shutdown down serf failed: %s", err)
+			}
+			a.serf.Shutdown()
+			wg.Done()
+		}()
+		wg.Wait()
+		gracefulCh <- struct{}{}
+	}()
+
+	select {
+	case <-time.After(gracefulTime):
+		return 1
+	case <-gracefulCh:
+		return 0
+	}
+}
+
+func New(args []string, version string) *Agent {
+	config, err := newConfig(args, version)
+	if err != nil {
+		Log.Fatalln(err)
+	}
+
+	return &Agent{
+		jobLockers:  make(map[string]store.Locker),
+		eventCh:     make(chan serf.Event, 64),
+		memberCache: make(map[string]map[string]string),
+		config:      config,
+		version:     version,
+	}
+
+}
+

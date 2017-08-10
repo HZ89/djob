@@ -29,7 +29,7 @@ func (a *Agent) createSerfQueryParam(expression string) (*serf.QueryParam, error
 
 	suspected := make(map[string]map[string]string)
 	for _, v := range exp.Vars() {
-		for mk, mv := range a.membercache[v] {
+		for mk, mv := range a.memberCache[v] {
 			suspected[mk][v] = mv
 		}
 	}
@@ -65,10 +65,10 @@ func (a *Agent) handleMemberCache(eventType serf.EventType, members []serf.Membe
 
 	for _, member := range members {
 		for tk, tv := range member.Tags {
-			if _, exits := a.membercache[tk]; exits {
-				if _, exits := a.membercache[tk][member.Name]; exits {
+			if _, exits := a.memberCache[tk]; exits {
+				if _, exits := a.memberCache[tk][member.Name]; exits {
 					if eventType == serf.EventMemberJoin || eventType == serf.EventMemberUpdate {
-						a.membercache[tk][member.Name] = tv
+						a.memberCache[tk][member.Name] = tv
 
 						if eventType == serf.EventMemberJoin {
 							Log.Warn("agent: get a new member event, but already have it's cache")
@@ -80,23 +80,23 @@ func (a *Agent) handleMemberCache(eventType serf.EventType, members []serf.Membe
 
 					}
 					if eventType == serf.EventMemberReap || eventType == serf.EventMemberFailed || eventType == serf.EventMemberLeave {
-						delete(a.membercache[tk], member.Name)
+						delete(a.memberCache[tk], member.Name)
 						Log.Infof("agent: delte member %s tags %s from cache", member.Name, tk)
 					}
 					// remove no value key
-					if len(a.membercache[tk]) == 0 {
-						delete(a.membercache, tk)
+					if len(a.memberCache[tk]) == 0 {
+						delete(a.memberCache, tk)
 					}
 				} else {
 					if eventType == serf.EventMemberJoin || eventType == serf.EventMemberUpdate {
-						a.membercache[tk][member.Name] = tv
+						a.memberCache[tk][member.Name] = tv
 					} else {
 						Log.Warn("agent: get a member delete event, but have not cache")
 					}
 				}
 			} else {
 				if eventType == serf.EventMemberUpdate || eventType == serf.EventMemberJoin {
-					a.membercache[tk][member.Name] = tv
+					a.memberCache[tk][member.Name] = tv
 				} else {
 					Log.Warn("agent: get a member delete event, but have not cache")
 				}

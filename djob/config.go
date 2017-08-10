@@ -31,9 +31,9 @@ type Config struct {
 	LogLevel          string   // info debug error
 	LogFile           string   // log file path
 	RPCTls            bool     // grpc enable tls or not
-	RPCCAfile         string   // tls ca file used in agent
-	RPCKeyFile        string   // key file used in server
-	RPCCertFile       string   // cert file used in server
+	CAFile            string   // tls ca file used in agent
+	KeyFile           string   // key file used in server
+	CertFile          string   // cert file used in server
 	RPCBindIP         string   // grcp bind addr ip
 	RPCBindPort       int
 	RPCAdcertiseIP    string // sames to serf advertise addr
@@ -59,7 +59,7 @@ const (
 //	viper.SetConfigType("yaml")
 //}
 
-func NewConfig(args []string) (*Config, error) {
+func newConfig(args []string, version string) (*Config, error) {
 
 	cmdFlags := flag.NewFlagSet("agent", flag.ContinueOnError)
 	cmdFlags.String("config", DefaultConfigFile, "config file path")
@@ -83,10 +83,10 @@ func NewConfig(args []string) (*Config, error) {
 	viper.SetDefault("pid", cmdFlags.Lookup("pid").Value.String())
 	viper.SetDefault("logfile", cmdFlags.Lookup("logfile").Value.String())
 
-	return ReadConfig()
+	return ReadConfig(version)
 }
 
-func ReadConfig() (*Config, error) {
+func ReadConfig(version string) (*Config, error) {
 	err := viper.ReadInConfig()
 	if err != nil {
 		return nil, err
@@ -103,7 +103,7 @@ func ReadConfig() (*Config, error) {
 		tags["server"] = "true"
 	}
 
-	tags["version"] = cmd.VERSION
+	tags["version"] = version
 	tags["node"] = nodeName
 	tags["region"] = viper.GetString("region")
 
@@ -164,9 +164,9 @@ func ReadConfig() (*Config, error) {
 		RPCAdcertisePort:  rpcAdport,
 		LogLevel:          viper.GetString("log_level"),
 		LogFile:           viper.GetString("logfile"),
-		RPCCAfile:         caFile,
-		RPCCertFile:       certFile,
-		RPCKeyFile:        keyFile,
+		CAFile:            caFile,
+		CertFile:          certFile,
+		KeyFile:           keyFile,
 		RPCTls:            withTls,
 		JobStore:          viper.GetString("job_store"),
 		JobStoreServers:   viper.GetStringSlice("job_store_servers"),

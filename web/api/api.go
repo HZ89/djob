@@ -12,6 +12,9 @@ import (
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
 	"net/http"
 	"time"
+	"crypto/tls"
+	"fmt"
+	"context"
 )
 
 type Backend interface {
@@ -19,6 +22,11 @@ type Backend interface {
 	JobInfo(name string) (*pb.Resp, error)
 	JobDelete(name string) (*pb.Resp, error)
 	JobList() (*pb.Resp, error)
+}
+
+type KayPair struct {
+	Key  string
+	Cert string
 }
 
 var jsonContentType = []string{"application/json; charset=utf-8"}
@@ -34,7 +42,7 @@ func (j pbjson) Render(w http.ResponseWriter) error {
 	if err := marshaler.Marshal(&buf, j.data.(proto.Message)); err != nil {
 		return err
 	}
-	w.Write(bytes(buf))
+	w.Write(buf.Bytes())
 	return nil
 }
 
@@ -63,13 +71,18 @@ func (jsonpbBinding) Bind(req *http.Request, obj interface{}) error {
 
 type APIServer struct {
 	bindIP    string
-	bindPort  string
+	bindPort  int
 	tokenList map[string]string
 	backend   Backend
 	loger     *logrus.Entry
+	keyPair   *KayPair
+	tls       bool
+	router    *gin.Engine
+	server    *http.Server
 }
 
-func (a *APIServer) NewAPIServer(ip string, port string, loger *logrus.Entry, tokens map[string]string) (*APIServer, error) {
+func NewAPIServer(ip string, port int, loger *logrus.Entry,
+	tokens map[string]string, tls bool, pair *KayPair) (*APIServer, error) {
 	if len(tokens) == 0 {
 		return nil, errors.New("Have no tokens")
 	}
@@ -86,6 +99,8 @@ func (a *APIServer) NewAPIServer(ip string, port string, loger *logrus.Entry, to
 		bindPort:  port,
 		loger:     loger,
 		tokenList: n,
+		tls:       tls,
+		keyPair:   pair,
 	}, nil
 }
 
@@ -94,6 +109,9 @@ func (a *APIServer) prepareGin() *gin.Engine {
 	r.Use(a.logMiddleware())
 	r.Use(a.tokenAuthMiddleware())
 	r.Use(gin.Recovery())
+	if a.tls {
+		r.Use(a.tlsHeaderMiddleware())
+	}
 	web := r.Group("/web")
 	web.Use(gzip.Gzip(gzip.DefaultCompression))
 	web.POST("/jobs", a.modJob)
@@ -152,6 +170,14 @@ func (a *APIServer) modJob(c *gin.Context) {
 	c.Render(http.StatusOK, pbjson{data: resp})
 }
 
+func (a *APIServer) tlsHeaderMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Next()
+		c.Writer.Header().Set("Strict-Transport-Security",
+			"max-age=63072000; includeSubDomains")
+	}
+}
+
 func (a *APIServer) logMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -199,4 +225,39 @@ func (a *APIServer) tokenAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 	}
+}
+
+func (a *APIServer) Run() error {
+	r := a.prepareGin()
+	a.server = &http.Server{
+		Addr:    fmt.Sprintf("%s:%d", a.bindIP, a.bindPort),
+		Handler: r,
+	}
+	if a.tls {
+		a.server.TLSConfig = &tls.Config{
+			MinVersion:               tls.VersionTLS12,
+			CurvePreferences:         []tls.CurveID{tls.CurveP256, tls.CurveP384, tls.CurveP521},
+			PreferServerCipherSuites: true,
+			CipherSuites: []uint16{
+				tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+			},
+		}
+		a.server.TLSNextProto = make(map[string]func(*http.Server, *tls.Conn, http.Handler), 0)
+		return a.server.ListenAndServeTLS(a.keyPair.Cert, a.keyPair.Key)
+	}
+	return a.server.ListenAndServe()
+}
+
+func (a *APIServer) Stop(wait time.Duration) error {
+	a.loger.Infof("API-server: shutdown in %d second", wait)
+	ctx, cancel := context.WithTimeout(context.Background(), wait)
+	defer cancel()
+	if err := a.server.Shutdown(ctx); err != nil {
+		return err
+	}
+	a.loger.Info("API-server: bye-bye")
+	return nil
 }
