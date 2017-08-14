@@ -7,6 +7,7 @@ import (
 	"github.com/docker/libkv/store"
 	"github.com/gogo/protobuf/proto"
 	"github.com/hashicorp/serf/serf"
+	"github.com/prometheus/common/log"
 )
 
 const (
@@ -26,9 +27,8 @@ const (
 //}
 
 // sendNreJobQuery func used to notice all server there is a now job need to be add
-func (a *Agent) sendNewJobQuery(jobName string) {
-	var params *serf.QueryParam
-	job, err := a.store.GetJob(jobName)
+func (a *Agent) sendNewJobQuery(jobName, region string) {
+	job, err := a.store.GetJob(jobName, region)
 	if err != nil {
 		if err == store.ErrKeyNotFound {
 			Log.WithFields(logrus.Fields{
@@ -36,24 +36,14 @@ func (a *Agent) sendNewJobQuery(jobName string) {
 			}).Debug("job can not found")
 		}
 	}
-	params, err = a.createSerfQueryParam(job.Expression)
-	if err != nil {
-		if err == ErrCanNotFoundNode {
-			Log.WithFields(logrus.Fields{
-				"jobName":   job.Name,
-				"jobRegion": job.Region,
-				"jobExp":    job.Expression,
-			}).Debug(err)
-		}
-		Log.Warn(err)
-		return
-		//var regionFilter map[string]string
-		//regionFilter["region"] = job.Region
-		//params = &serf.QueryParam{
-		//	FilterTags: regionFilter,
-		//	RequestAck: true,
-		//}
+	params := &serf.QueryParam{
+		FilterTags: map[string]string{
+			"server": "true",
+			"region": region,
+		},
+		RequestAck: true,
 	}
+
 	qp := &pb.NewJobQueryParams{
 		Name:   job.Name,
 		Region: job.Region,
@@ -105,7 +95,14 @@ func (a *Agent) receiveNewJobQuery(query *serf.Query) {
 			"payload": string(query.Payload),
 		}).WithError(err).Error("agent: Server add new job memberevent")
 	}
-	job, err := a.store.GetJob(params.Name)
+	if params.Region != a.config.Region {
+		Log.WithFields(logrus.Fields{
+			"name":   params.Name,
+			"region": params.Region,
+		}).Debug("Agent: receive a job from other region")
+		return
+	}
+	job, err := a.store.GetJob(params.Name, params.Region)
 	if err != nil {
 		Log.WithFields(logrus.Fields{
 			"query":   query.Name,
@@ -126,6 +123,13 @@ func (a *Agent) receiveNewJobQuery(query *serf.Query) {
 		return
 	}
 
+	job.SchedulerNodeName = a.config.Nodename
+	if err := a.store.SetJob(job); err != nil {
+		locker.Unlock()
+		Log.WithFields(logrus.Fields{
+			"job_name": job.Name,
+		}).WithError(err).Error("Agent: Update job schedulerNodeName failed")
+	}
 	a.jobLockers[job.Name] = locker
 
 	// add job

@@ -50,7 +50,7 @@ func (b byTime) Less(i, j int) bool {
 }
 
 func newEntery(job *pb.Job) (*entry, error) {
-	analyzer, err := prepare(job.Schedule)
+	analyzer, err := Prepare(job.Schedule)
 	if err != nil {
 		return nil, err
 	}

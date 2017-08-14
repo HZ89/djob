@@ -47,9 +47,10 @@ func NewStore(backend string, servers []string, keyspace string) (*KVStore, erro
 	}, nil
 }
 
-func (s *KVStore) GetJob(jobName string) (*pb.Job, error) {
-	jobNamekey := generateSlug(jobName)
-	res, err := s.Client.Get(s.keyspace + "/jobs/" + jobNamekey)
+func (s *KVStore) GetJob(jobName, region string) (*pb.Job, error) {
+	jobNameKey := generateSlug(jobName)
+	regionKey := generateSlug(region)
+	res, err := s.Client.Get(fmt.Sprintf("%s/%s/jobs/%s", s.keyspace, regionKey, jobNameKey))
 	if err != nil {
 		return nil, err
 	}
@@ -64,13 +65,20 @@ func (s *KVStore) SetJob(job *pb.Job) error {
 	if err := verifyJob(job); err != nil {
 		return err
 	}
-	jobName := generateSlug(job.Name)
-	jobkey := fmt.Sprintf("%s/jobs/%s", s.keyspace, jobName)
+	jobNameKey := generateSlug(job.Name)
+	regionKey := generateSlug(job.Region)
+	jobkey := fmt.Sprintf("%s/%s/jobs/%s", s.keyspace, regionKey, jobNameKey)
 
 	v, err := proto.Marshal(job)
 	if err != nil {
 		return err
 	}
-	Log.WithFields(logrus.Fields{})
+	Log.WithFields(logrus.Fields{
+		"name":       jobNameKey,
+		"region":     regionKey,
+		"expression": job.Expression,
+		"scheduler":  job.Schedule,
+		"marshal":    string(v),
+	}).Debug("Store: save job to etcd")
 	return nil
 }

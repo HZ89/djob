@@ -9,6 +9,8 @@ import (
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
 	"strings"
 	"unicode"
+	"version.uuzu.com/zhuhuipeng/djob/scheduler"
+	"fmt"
 )
 
 var (
@@ -17,6 +19,7 @@ var (
 	ErrNoCmd           = errors.New("A job must have a Command")
 	ErrNoReg           = errors.New("A job must have a region")
 	ErrNoExp           = errors.New("A job must have a Expression")
+	ErrScheduleParse   = errors.New("Can't parse job schedule")
 )
 
 func (a *Agent) createSerfQueryParam(expression string) (*serf.QueryParam, error) {
@@ -122,6 +125,13 @@ func verifyJob(job *pb.Job) error {
 		return ErrNoExp
 	}
 
+	if job.ParentJob == "" {
+		if _, err := scheduler.Prepare(job.Schedule); err != nil {
+			return fmt.Errorf("%s: %s", ErrScheduleParse.Error(), err)
+		}
+	}
+
+	return nil
 }
 
 func generateSlug(str string) (slug string) {

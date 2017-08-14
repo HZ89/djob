@@ -252,7 +252,7 @@ func (a *Agent) Run() {
 			Log.Info("Agent: RPC Server started")
 		}()
 
-		a.loadAllJob(a.config.Region)
+		a.loadJob(a.config.Region)
 
 		a.apiServer, err = api.NewAPIServer(a.config.APIBindIP, a.config.APIBindPort, Log, make(map[string]string), a.config.RPCTls, &keyPair)
 		if err != nil {
@@ -270,7 +270,7 @@ func (a *Agent) Run() {
 	a.mainLoop()
 }
 
-func (a *Agent) loadAllJob(region string) {
+func (a *Agent) loadJob(region string) {
 
 }
 

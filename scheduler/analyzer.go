@@ -15,7 +15,7 @@ import (
 // - crontab specs, e.g. "* * * * * *"
 //   (second) (minute) (hour) (day of month) (month) (day of week)
 // - Descriptors, e.g. "@midnight", "@every 1h"
-func prepare(spec string) (_ analyzer, err error) {
+func Prepare(spec string) (_ analyzer, err error) {
 
 	// TODO: change all panicf to return a error
 	// Convert panics into errors
