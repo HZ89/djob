@@ -1,9 +1,9 @@
 package djob
 
 import (
-	"version.uuzu.com/zhuhuipeng/djob/rpc"
-	pb "version.uuzu.com/zhuhuipeng/djob/message"
 	"time"
+	pb "version.uuzu.com/zhuhuipeng/djob/message"
+	"version.uuzu.com/zhuhuipeng/djob/rpc"
 
 	"errors"
 	"fmt"
@@ -96,11 +96,11 @@ func (a *Agent) serfJion(addrs []string, replay bool) (n int, err error) {
 	return
 }
 
-func (a *Agent) lockJob(jobName string) (store.Locker, error) {
+func (a *Agent) lockJob(jobName, region string) (store.Locker, error) {
 
 	//reNewCh := make(chan struct{})
 
-	lockkey := fmt.Sprintf("%s/job_locks/%s", a.store.keyspace, jobName)
+	lockkey := fmt.Sprintf("%s/%s/job_locks/%s", a.store.keyspace, region, jobName)
 
 	//l, err := a.store.Client.NewLock(lockkey, &store.LockOptions{RenewLock:reNewCh})
 	l, err := a.store.Client.NewLock(lockkey, &store.LockOptions{})
@@ -188,6 +188,7 @@ func (a *Agent) mainLoop() {
 							"at":      query.LTime,
 						}).Debug("agent: Server receive a rpc config query")
 					}
+					go a.receiveGetRPCConfigQuery(query)
 				default:
 					Log.Warn("agent: get a unknow message")
 					Log.WithFields(logrus.Fields{
@@ -217,24 +218,26 @@ func (a *Agent) Run() {
 	a.serfJion(a.config.SerfJoin, true)
 	// TODO: add prometheus support
 	// start prometheus client
-	var tls rpc.TlsOpt
-	var keyPair api.KayPair
-	if a.config.RPCTls {
-		tls = rpc.TlsOpt{
-			CertFile: a.config.CertFile,
-			KeyFile:  a.config.KeyFile,
-			CaFile:   a.config.CAFile,
-		}
-		keyPair = api.KayPair{
-			Key:  a.config.KeyFile,
-			Cert: a.config.CertFile,
-		}
-	}
 
 	if a.config.Server {
+
+		var tls rpc.TlsOpt
+		var keyPair api.KayPair
+		if a.config.RPCTls {
+			tls = rpc.TlsOpt{
+				CertFile: a.config.CertFile,
+				KeyFile:  a.config.KeyFile,
+				CaFile:   a.config.CAFile,
+			}
+			keyPair = api.KayPair{
+				Key:  a.config.KeyFile,
+				Cert: a.config.CertFile,
+			}
+		}
+
 		a.scheduler = scheduler.New(a.runJobCh)
 		a.scheduler.Start()
-		a.store, err = NewStore(a.config.JobStore, a.config.JobStoreServers, a.config.JobStoreKeyspace)
+		a.store, err = NewKVStore(a.config.JobStore, a.config.JobStoreServers, a.config.JobStoreKeyspace)
 		if err != nil {
 			Log.WithFields(logrus.Fields{
 				"backend":  a.config.JobStore,
@@ -341,6 +344,22 @@ func (a *Agent) Stop(graceful bool) int {
 	}
 }
 
+func (a *Agent) newRPCClient(ip string, port int) *rpc.RpcClient {
+	var tls *rpc.TlsOpt
+	if a.config.RPCTls {
+		tls = &rpc.TlsOpt{
+			CertFile: a.config.CertFile,
+			KeyFile:  a.config.KeyFile,
+			CaFile:   a.config.CAFile,
+		}
+	}
+	client, err := rpc.NewRpcClient(ip, port, tls)
+	if err != nil {
+		Log.WithError(err).Fatal("Agent: start RPC Client failed")
+	}
+	return client
+}
+
 func New(args []string, version string) *Agent {
 	config, err := newConfig(args, version)
 	if err != nil {
@@ -357,4 +376,3 @@ func New(args []string, version string) *Agent {
 	}
 
 }
-

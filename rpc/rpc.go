@@ -5,9 +5,9 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	pb "version.uuzu.com/zhuhuipeng/djob/message"
 	"net"
 	"time"
+	pb "version.uuzu.com/zhuhuipeng/djob/message"
 )
 
 type DjobServer interface {
@@ -171,7 +171,7 @@ func (c *RpcClient) Shutdown() error {
 	return nil
 }
 
-func (c *RpcClient) GotJob(jobName string) (*pb.Job, error) {
+func (c *RpcClient) GetJob(jobName string) (*pb.Job, error) {
 	pbName := pb.Name{Name: jobName}
 	pbjob, err := c.client.GetJob(context.Background(), &pbName)
 	if err != nil {

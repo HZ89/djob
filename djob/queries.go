@@ -3,11 +3,10 @@ package djob
 import (
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
 
+	"fmt"
 	"github.com/Sirupsen/logrus"
-	"github.com/docker/libkv/store"
 	"github.com/gogo/protobuf/proto"
 	"github.com/hashicorp/serf/serf"
-	"github.com/prometheus/common/log"
 )
 
 const (
@@ -26,17 +25,11 @@ const (
 //	SchedulerNodeName string
 //}
 
-// sendNreJobQuery func used to notice all server there is a now job need to be add
-func (a *Agent) sendNewJobQuery(jobName, region string) {
-	job, err := a.store.GetJob(jobName, region)
-	if err != nil {
-		if err == store.ErrKeyNotFound {
-			Log.WithFields(logrus.Fields{
-				"jobName": jobName,
-			}).Debug("job can not found")
-		}
-	}
+// sendNreJobQuery func used to notice a server there is a now job need to be add
+func (a *Agent) sendNewJobQuery(jobName, region, serverNodeName string) {
+
 	params := &serf.QueryParam{
+		FilterNodes: []string(serverNodeName),
 		FilterTags: map[string]string{
 			"server": "true",
 			"region": region,
@@ -45,15 +38,16 @@ func (a *Agent) sendNewJobQuery(jobName, region string) {
 	}
 
 	qp := &pb.NewJobQueryParams{
-		Name:   job.Name,
-		Region: job.Region,
+		Name:           jobName,
+		Region:         region,
+		SourceNodeName: a.config.Nodename,
 	}
 	qpPb, _ := proto.Marshal(qp)
 
 	Log.WithFields(logrus.Fields{
 		"query_name": QueryNewJob,
-		"job_name":   job.Name,
-		"job_region": job.Region,
+		"job_name":   jobName,
+		"job_region": region,
 		"playload":   qp.String(),
 	}).Debug("agent: Sending query")
 
@@ -93,7 +87,7 @@ func (a *Agent) receiveNewJobQuery(query *serf.Query) {
 		Log.WithFields(logrus.Fields{
 			"query":   query.Name,
 			"payload": string(query.Payload),
-		}).WithError(err).Error("agent: Server add new job memberevent")
+		}).WithError(err).Error("Agent: Server add new job memberevent")
 	}
 	if params.Region != a.config.Region {
 		Log.WithFields(logrus.Fields{
@@ -102,35 +96,49 @@ func (a *Agent) receiveNewJobQuery(query *serf.Query) {
 		}).Debug("Agent: receive a job from other region")
 		return
 	}
-	job, err := a.store.GetJob(params.Name, params.Region)
+	ip, port, err := a.sendGetRPCConfigQuery(params.SourceNodeName)
 	if err != nil {
 		Log.WithFields(logrus.Fields{
-			"query":   query.Name,
-			"payload": string(query.Payload),
-		}).WithError(err).Error("agent: Server add new job memberevent")
-	}
-	// try to lock this job.
-	locker, err := a.lockJob(job.Name)
-
-	if err != nil {
-		if err == ErrLockTimeout {
-			Log.WithField("jobName:", job.Name).WithError(err).Debug("agent: try lock a job")
-		}
-		Log.WithFields(logrus.Fields{
-			"query":   query.Name,
-			"payload": string(query.Payload),
-		}).WithError(err).Debug("agent: Server add new job memberevent")
+			"SourceNodeName": params.SourceNodeName,
+		}).WithError(err).Error("Agent: Get RPC config Failed")
 		return
 	}
 
-	job.SchedulerNodeName = a.config.Nodename
-	if err := a.store.SetJob(job); err != nil {
-		locker.Unlock()
+	rpcClient := a.newRPCClient(ip, port)
+	defer rpcClient.Shutdown()
+
+	job, err := rpcClient.GetJob(params.Name)
+	if err != nil {
 		Log.WithFields(logrus.Fields{
-			"job_name": job.Name,
-		}).WithError(err).Error("Agent: Update job schedulerNodeName failed")
+			"Name":    query.Name,
+			"RPCAddr": fmt.Sprintf("%s:%d", ip, port),
+		}).WithError(err).Error("Agent: RPC Client get job failed")
 	}
-	a.jobLockers[job.Name] = locker
+
+	a.mutex.Lock()
+	if _, exist := a.jobLockers[job.Name]; !exist {
+		// try to lock this job.
+		locker, err := a.lockJob(job.Name, job.Region)
+		if err != nil {
+			Log.WithFields(logrus.Fields{
+				"JobName": job.Name,
+				"Region":  job.Region,
+			}).WithError(err).Fatal("Agent: try lock a job")
+		}
+
+		a.jobLockers[job.Name] = locker
+		job.SchedulerNodeName = a.config.Nodename
+	}
+	a.mutex.Unlock()
+
+	if err := a.store.SetJob(job); err != nil {
+		Log.WithFields(logrus.Fields{
+			"JobName": job.Name,
+			"Region":  job.Region,
+		}).WithError(err).Fatal("Agent: Save job to store failed")
+	}
+
+	a.scheduler.DeleteJob(job.Name)
 
 	// add job
 	err = a.scheduler.AddJob(job)
@@ -138,7 +146,7 @@ func (a *Agent) receiveNewJobQuery(query *serf.Query) {
 		Log.WithFields(logrus.Fields{
 			"job_name":  job.Name,
 			"scheduler": job.Schedule,
-		}).WithError(err).Error("Add Job to scheduler failed")
+		}).WithError(err).Fatal("Add Job to scheduler failed")
 	}
 	Log.Infof("agent: send job %s to newJobCh", job.Name)
 	Log.WithFields(logrus.Fields{
@@ -153,4 +161,68 @@ func (a *Agent) sendRunJobQuery(job *pb.Job) {
 
 func (a *Agent) receiveRunJobQuery(query *serf.Query) {
 
+}
+
+func (a *Agent) sendGetRPCConfigQuery(nodeName string) (string, int, error) {
+	params := &serf.QueryParam{
+		FilterNodes: []string(nodeName),
+		FilterTags:  map[string]string{"server": "true"},
+		RequestAck:  true,
+	}
+
+	qr, err := a.serf.Query(QueryRPCConfig, nil, params)
+	if err != nil {
+		Log.WithFields(logrus.Fields{
+			"query": QueryRPCConfig,
+			"error": err,
+		}).Fatal("Agent: Error sending serf query")
+	}
+
+	defer qr.Close()
+
+	ackCh := qr.AckCh()
+	respCh := qr.ResponseCh()
+	var payloadPb []byte
+	for !qr.Finished() {
+		select {
+		case ack, ok := <-ackCh:
+			if ok {
+				Log.WithFields(logrus.Fields{
+					"query": QueryRPCConfig,
+					"from":  ack,
+				}).Debug("Agent: Received ack")
+			}
+		case resp, ok := <-respCh:
+			if ok {
+				Log.WithFields(logrus.Fields{
+					"query":   QueryRPCConfig,
+					"from":    resp.From,
+					"payload": string(resp.Payload),
+				}).Debug("Agent: Received response")
+				payloadPb = resp.Payload
+			}
+		}
+	}
+	Log.WithFields(logrus.Fields{
+		"query": QueryRPCConfig,
+	}).Debug("Agent: Received ack and response Done")
+
+	var payload *pb.GetRPCConfigResp
+	if err := proto.Unmarshal(payloadPb, payload); err != nil {
+		Log.WithError(err).Error("Agent: Payload decode failed")
+		return "", 0, nil
+	}
+	return payload.Ip, int(payload.Port), nil
+}
+
+func (a *Agent) receiveGetRPCConfigQuery(query *serf.Query) {
+	resp := &pb.GetRPCConfigResp{
+		Ip:   a.config.RPCBindIP,
+		Port: int32(a.config.RPCBindPort),
+	}
+	respPb, _ := proto.Marshal(resp)
+	if err := query.Respond(respPb); err != nil {
+		Log.WithError(err).Errorf("Agent: serf query Respond error")
+	}
+	return
 }

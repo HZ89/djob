@@ -2,11 +2,10 @@ package scheduler
 
 import (
 	"errors"
-	pb "version.uuzu.com/zhuhuipeng/djob/message"
 	"sort"
 	"time"
+	pb "version.uuzu.com/zhuhuipeng/djob/message"
 )
-
 
 type analyzer interface {
 	Next(time.Time) time.Time
@@ -90,7 +89,7 @@ func (s *Scheduler) deleteEntryByName(name string) error {
 /*
 TODO: 重写runJob，添加一个backend interface，包含异步任务执行方法，同步任务执行方法和任务执行结果查询方法
 TODO: 添加 基于任务执行结果的调度
- */
+*/
 func (s *Scheduler) runJob(job *pb.Job) {
 	s.RunJobCh <- job
 }
@@ -163,4 +162,8 @@ func (s *Scheduler) AddJob(job *pb.Job) error {
 
 func (s *Scheduler) DeleteJob(name string) {
 	s.deleteEntry <- name
+}
+
+func (s *Scheduler) JobCount() int {
+	return len(s.entries)
 }

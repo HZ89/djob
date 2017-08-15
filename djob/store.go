@@ -25,7 +25,7 @@ func init() {
 	zookeeper.Register()
 }
 
-func NewStore(backend string, servers []string, keyspace string) (*KVStore, error) {
+func NewKVStore(backend string, servers []string, keyspace string) (*KVStore, error) {
 	s, err := libkv.NewStore(store.Backend(backend), servers, nil)
 	if err != nil {
 		return nil, err
@@ -69,7 +69,12 @@ func (s *KVStore) SetJob(job *pb.Job) error {
 	regionKey := generateSlug(job.Region)
 	jobkey := fmt.Sprintf("%s/%s/jobs/%s", s.keyspace, regionKey, jobNameKey)
 
-	v, err := proto.Marshal(job)
+	_, err := s.GetJob(job.Name, job.Region)
+	if err != nil && err != store.ErrKeyNotFound {
+		return err
+	}
+
+	jobpb, err := proto.Marshal(job)
 	if err != nil {
 		return err
 	}
@@ -78,7 +83,10 @@ func (s *KVStore) SetJob(job *pb.Job) error {
 		"region":     regionKey,
 		"expression": job.Expression,
 		"scheduler":  job.Schedule,
-		"marshal":    string(v),
+		"marshal":    string(jobpb),
 	}).Debug("Store: save job to etcd")
+	if err := s.Client.Put(jobkey, jobpb, nil); err != nil {
+		return err
+	}
 	return nil
 }

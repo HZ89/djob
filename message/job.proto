@@ -4,9 +4,11 @@ syntax = "proto3";
 package message;
 
 service job {
-    rpc GetJob(Name) returns (Job) {}
-    rpc GetExecution(Name) returns (Execution) {}
-    rpc ExecDone(Execution) returns (Result) {}
+    rpc GetJob (Name) returns (Job) {}
+    rpc GetExecution (Name) returns (Execution) {}
+    rpc ExecDone (Execution) returns (Result) {}
+    rpc SetJob (Job) returns (Result) {
+    }
 }
 
 message Name {
@@ -20,14 +22,12 @@ message Job {
     bool Shell = 4; // Use shell to run command
     string Command = 5; // Command to run
     string Expression = 6; // A expression used for filter agent node, job will run in the node when this expression is true
-    int64 Retries = 7; // Number of times to retry a job that failed an execution
-    repeated string BeingDependentJobs = 8; // Other jobs that depend on this job.
-    string ParentJob = 9; // This job depends on the job.
-    bool Parallel = 10; // Parallel policy for this job. if true, this job will run in all target node.
-    bool Concurrent = 11; // Concurrent or not. if true, the next job will start regardless of whether or not the last time the execution is complete
-    bool Disposable = 12; // if true, job just run once a time
-    string SchedulerNodeName = 13; // which node schedule this job
-
+    repeated string BeingDependentJobs = 7; // Other jobs that depend on this job.
+    string ParentJob = 8; // This job depends on the job.
+    bool Parallel = 9; // Parallel policy for this job. if true, this job will run in all target node.
+    bool Concurrent = 10; // Concurrent or not. if true, the next job will start regardless of whether or not the last time the execution is complete
+    bool Disable = 11; // if true, job don't run
+    string SchedulerNodeName = 12; // which node schedule this job
 }
 
 message JobStatus {
@@ -48,6 +48,7 @@ message Execution {
     string FinishTime = 6;
     string NodeName = 7;
     string JobName = 8;
+    int64 Retries = 9; // Number of times to retry a execution
 
 }
 
