@@ -3,14 +3,15 @@ package djob
 import (
 	"errors"
 
+	"fmt"
 	"github.com/Knetic/govaluate"
 	"github.com/Sirupsen/logrus"
+	"github.com/gogo/protobuf/proto"
 	"github.com/hashicorp/serf/serf"
-	pb "version.uuzu.com/zhuhuipeng/djob/message"
 	"strings"
 	"unicode"
+	pb "version.uuzu.com/zhuhuipeng/djob/message"
 	"version.uuzu.com/zhuhuipeng/djob/scheduler"
-	"fmt"
 )
 
 var (
@@ -74,17 +75,17 @@ func (a *Agent) handleMemberCache(eventType serf.EventType, members []serf.Membe
 						a.memberCache[tk][member.Name] = tv
 
 						if eventType == serf.EventMemberJoin {
-							Log.Warn("agent: get a new member event, but already have it's cache")
+							Log.Warn("Agent: get a new member event, but already have it'k cache")
 							Log.WithFields(logrus.Fields{
 								"memberName": member.Name,
 								"tags":       member.Tags,
-							}).Debug("agent: get a new member event, but already have it's cache")
+							}).Debug("Agent: get a new member event, but already have it'k cache")
 						}
 
 					}
 					if eventType == serf.EventMemberReap || eventType == serf.EventMemberFailed || eventType == serf.EventMemberLeave {
 						delete(a.memberCache[tk], member.Name)
-						Log.Infof("agent: delte member %s tags %s from cache", member.Name, tk)
+						Log.Infof("Agent: delte member %s tags %s from cache", member.Name, tk)
 					}
 					// remove no value key
 					if len(a.memberCache[tk]) == 0 {
@@ -94,14 +95,14 @@ func (a *Agent) handleMemberCache(eventType serf.EventType, members []serf.Membe
 					if eventType == serf.EventMemberJoin || eventType == serf.EventMemberUpdate {
 						a.memberCache[tk][member.Name] = tv
 					} else {
-						Log.Warn("agent: get a member delete event, but have not cache")
+						Log.Warn("Agent: get a member delete event, but have not cache")
 					}
 				}
 			} else {
 				if eventType == serf.EventMemberUpdate || eventType == serf.EventMemberJoin {
 					a.memberCache[tk][member.Name] = tv
 				} else {
-					Log.Warn("agent: get a member delete event, but have not cache")
+					Log.Warn("Agent: get a member delete event, but have not cache")
 				}
 			}
 		}
@@ -145,4 +146,16 @@ func generateSlug(str string) (slug string) {
 			return -1
 		}
 	}, strings.ToLower(strings.TrimSpace(str)))
+}
+
+func genrateResultPb(status int, message string) ([]byte, error) {
+	r := pb.Result{
+		Status:  int32(status),
+		Message: message,
+	}
+	pb, err := proto.Marshal(&r)
+	if err != nil {
+		return nil, err
+	}
+	return pb, nil
 }

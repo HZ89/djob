@@ -47,29 +47,28 @@ func NewKVStore(backend string, servers []string, keyspace string) (*KVStore, er
 	}, nil
 }
 
-func (s *KVStore) GetJob(jobName, region string) (*pb.Job, error) {
-	jobNameKey := generateSlug(jobName)
-	regionKey := generateSlug(region)
-	res, err := s.Client.Get(fmt.Sprintf("%s/%s/jobs/%s", s.keyspace, regionKey, jobNameKey))
+func (k *KVStore) GetJob(name, region string) (*pb.Job, error) {
+
+	res, err := k.Client.Get(fmt.Sprintf("%s/%s/jobs/%s", k.keyspace, generateSlug(region), generateSlug(name)))
 	if err != nil {
 		return nil, err
 	}
-	job := &pb.Job{}
-	if err = proto.Unmarshal([]byte(res.Value), job); err != nil {
+	var job pb.Job
+	if err = proto.Unmarshal([]byte(res.Value), &job); err != nil {
 		return nil, err
 	}
-	return job, nil
+	return &job, nil
 }
 
-func (s *KVStore) SetJob(job *pb.Job) error {
+func (k *KVStore) SetJob(job *pb.Job) error {
 	if err := verifyJob(job); err != nil {
 		return err
 	}
 	jobNameKey := generateSlug(job.Name)
 	regionKey := generateSlug(job.Region)
-	jobkey := fmt.Sprintf("%s/%s/jobs/%s", s.keyspace, regionKey, jobNameKey)
+	jobkey := fmt.Sprintf("%s/%s/jobs/%s", k.keyspace, regionKey, jobNameKey)
 
-	_, err := s.GetJob(job.Name, job.Region)
+	_, err := k.GetJob(job.Name, job.Region)
 	if err != nil && err != store.ErrKeyNotFound {
 		return err
 	}
@@ -85,8 +84,74 @@ func (s *KVStore) SetJob(job *pb.Job) error {
 		"scheduler":  job.Schedule,
 		"marshal":    string(jobpb),
 	}).Debug("Store: save job to etcd")
-	if err := s.Client.Put(jobkey, jobpb, nil); err != nil {
+	if err := k.Client.Put(jobkey, jobpb, nil); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (k *KVStore) DeleteJob(name, region string) (*pb.Job, error) {
+	job, err := k.GetJob(name, region)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := k.Client.Delete(fmt.Sprintf("%s/%s/jobs/%s", k.keyspace, generateSlug(region), generateSlug(name))); err != nil {
+		return nil, err
+	}
+
+	return job, nil
+}
+
+// used to cache job add from web api
+type MemStore struct {
+	memBuf *memDbBuffer
+}
+
+func (m *MemStore) GetJob(name, region string) (*pb.Job, error) {
+	jobKey := Key(fmt.Sprintf("%s-%s", generateSlug(region), generateSlug(name)))
+	res, err := m.memBuf.Get(jobKey)
+	if err != nil {
+		return nil, err
+	}
+	var job pb.Job
+	if err := proto.Unmarshal(res, &job); err != nil {
+		return nil, err
+	}
+	return &job, nil
+}
+
+func (m *MemStore) SetJob(job *pb.Job) error {
+	if err := verifyJob(job); err != nil {
+		return err
+	}
+
+	jobpb, err := proto.Marshal(job)
+	if err != nil {
+		return err
+	}
+
+	jobKey := Key(fmt.Sprintf("%s-%s", generateSlug(job.Region), generateSlug(job.Name)))
+
+	if err := m.memBuf.Set(jobKey, jobpb); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *MemStore) DeleteJob(name, region string) error {
+	jobKey := Key(fmt.Sprintf("%s-%s", generateSlug(region), generateSlug(name)))
+
+	if err := m.memBuf.Delete(jobKey); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func NewMemStore() *MemStore {
+	return &MemStore{
+		memBuf: NewMemDbBuffer(),
+	}
 }

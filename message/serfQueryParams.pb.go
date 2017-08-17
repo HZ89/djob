@@ -22,7 +22,7 @@ type NewJobQueryParams struct {
 func (m *NewJobQueryParams) Reset()                    { *m = NewJobQueryParams{} }
 func (m *NewJobQueryParams) String() string            { return proto.CompactTextString(m) }
 func (*NewJobQueryParams) ProtoMessage()               {}
-func (*NewJobQueryParams) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{0} }
+func (*NewJobQueryParams) Descriptor() ([]byte, []int) { return fileDescriptor2, []int{0} }
 
 func (m *NewJobQueryParams) GetName() string {
 	if m != nil {
@@ -53,7 +53,7 @@ type RunJobQueryParams struct {
 func (m *RunJobQueryParams) Reset()                    { *m = RunJobQueryParams{} }
 func (m *RunJobQueryParams) String() string            { return proto.CompactTextString(m) }
 func (*RunJobQueryParams) ProtoMessage()               {}
-func (*RunJobQueryParams) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{1} }
+func (*RunJobQueryParams) Descriptor() ([]byte, []int) { return fileDescriptor2, []int{1} }
 
 func (m *RunJobQueryParams) GetName() string {
 	if m != nil {
@@ -77,7 +77,7 @@ type GetRPCConfigResp struct {
 func (m *GetRPCConfigResp) Reset()                    { *m = GetRPCConfigResp{} }
 func (m *GetRPCConfigResp) String() string            { return proto.CompactTextString(m) }
 func (*GetRPCConfigResp) ProtoMessage()               {}
-func (*GetRPCConfigResp) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{2} }
+func (*GetRPCConfigResp) Descriptor() ([]byte, []int) { return fileDescriptor2, []int{2} }
 
 func (m *GetRPCConfigResp) GetIp() string {
 	if m != nil {
@@ -99,9 +99,9 @@ func init() {
 	proto.RegisterType((*GetRPCConfigResp)(nil), "message.GetRPCConfigResp")
 }
 
-func init() { proto.RegisterFile("serfQueryParams.proto", fileDescriptor1) }
+func init() { proto.RegisterFile("serfQueryParams.proto", fileDescriptor2) }
 
-var fileDescriptor1 = []byte{
+var fileDescriptor2 = []byte{
 	// 199 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0x12, 0x2d, 0x4e, 0x2d, 0x4a,
 	0x0b, 0x2c, 0x4d, 0x2d, 0xaa, 0x0c, 0x48, 0x2c, 0x4a, 0xcc, 0x2d, 0xd6, 0x2b, 0x28, 0xca, 0x2f,

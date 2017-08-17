@@ -1,5 +1,5 @@
-hash: 3b085cefb754494e91dd6f67edc6b890029729f66ed4ca710f0918d505373d88
-updated: 2017-08-08T15:34:34.315947161+08:00
+hash: 241327eff090aacc2f35a10865edfc99f65029d1b24a242661df60361cfd1982
+updated: 2017-08-16T16:35:25.555592127+08:00
 imports:
 - name: bitbucket.org/tebeka/strftime
   version: 2194253a23c090a4d5953b152a3c63fb5da4f5a4
@@ -56,6 +56,8 @@ imports:
   - ptypes/any
   - ptypes/struct
   - ptypes/timestamp
+- name: github.com/golang/snappy
+  version: 553a641470496b2327abcac10b36396bd98e45c9
 - name: github.com/hashicorp/consul
   version: 2c7715154d8d4568524b76d2d4deb7ca6fd1b285
   subpackages:
@@ -98,6 +100,8 @@ imports:
   subpackages:
   - coordinate
   - serf
+- name: github.com/juju/errors
+  version: c7d06af17c68cd34c835053720b21f6549d9b0ee
 - name: github.com/Knetic/govaluate
   version: d216395917cc49052c7c7094cf57f09657ca08a8
 - name: github.com/lestrrat/go-file-rotatelogs
@@ -118,6 +122,21 @@ imports:
   version: c37440a7cf42ac63b919c752ca73a85067e05992
 - name: github.com/pelletier/go-toml
   version: 685a1f1cb7a66b9cadbe8f1ac49d9f8f567d6a9d
+- name: github.com/pingcap/goleveldb
+  version: 158edde5a354460121af007d02a00b01c8d03443
+  subpackages:
+  - leveldb
+  - leveldb/cache
+  - leveldb/comparer
+  - leveldb/errors
+  - leveldb/filter
+  - leveldb/iterator
+  - leveldb/journal
+  - leveldb/memdb
+  - leveldb/opt
+  - leveldb/storage
+  - leveldb/table
+  - leveldb/util
 - name: github.com/rifflock/lfshook
   version: 2adb3e0c4ddd8778c4adde609d2dfd4fbe6096ea
 - name: github.com/samuel/go-zookeeper

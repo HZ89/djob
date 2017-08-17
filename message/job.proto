@@ -1,5 +1,5 @@
 syntax = "proto3";
-// import "google/protobuf/timestamp.proto";
+//import "google/protobuf/timestamp.proto";
 
 package message;
 
@@ -49,14 +49,9 @@ message Execution {
     string NodeName = 7;
     string JobName = 8;
     int64 Retries = 9; // Number of times to retry a execution
-
 }
 
 message Result {
-    bool err = 1;
-}
-
-message Resp {
-    string error = 1;
-    repeated Job data = 2;
+    int32 Status = 1;
+    string Message = 2;
 }

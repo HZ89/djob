@@ -1,0 +1,9 @@
+syntax = "proto3";
+import "job.proto";
+package message;
+
+message RespJob {
+    int32 Status = 1;
+    string Message = 2;
+    repeated Job Data = 3;
+}

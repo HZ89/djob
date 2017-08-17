@@ -2,26 +2,26 @@ package api
 
 import (
 	"bytes"
+	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/Sirupsen/logrus"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
-	pb "version.uuzu.com/zhuhuipeng/djob/message"
 	"net/http"
 	"time"
-	"crypto/tls"
-	"fmt"
-	"context"
+	pb "version.uuzu.com/zhuhuipeng/djob/message"
 )
 
 type Backend interface {
-	JobModify(job *pb.Job) (*pb.Resp, error)
-	JobInfo(name string) (*pb.Resp, error)
-	JobDelete(name string) (*pb.Resp, error)
-	JobList() (*pb.Resp, error)
+	JobModify(job *pb.Job) (*pb.RespJob, error)
+	JobInfo(name, region string) (*pb.RespJob, error)
+	JobDelete(name, region string) (*pb.RespJob, error)
+	JobList() (*pb.RespJob, error)
 }
 
 type KayPair struct {
@@ -114,11 +114,11 @@ func (a *APIServer) prepareGin() *gin.Engine {
 	}
 	web := r.Group("/web")
 	web.Use(gzip.Gzip(gzip.DefaultCompression))
-	web.POST("/jobs", a.modJob)
-	web.GET("/jobs", a.getJobList)
-	web.GET("/jobs/:name", a.getJob)
-	web.DELETE("/jobs/:name", a.deleteJob)
-	web.GET("/job/:name/run", a.runjob)
+	web.POST("/:region/jobs", a.modJob)
+	web.GET("/:region/jobs", a.getJobList)
+	web.GET("/:region/jobs/:name", a.getJob)
+	web.DELETE("/:region/jobs/:name", a.deleteJob)
+	web.GET("/:region/jobs/:name/run", a.runjob)
 
 	return r
 }
@@ -128,8 +128,9 @@ func (a *APIServer) runjob(c *gin.Context) {
 }
 
 func (a *APIServer) deleteJob(c *gin.Context) {
-	jobname := c.Params.ByName("name")
-	resp, err := a.backend.JobDelete(jobname)
+	name := c.Params.ByName("name")
+	region := c.Params.ByName("region")
+	resp, err := a.backend.JobDelete(name, region)
 	if err != nil {
 		a.respondWithError(http.StatusInternalServerError, err.Error(), c)
 	}
@@ -145,8 +146,9 @@ func (a *APIServer) getJobList(c *gin.Context) {
 	c.Render(http.StatusOK, pbjson{data: resp})
 }
 func (a *APIServer) getJob(c *gin.Context) {
-	jobname := c.Params.ByName("name")
-	resp, err := a.backend.JobInfo(jobname)
+	name := c.Params.ByName("name")
+	region := c.Params.ByName("region")
+	resp, err := a.backend.JobInfo(name, region)
 	if err != nil {
 		a.respondWithError(http.StatusInternalServerError, err.Error(), c)
 	}
@@ -156,7 +158,7 @@ func (a *APIServer) getJob(c *gin.Context) {
 func (a *APIServer) modJob(c *gin.Context) {
 	var (
 		job  *pb.Job
-		resp *pb.Resp
+		resp *pb.RespJob
 		err  error
 	)
 	err = c.MustBindWith(job, jsonpbBinding{})

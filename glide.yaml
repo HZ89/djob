@@ -32,3 +32,5 @@ import:
   subpackages:
   - jwt
 - package: github.com/gin-contrib/gzip
+- package: github.com/pingcap/goleveldb
+- package: github.com/juju/errors
