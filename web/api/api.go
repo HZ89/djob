@@ -18,10 +18,10 @@ import (
 )
 
 type Backend interface {
-	JobModify(job *pb.Job) (*pb.RespJob, error)
-	JobInfo(name, region string) (*pb.RespJob, error)
-	JobDelete(name, region string) (*pb.RespJob, error)
-	JobList() (*pb.RespJob, error)
+	JobModify(job *pb.Job) (*pb.Job, error)
+	JobInfo(name, region string) (*pb.Job, error)
+	JobDelete(name, region string) (*pb.Job, error)
+	JobList() ([]*pb.Job, error)
 }
 
 type KayPair struct {
@@ -163,12 +163,16 @@ func (a *APIServer) modJob(c *gin.Context) {
 	)
 	err = c.MustBindWith(job, jsonpbBinding{})
 	if err != nil {
-		a.respondWithError(http.StatusBadRequest, err.Error(), c)
+		a.respondWithError(http.StatusBadRequest, &pb.RespJob{Status: http.StatusBadRequest, Message: err.Error()}, c)
 	}
-	resp, err = a.backend.JobModify(job)
+	job, err = a.backend.JobModify(job)
 	if err != nil {
-		a.respondWithError(http.StatusInternalServerError, err.Error(), c)
+		a.respondWithError(http.StatusInternalServerError, &pb.RespJob{Status: http.StatusInternalServerError, Message: err.Error()}, c)
 	}
+	resp.Status = 0
+	resp.Message = "succeed"
+	resp.Data = append(resp.Data, job)
+
 	c.Render(http.StatusOK, pbjson{data: resp})
 }
 
@@ -206,9 +210,12 @@ func (a *APIServer) logMiddleware() gin.HandlerFunc {
 	}
 }
 
-func (a *APIServer) respondWithError(code int, message string, c *gin.Context) {
-	resp := map[string]string{"error": message}
-	c.JSON(code, resp)
+func (a *APIServer) respondWithError(code int, pb interface{}, c *gin.Context) {
+	resp, err := proto.Marshal(pb.(proto.Message))
+	if err != nil {
+		c.String(http.StatusInternalServerError, "protp decode error: %s", err.Error())
+	}
+	c.Render(code, pbjson{data: resp})
 	c.AbortWithStatus(code)
 }
 

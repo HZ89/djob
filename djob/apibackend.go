@@ -9,7 +9,7 @@ import (
 
 var APITimeOut = 5 * time.Second
 
-func (a *Agent) JobModify(job *pb.Job) (*pb.RespJob, error) {
+func (a *Agent) JobModify(job *pb.Job) (*pb.Job, error) {
 
 	if err := a.memStore.SetJob(job); err != nil {
 		return nil, err
@@ -23,9 +23,9 @@ func (a *Agent) JobModify(job *pb.Job) (*pb.RespJob, error) {
 	if ej != nil {
 		node = ej.SchedulerNodeName
 	} else {
-		node = a.minimalLoadServer()
+		node = a.minimalLoadServer(job.Region)
 	}
-	resCh := make(chan *pb.Result)
+	resCh := make(chan *pb.Job)
 	errCh := make(chan error)
 	go func() {
 		result, err := a.sendNewJobQuery(job.Name, job.Region, node)
@@ -34,12 +34,13 @@ func (a *Agent) JobModify(job *pb.Job) (*pb.RespJob, error) {
 		}
 		resCh <- result
 	}()
+	defer a.memStore.DeleteJob(job.Name, job.Region)
 
 	select {
 	case err := <-errCh:
 		return nil, err
 	case result := <-resCh:
-		return &pb.RespJob{Status: result.Status, Message: result.Message}, nil
+		return result, nil
 	case <-time.After(APITimeOut):
 		return nil, errors.New("Time out")
 	}

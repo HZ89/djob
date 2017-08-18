@@ -5,7 +5,7 @@ import pb "version.uuzu.com/zhuhuipeng/djob/message"
 // implementation of DjobServer interface
 
 // JobInfo get the job from backend
-func (a *Agent) JobInfo(jobName string) (*pb.Job, error) {
+func (a *Agent) JobInfo(name, region string) (*pb.Job, error) {
 	return nil, nil
 }
 

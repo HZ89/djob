@@ -16,3 +16,8 @@ message GetRPCConfigResp {
     string ip = 1;
     int32 port = 2;
 }
+
+message JobCountResp {
+    string Name = 1; // Server node name
+    int64 Count = 2; // Job num count in this node
+}

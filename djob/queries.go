@@ -3,6 +3,7 @@ package djob
 import (
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
 
+	"errors"
 	"fmt"
 	"github.com/Sirupsen/logrus"
 	"github.com/gogo/protobuf/proto"
@@ -16,7 +17,7 @@ const (
 	QueryJobCount  = "job:count"
 )
 
-func (a *Agent) sendJobCountQuery(region string) ([]string, int, error) {
+func (a *Agent) sendJobCountQuery(region string) ([]*pb.JobCountResp, error) {
 	params := &serf.QueryParam{
 		FilterTags: map[string]string{
 			"server": "true",
@@ -34,10 +35,52 @@ func (a *Agent) sendJobCountQuery(region string) ([]string, int, error) {
 
 	defer qr.Close()
 
+	ackCh := qr.AckCh()
+	respCh := qr.ResponseCh()
+	var payloads [][]byte
+	if !qr.Finished() {
+		select {
+		case ack, ok := <-ackCh:
+			if ok {
+				Log.WithFields(logrus.Fields{
+					"query": QueryJobCount,
+					"from":  ack,
+				}).Debug("Agent: Received ack")
+			}
+		case resp, ok := <-respCh:
+			if ok {
+				payloads = append(payloads, resp.Payload)
+				Log.WithFields(logrus.Fields{
+					"query": QueryJobCount,
+					"resp":  string(resp.Payload),
+				}).Debug("Agent: Received resp")
+			}
+		}
+	}
+
+	var r []*pb.JobCountResp
+	for _, v := range payloads {
+		var p pb.JobCountResp
+		proto.Unmarshal(v, &p)
+		r = append(r, &p)
+	}
+	return r, nil
+}
+
+func (a *Agent) reveiveJobCountQuery(query *serf.Query) {
+	resp := &pb.JobCountResp{
+		Name:  a.config.Nodename,
+		Count: int64(a.scheduler.JobCount()),
+	}
+	respPb, _ := proto.Marshal(resp)
+	if err := query.Respond(respPb); err != nil {
+		Log.WithError(err).Fatal("Agent: serf quert Responed failed")
+	}
+	return
 }
 
 // sendNreJobQuery func used to notice a server there is a now job need to be add
-func (a *Agent) sendNewJobQuery(jobName, region, serverNodeName string) (*pb.Result, error) {
+func (a *Agent) sendNewJobQuery(jobName, region, serverNodeName string) (*pb.Job, error) {
 
 	params := &serf.QueryParam{
 		FilterNodes: []string(serverNodeName),
@@ -93,12 +136,15 @@ func (a *Agent) sendNewJobQuery(jobName, region, serverNodeName string) (*pb.Res
 		}
 	}
 
-	var result pb.Result
+	var result pb.RespJob
 	if err := proto.Unmarshal(payloadPb, &result); err != nil {
 		Log.WithError(err).Error("Agent: Decode respond failed")
 		return nil, err
 	}
-	return &result, nil
+	if result.Status != 0 {
+		return nil, errors.New(result.Message)
+	}
+	return result.Data[0], nil
 }
 
 func (a *Agent) receiveNewJobQuery(query *serf.Query) {
@@ -134,7 +180,7 @@ func (a *Agent) receiveNewJobQuery(query *serf.Query) {
 	rpcClient := a.newRPCClient(ip, port)
 	defer rpcClient.Shutdown()
 
-	job, err := rpcClient.GetJob(params.Name)
+	job, err := rpcClient.GetJob(params.Name, params.Region)
 	if err != nil {
 		Log.WithFields(logrus.Fields{
 			"Name":    query.Name,
@@ -263,7 +309,7 @@ func (a *Agent) receiveGetRPCConfigQuery(query *serf.Query) {
 	}
 	respPb, _ := proto.Marshal(resp)
 	if err := query.Respond(respPb); err != nil {
-		Log.WithError(err).Error("Agent: serf query Respond error")
+		Log.WithError(err).Fatal("Agent: serf query Respond error")
 	}
 	return
 }

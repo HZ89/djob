@@ -13,6 +13,7 @@ import (
 	"github.com/docker/libkv/store"
 	"github.com/hashicorp/memberlist"
 	"github.com/hashicorp/serf/serf"
+	"sort"
 	"version.uuzu.com/zhuhuipeng/djob/scheduler"
 	"version.uuzu.com/zhuhuipeng/djob/web/api"
 )
@@ -379,6 +380,19 @@ func New(args []string, version string) *Agent {
 
 }
 
-func (a *Agent) minimalLoadServer() string {
-	return ""
+type byCount []*pb.JobCountResp
+
+func (b byCount) Len() int           { return len(b) }
+func (b byCount) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
+func (b byCount) Less(i, j int) bool { return b[i].Count < b[j].Count }
+
+func (a *Agent) minimalLoadServer(region string) string {
+	jobCounts, err := a.sendJobCountQuery(region)
+	if err != nil {
+		Log.WithError(err).Fatal("Agent: Send serf query failed")
+	}
+
+	sort.Sort(byCount(jobCounts))
+
+	return jobCounts[0].Name
 }

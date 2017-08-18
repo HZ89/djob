@@ -11,7 +11,7 @@ import (
 )
 
 type DjobServer interface {
-	JobInfo(jobName string) (*pb.Job, error)
+	JobInfo(name, region string) (*pb.Job, error)
 	ExecDone(execution *pb.Execution) error
 	ExecutionInfo(executionName string) (*pb.Execution, error)
 }
@@ -40,31 +40,33 @@ func NewRPCServer(bindIp string, port int, server DjobServer, tlsopt *TlsOpt) *R
 	}
 }
 
-func (s *RpcServer) GetJob(ctx context.Context, name *pb.Name) (*pb.Job, error) {
-	jobInfo, err := s.dserver.JobInfo(name.Name)
+func (s *RpcServer) GetJob(ctx context.Context, params *pb.Params) (*pb.Job, error) {
+	jobInfo, err := s.dserver.JobInfo(params.Name, params.Region)
 	if err != nil {
 		return nil, err
 	}
 
-	pjob := &pb.Job{
+	job := &pb.Job{
 		Name: jobInfo.Name,
 	}
 
-	return pjob, nil
+	return job, nil
 }
 
-func (s *RpcServer) GetExecution(ctx context.Context, name *pb.Name) (*pb.Execution, error) {
+func (s *RpcServer) GetExecution(ctx context.Context, params *pb.Params) (*pb.Execution, error) {
 	return nil, nil
 }
 
 func (s *RpcServer) ExecDone(ctx context.Context, execution *pb.Execution) (*pb.Result, error) {
 	if err := s.dserver.ExecDone(execution); err != nil {
 		return &pb.Result{
-			Err: false,
+			Status:  255,
+			Message: err.Error(),
 		}, nil
 	}
 	return &pb.Result{
-		Err: true,
+		Status:  0,
+		Message: "Succeed",
 	}, nil
 }
 
@@ -171,21 +173,21 @@ func (c *RpcClient) Shutdown() error {
 	return nil
 }
 
-func (c *RpcClient) GetJob(jobName string) (*pb.Job, error) {
-	pbName := pb.Name{Name: jobName}
-	pbjob, err := c.client.GetJob(context.Background(), &pbName)
+func (c *RpcClient) GetJob(name, region string) (*pb.Job, error) {
+	p := pb.Params{Name: name, Region: region}
+	job, err := c.client.GetJob(context.Background(), &p)
 	if err != nil {
 		return nil, err
 	}
 
-	return pbjob, nil
+	return job, nil
 }
 
-func (c *RpcClient) ExecDone(execution *pb.Execution) (bool, error) {
+func (c *RpcClient) ExecDone(execution *pb.Execution) (int, error) {
 
-	pbresutl, err := c.client.ExecDone(context.Background(), execution)
+	result, err := c.client.ExecDone(context.Background(), execution)
 	if err != nil {
-		return false, err
+		return 1, err
 	}
-	return pbresutl.Err, nil
+	return int(result.Status), nil
 }

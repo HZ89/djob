@@ -12,7 +12,7 @@ It is generated from these files:
 
 It has these top-level messages:
 	RespJob
-	Name
+	Params
 	Job
 	JobStatus
 	Execution
@@ -20,6 +20,7 @@ It has these top-level messages:
 	NewJobQueryParams
 	RunJobQueryParams
 	GetRPCConfigResp
+	JobCountResp
 */
 package message
 

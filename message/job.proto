@@ -4,15 +4,16 @@ syntax = "proto3";
 package message;
 
 service job {
-    rpc GetJob (Name) returns (Job) {}
-    rpc GetExecution (Name) returns (Execution) {}
-    rpc ExecDone (Execution) returns (Result) {}
-    rpc SetJob (Job) returns (Result) {
+    rpc GetJob (Params) returns (Job) {
     }
+    rpc GetExecution (Params) returns (Execution) {
+    }
+    rpc ExecDone (Execution) returns (Result) {}
 }
 
-message Name {
+message Params {
     string Name = 1;
+    string Region = 2;
 }
 
 message Job {
