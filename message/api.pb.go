@@ -17,8 +17,7 @@ It has these top-level messages:
 	JobStatus
 	Execution
 	Result
-	NewJobQueryParams
-	RunJobQueryParams
+	JobQueryParams
 	GetRPCConfigResp
 	JobCountResp
 */

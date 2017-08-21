@@ -1,15 +1,11 @@
 syntax="proto3";
 package message;
 
-message NewJobQueryParams {
+message JobQueryParams {
     string Name = 1;
     string Region = 2;
     string SourceNodeName = 3;
-}
-
-message RunJobQueryParams {
-    string Name = 1;
-    string SchedulerNodename = 2;
+    string DistNodeName = 4;
 }
 
 message GetRPCConfigResp {

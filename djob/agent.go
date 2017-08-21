@@ -36,7 +36,7 @@ type Agent struct {
 	store       *KVStore
 	memStore    *MemStore
 	memberCache map[string]map[string]string
-	mutex       sync.Mutex
+	mutex       *sync.Mutex
 	scheduler   *scheduler.Scheduler
 	apiServer   *api.APIServer
 	version     string
@@ -98,16 +98,16 @@ func (a *Agent) serfJion(addrs []string, replay bool) (n int, err error) {
 	return
 }
 
-func (a *Agent) lockJob(jobName, region string) (store.Locker, error) {
+func (a *Agent) lock(name, region string, obj interface{}) (store.Locker, error) {
 
-	//reNewCh := make(chan struct{})
+	t := getType(obj)
 
-	lockkey := fmt.Sprintf("%s/%s/job_locks/%s", a.store.keyspace, region, jobName)
+	lockkey := fmt.Sprintf("%s/%s/%s_locks/%s", a.store.keyspace, region, t, name)
 
 	//l, err := a.store.Client.NewLock(lockkey, &store.LockOptions{RenewLock:reNewCh})
 	l, err := a.store.Client.NewLock(lockkey, &store.LockOptions{})
 	if err != nil {
-		Log.WithField("jobName", jobName).WithError(err).Fatal("Agent: New lock failed")
+		Log.WithField("name", name).WithError(err).Fatal("Agent: New lock failed")
 	}
 
 	errCh := make(chan error)
@@ -126,7 +126,7 @@ func (a *Agent) lockJob(jobName, region string) (store.Locker, error) {
 
 	select {
 	case <-freeCh:
-		return l, nil
+		return &l, nil
 	case err := <-errCh:
 		return nil, err
 	case <-timeoutCh:
@@ -135,7 +135,7 @@ func (a *Agent) lockJob(jobName, region string) (store.Locker, error) {
 	}
 }
 
-func (a *Agent) mainLoop() {
+func (a *Agent) serfEventLoop() {
 	serfShutdownCh := a.serf.ShutdownCh()
 	Log.Info("Agent: Listen for event")
 	for {
@@ -257,7 +257,7 @@ func (a *Agent) Run() {
 			Log.Info("Agent: RPC Server started")
 		}()
 
-		a.loadJob(a.config.Region)
+		a.loadJobs(a.config.Region)
 
 		a.apiServer, err = api.NewAPIServer(a.config.APIBindIP, a.config.APIBindPort, Log, make(map[string]string), a.config.RPCTls, &keyPair)
 		if err != nil {
@@ -272,10 +272,10 @@ func (a *Agent) Run() {
 
 	}
 
-	a.mainLoop()
+	a.serfEventLoop()
 }
 
-func (a *Agent) loadJob(region string) {
+func (a *Agent) loadJobs(region string) {
 
 }
 
@@ -376,6 +376,7 @@ func New(args []string, version string) *Agent {
 		memStore:    NewMemStore(),
 		config:      config,
 		version:     version,
+		mutex:       &sync.Mutex{},
 	}
 
 }
@@ -386,13 +387,59 @@ func (b byCount) Len() int           { return len(b) }
 func (b byCount) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
 func (b byCount) Less(i, j int) bool { return b[i].Count < b[j].Count }
 
-func (a *Agent) minimalLoadServer(region string) string {
-	jobCounts, err := a.sendJobCountQuery(region)
-	if err != nil {
-		Log.WithError(err).Fatal("Agent: Send serf query failed")
+func (a *Agent) minimalLoadServer(region string) (string, error) {
+
+	resCh := make(chan []*pb.JobCountResp)
+	errCh := make(chan error)
+
+	go func() {
+		jobCounts, err := a.sendJobCountQuery(region)
+		if err != nil {
+			errCh <- err
+		}
+		resCh <- jobCounts
+	}()
+
+	select {
+	case err := <-errCh:
+		return "", err
+	case res := <-resCh:
+		if res == nil || len(res) == 0 {
+			Log.WithFields(logrus.Fields{
+				"node":     a.config.Nodename,
+				"function": "minimalLoadServer",
+			}).Fatal("Agent: []*pb.JobCountResp is nil")
+		}
+		sort.Sort(byCount(res))
+		return res[0].Name, nil
+	case <-time.After(APITimeOut):
+		return "", ErrTimeOut
 	}
+}
 
-	sort.Sort(byCount(jobCounts))
+func (a *Agent) haveIt(name string) bool {
+	a.mutex.Lock()
+	_, exist := a.jobLockers[name]
+	a.mutex.Unlock()
+	return exist
+}
 
-	return jobCounts[0].Name
+func (a *Agent) addLocker(name string, locker store.Locker) {
+	a.mutex.Lock()
+	a.jobLockers[name] = locker
+	a.mutex.Unlock()
+}
+
+func (a *Agent) deleteLocker(name string) error {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+	locker, exist := a.jobLockers[name]
+	if exist {
+		if err := locker.Unlock(); err != nil {
+			return err
+		}
+		delete(a.jobLockers, name)
+		return nil
+	}
+	return ErrNotExist
 }

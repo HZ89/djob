@@ -21,7 +21,7 @@ type Backend interface {
 	JobModify(job *pb.Job) (*pb.Job, error)
 	JobInfo(name, region string) (*pb.Job, error)
 	JobDelete(name, region string) (*pb.Job, error)
-	JobList() ([]*pb.Job, error)
+	JobList(region string) ([]*pb.Job, error)
 }
 
 type KayPair struct {
@@ -114,43 +114,53 @@ func (a *APIServer) prepareGin() *gin.Engine {
 	}
 	web := r.Group("/web")
 	web.Use(gzip.Gzip(gzip.DefaultCompression))
-	web.POST("/:region/jobs", a.modJob)
+	web.POST("/jobs", a.modJob)
 	web.GET("/:region/jobs", a.getJobList)
 	web.GET("/:region/jobs/:name", a.getJob)
 	web.DELETE("/:region/jobs/:name", a.deleteJob)
-	web.GET("/:region/jobs/:name/run", a.runjob)
-
 	return r
-}
-
-func (a *APIServer) runjob(c *gin.Context) {
-
 }
 
 func (a *APIServer) deleteJob(c *gin.Context) {
 	name := c.Params.ByName("name")
 	region := c.Params.ByName("region")
-	resp, err := a.backend.JobDelete(name, region)
+	job, err := a.backend.JobDelete(name, region)
 	if err != nil {
-		a.respondWithError(http.StatusInternalServerError, err.Error(), c)
+		a.respondWithError(http.StatusInternalServerError, &pb.RespJob{Status: http.StatusInternalServerError, Message: err.Error()}, c)
+	}
+	resp := pb.RespJob{
+		Status:  0,
+		Message: "succeed",
+		Data:    []*pb.Job(job),
 	}
 	c.Render(http.StatusOK, pbjson{data: resp})
 }
 
 // TODO: add a data filter
 func (a *APIServer) getJobList(c *gin.Context) {
-	resp, err := a.backend.JobList()
+	region := c.Params.ByName("region")
+	jobs, err := a.backend.JobList(region)
 	if err != nil {
-		a.respondWithError(http.StatusInternalServerError, err.Error(), c)
+		a.respondWithError(http.StatusInternalServerError, &pb.RespJob{Status: http.StatusInternalServerError, Message: err.Error()}, c)
+	}
+	resp := pb.RespJob{
+		Status:  0,
+		Message: "succeed",
+		Data:    jobs,
 	}
 	c.Render(http.StatusOK, pbjson{data: resp})
 }
 func (a *APIServer) getJob(c *gin.Context) {
 	name := c.Params.ByName("name")
 	region := c.Params.ByName("region")
-	resp, err := a.backend.JobInfo(name, region)
+	job, err := a.backend.JobInfo(name, region)
 	if err != nil {
-		a.respondWithError(http.StatusInternalServerError, err.Error(), c)
+		a.respondWithError(http.StatusInternalServerError, &pb.RespJob{Status: http.StatusInternalServerError, Message: err.Error()}, c)
+	}
+	resp := pb.RespJob{
+		Status:  0,
+		Message: "succeed",
+		Data:    []*pb.Job(job),
 	}
 	c.Render(http.StatusOK, pbjson{data: resp})
 }

@@ -1,13 +1,11 @@
 package djob
 
 import (
-	pb "version.uuzu.com/zhuhuipeng/djob/message"
-
-	"errors"
 	"fmt"
 	"github.com/Sirupsen/logrus"
 	"github.com/gogo/protobuf/proto"
 	"github.com/hashicorp/serf/serf"
+	pb "version.uuzu.com/zhuhuipeng/djob/message"
 )
 
 const (
@@ -15,7 +13,123 @@ const (
 	QueryRunJob    = "job:run"
 	QueryRPCConfig = "rpc:config"
 	QueryJobCount  = "job:count"
+	QueryJobDelete = "job:delete"
 )
+
+func (a *Agent) sendJobDeleteQuery(name, region, nodeName string) (*pb.Result, error) {
+	params := &serf.QueryParam{
+		FilterNodes: []string(nodeName),
+		FilterTags: map[string]string{
+			"server": "true",
+			"region": region,
+		},
+		RequestAck: true,
+	}
+
+	qp := &pb.JobQueryParams{
+		Name:           name,
+		Region:         region,
+		SourceNodeName: a.config.Nodename,
+	}
+	qpPb, _ := proto.Marshal(qp)
+
+	Log.WithFields(logrus.Fields{
+		"query_name": QueryJobDelete,
+		"job_name":   name,
+		"job_region": region,
+		"playload":   qp.String(),
+	}).Debug("Agent: Sending query")
+
+	qr, err := a.serf.Query(QueryJobDelete, qpPb, params)
+	if err != nil {
+		Log.WithField("query", QueryJobDelete).WithError(err).Fatal("Agent: Sending query error")
+	}
+	defer qr.Close()
+
+	ackCh := qr.AckCh()
+	respCh := qr.ResponseCh()
+	var payloadPb []byte
+	for !qr.Finished() {
+		select {
+		case ack, ok := <-ackCh:
+			if ok {
+				Log.WithFields(logrus.Fields{
+					"query": QueryJobDelete,
+					"from":  ack,
+				}).Debug("Agent: Received ack")
+			}
+
+		case resp, ok := <-respCh:
+			if ok {
+				payloadPb = resp.Payload
+				Log.WithFields(logrus.Fields{
+					"query":   QueryJobDelete,
+					"payload": string(resp.Payload),
+				}).Debug("Agent: Received response")
+			}
+
+		}
+	}
+
+	var result pb.Result
+	if err := proto.Unmarshal(payloadPb, &result); err != nil {
+		Log.WithError(err).Error("Agent: Decode respond failed")
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func (a *Agent) receiveJobDeleteQuery(query *serf.Query) {
+	var params *pb.JobQueryParams
+	if err := proto.Unmarshal(query.Payload, params); err != nil {
+		Log.WithFields(logrus.Fields{
+			"query":   query.Name,
+			"payload": string(query.Payload),
+		}).WithError(err).Error("Agent: Decode payload failed")
+		rb, _ := genrateResultPb(1, "Decode failed")
+		query.Respond(rb)
+		return
+	}
+	if params.Region != a.config.Region {
+		Log.WithFields(logrus.Fields{
+			"name":   params.Name,
+			"region": params.Region,
+		}).Debug("Agent: receive a job from other region")
+		rb, _ := genrateResultPb(2, "region error")
+		query.Respond(rb)
+		return
+	}
+	if !a.haveIt(params.Name) {
+		Log.WithFields(logrus.Fields{
+			"query": query.Name,
+			"name":  params.Name,
+		}).Error("Agent: have no job locker")
+		rb, _ := genrateResultPb(10, "have no job locker")
+		query.Respond(rb)
+		return
+	}
+	_, err := a.store.DeleteJob(params.Name, params.Region)
+	if err != nil {
+		Log.WithFields(logrus.Fields{
+			"query": query.Name,
+		}).WithError(err).Error("Agent: Delete job failed")
+		rb, _ := genrateResultPb(7, "Delete job failed")
+		query.Respond(rb)
+		return
+	}
+	if err := a.deleteLocker(params.Name); err != nil {
+		Log.WithError(err).Error("Agent: Unlock job failed")
+		rb, _ := genrateResultPb(11, "Unlock job failed")
+		query.Respond(rb)
+		return
+	}
+	rb, _ := genrateResultPb(0, "Succeed")
+	if err := query.Respond(rb); err != nil {
+		Log.WithError(err).Fatal("Agent: serf query Respond error")
+	}
+	return
+}
 
 func (a *Agent) sendJobCountQuery(region string) ([]*pb.JobCountResp, error) {
 	params := &serf.QueryParam{
@@ -67,7 +181,7 @@ func (a *Agent) sendJobCountQuery(region string) ([]*pb.JobCountResp, error) {
 	return r, nil
 }
 
-func (a *Agent) reveiveJobCountQuery(query *serf.Query) {
+func (a *Agent) receiveJobCountQuery(query *serf.Query) {
 	resp := &pb.JobCountResp{
 		Name:  a.config.Nodename,
 		Count: int64(a.scheduler.JobCount()),
@@ -80,10 +194,10 @@ func (a *Agent) reveiveJobCountQuery(query *serf.Query) {
 }
 
 // sendNreJobQuery func used to notice a server there is a now job need to be add
-func (a *Agent) sendNewJobQuery(jobName, region, serverNodeName string) (*pb.Job, error) {
+func (a *Agent) sendNewJobQuery(name, region, nodeName string) (*pb.Result, error) {
 
 	params := &serf.QueryParam{
-		FilterNodes: []string(serverNodeName),
+		FilterNodes: []string(nodeName),
 		FilterTags: map[string]string{
 			"server": "true",
 			"region": region,
@@ -91,8 +205,8 @@ func (a *Agent) sendNewJobQuery(jobName, region, serverNodeName string) (*pb.Job
 		RequestAck: true,
 	}
 
-	qp := &pb.NewJobQueryParams{
-		Name:           jobName,
+	qp := &pb.JobQueryParams{
+		Name:           name,
 		Region:         region,
 		SourceNodeName: a.config.Nodename,
 	}
@@ -100,7 +214,7 @@ func (a *Agent) sendNewJobQuery(jobName, region, serverNodeName string) (*pb.Job
 
 	Log.WithFields(logrus.Fields{
 		"query_name": QueryNewJob,
-		"job_name":   jobName,
+		"job_name":   name,
 		"job_region": region,
 		"playload":   qp.String(),
 	}).Debug("Agent: Sending query")
@@ -136,19 +250,17 @@ func (a *Agent) sendNewJobQuery(jobName, region, serverNodeName string) (*pb.Job
 		}
 	}
 
-	var result pb.RespJob
+	var result pb.Result
 	if err := proto.Unmarshal(payloadPb, &result); err != nil {
 		Log.WithError(err).Error("Agent: Decode respond failed")
 		return nil, err
 	}
-	if result.Status != 0 {
-		return nil, errors.New(result.Message)
-	}
-	return result.Data[0], nil
+
+	return &result, nil
 }
 
 func (a *Agent) receiveNewJobQuery(query *serf.Query) {
-	var params *pb.NewJobQueryParams
+	var params *pb.JobQueryParams
 	if err := proto.Unmarshal(query.Payload, params); err != nil {
 		Log.WithFields(logrus.Fields{
 			"query":   query.Name,
@@ -158,6 +270,21 @@ func (a *Agent) receiveNewJobQuery(query *serf.Query) {
 		query.Respond(rb)
 		return
 	}
+
+	if !a.haveIt(params.Name) {
+		locker, err := a.lock(params.Name, params.Region, pb.Job{})
+		if err != nil {
+			Log.WithFields(logrus.Fields{
+				"JobName": params.Name,
+				"Region":  params.Region,
+			}).WithError(err).Error("Agent: try lock a job failed")
+			rb, _ := genrateResultPb(9, "try lock a job failed")
+			query.Respond(rb)
+			return
+		}
+		a.addLocker(params.Name, locker)
+	}
+
 	if params.Region != a.config.Region {
 		Log.WithFields(logrus.Fields{
 			"name":   params.Name,
@@ -191,21 +318,7 @@ func (a *Agent) receiveNewJobQuery(query *serf.Query) {
 		return
 	}
 
-	a.mutex.Lock()
-	if _, exist := a.jobLockers[job.Name]; !exist {
-		// try to lock this job.
-		locker, err := a.lockJob(job.Name, job.Region)
-		if err != nil {
-			Log.WithFields(logrus.Fields{
-				"JobName": job.Name,
-				"Region":  job.Region,
-			}).WithError(err).Error("Agent: try lock a job")
-		}
-
-		a.jobLockers[job.Name] = locker
-		job.SchedulerNodeName = a.config.Nodename
-	}
-	a.mutex.Unlock()
+	job.SchedulerNodeName = a.config.Nodename
 
 	if err := a.store.SetJob(job); err != nil {
 		Log.WithFields(logrus.Fields{

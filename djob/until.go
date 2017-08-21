@@ -8,6 +8,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/gogo/protobuf/proto"
 	"github.com/hashicorp/serf/serf"
+	"reflect"
 	"strings"
 	"unicode"
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
@@ -158,4 +159,12 @@ func genrateResultPb(status int, message string) ([]byte, error) {
 		return nil, err
 	}
 	return pb, nil
+}
+
+func getType(obj interface{}) string {
+	if t := reflect.TypeOf(obj); t.Kind() == reflect.Ptr {
+		return t.Elem().Name()
+	} else {
+		return t.Name()
+	}
 }
