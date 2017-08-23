@@ -22,7 +22,7 @@ type Backend interface {
 	JobInfo(name, region string) (*pb.Job, error)
 	JobDelete(name, region string) (*pb.Job, error)
 	JobList(region string) ([]*pb.Job, error)
-	JobRun(name, region string) (string, error)
+	JobRun(name, region string) error
 }
 
 type KayPair struct {

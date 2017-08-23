@@ -6,7 +6,6 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/hashicorp/serf/serf"
 	"math/rand"
-	"time"
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
 )
 
@@ -39,7 +38,7 @@ func (a *Agent) sendJobDeleteQuery(name, region, nodeName string) (*pb.Result, e
 		"query_name": QueryJobDelete,
 		"job_name":   name,
 		"job_region": region,
-		"playload":   qp.String(),
+		"payload":    qp.String(),
 	}).Debug("Agent: Sending query")
 
 	qr, err := a.serf.Query(QueryJobDelete, qpPb, params)
@@ -218,7 +217,7 @@ func (a *Agent) sendNewJobQuery(name, region, nodeName string) (*pb.Result, erro
 		"query_name": QueryNewJob,
 		"job_name":   name,
 		"job_region": region,
-		"playload":   qp.String(),
+		"payload":    qp.String(),
 	}).Debug("Agent: Sending query")
 
 	qr, err := a.serf.Query(QueryNewJob, qpPb, params)
@@ -357,19 +356,28 @@ func (a *Agent) receiveNewJobQuery(query *serf.Query) {
 	return
 }
 
-func (a *Agent) sendRunJobQuery(job *pb.Job) {
-	ex := pb.Execution{
-		Group:             time.Now().UnixNano(),
-		SchedulerNodeName: a.config.Nodename,
-		JobName:           job.Name,
-		Region:            job.Region,
+func (a *Agent) sendRunJobQuery(ex *pb.Execution) {
+
+	job, err := a.store.GetJob(ex.JobName, ex.Region)
+	if err != nil {
+		Log.WithError(err).Fatal("Agent GetJob failed")
 	}
-	exPb, err := proto.Marshal(&ex)
+
+	exPb, err := proto.Marshal(ex)
 	if err != nil {
 		Log.WithError(err).Fatal("Agent: Encode failed")
 	}
 
-	params, err := a.createSerfQueryParam(job.Expression)
+	var params *serf.QueryParam
+	if ex.Retries < 1 {
+		params, err = a.createSerfQueryParam(job.Expression)
+	} else {
+		params = &serf.QueryParam{
+			FilterNodes: []string{ex.RunNodeName},
+			RequestAck:  true,
+		}
+	}
+
 	if err != nil {
 		Log.WithFields(logrus.Fields{
 			"Query": QueryRunJob,
@@ -382,7 +390,7 @@ func (a *Agent) sendRunJobQuery(job *pb.Job) {
 		"query_name": QueryNewJob,
 		"job_name":   job.Name,
 		"job_region": job.Region,
-		"playload":   string(exPb),
+		"payload":    string(exPb),
 	}).Debug("Agent: Sending query")
 
 	qr, err := a.serf.Query(QueryRunJob, exPb, params)
