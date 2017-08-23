@@ -26,6 +26,7 @@ import:
   version: ~0.8.1
   subpackages:
   - serf
+  - testutil
 - package: github.com/gin-gonic/gin
   version: ~1.2.0
 - package: github.com/gin-gonic/contrib
@@ -34,3 +35,8 @@ import:
 - package: github.com/gin-contrib/gzip
 - package: github.com/pingcap/goleveldb
 - package: github.com/juju/errors
+- package: github.com/hashicorp/memberlist
+  version: ~0.1.0
+- package: github.com/armon/circbuf
+- package: github.com/mattn/go-shellwords
+  version: ~1.0.3

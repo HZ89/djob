@@ -22,6 +22,7 @@ type Backend interface {
 	JobInfo(name, region string) (*pb.Job, error)
 	JobDelete(name, region string) (*pb.Job, error)
 	JobList(region string) ([]*pb.Job, error)
+	JobRun(name, region string) (string, error)
 }
 
 type KayPair struct {
@@ -131,7 +132,7 @@ func (a *APIServer) deleteJob(c *gin.Context) {
 	resp := pb.RespJob{
 		Status:  0,
 		Message: "succeed",
-		Data:    []*pb.Job(job),
+		Data:    []*pb.Job{job},
 	}
 	c.Render(http.StatusOK, pbjson{data: resp})
 }
@@ -160,7 +161,7 @@ func (a *APIServer) getJob(c *gin.Context) {
 	resp := pb.RespJob{
 		Status:  0,
 		Message: "succeed",
-		Data:    []*pb.Job(job),
+		Data:    []*pb.Job{job},
 	}
 	c.Render(http.StatusOK, pbjson{data: resp})
 }

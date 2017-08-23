@@ -1,8 +1,10 @@
-hash: 241327eff090aacc2f35a10865edfc99f65029d1b24a242661df60361cfd1982
-updated: 2017-08-16T16:35:25.555592127+08:00
+hash: b6262525af6d46b040d0e5cb8b41b4de005950eeb06e3442f53c812871ffc707
+updated: 2017-08-23T15:44:58.004506132+08:00
 imports:
 - name: bitbucket.org/tebeka/strftime
   version: 2194253a23c090a4d5953b152a3c63fb5da4f5a4
+- name: github.com/armon/circbuf
+  version: bbbad097214e2918d8543d5201d12bfd7bca254d
 - name: github.com/armon/go-metrics
   version: efce74234d0fcaac1bd5b2a32d6d3afd108c4498
 - name: github.com/armon/go-radix
@@ -94,12 +96,13 @@ imports:
   - json/scanner
   - json/token
 - name: github.com/hashicorp/memberlist
-  version: ea4ef7f066304a8e6f28bdb958888fe899f3b44e
+  version: ce8abaa0c60c2d6bee7219f5ddf500e0a1457b28
 - name: github.com/hashicorp/serf
   version: d6574a5bb1226678d7010325fb6c985db20ee458
   subpackages:
   - coordinate
   - serf
+  - testutil
 - name: github.com/juju/errors
   version: c7d06af17c68cd34c835053720b21f6549d9b0ee
 - name: github.com/Knetic/govaluate
@@ -110,6 +113,8 @@ imports:
   version: 51463bfca2576e06c62a8504b5c0f06d61312647
 - name: github.com/mattn/go-isatty
   version: fc9e8d8ef48496124e79ae0df75490096eccf6fe
+- name: github.com/mattn/go-shellwords
+  version: 02e3cf038dcea8290e44424da473dd12be796a8a
 - name: github.com/miekg/dns
   version: 0f3adef2e2201d72e50309a36fc99d8a9d1a4960
 - name: github.com/mitchellh/cli
@@ -137,8 +142,6 @@ imports:
   - leveldb/storage
   - leveldb/table
   - leveldb/util
-- name: github.com/rifflock/lfshook
-  version: 2adb3e0c4ddd8778c4adde609d2dfd4fbe6096ea
 - name: github.com/samuel/go-zookeeper
   version: 8ac67fae881ed12e87206ba2243c75b079b419a4
   subpackages:

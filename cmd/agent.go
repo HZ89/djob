@@ -2,23 +2,23 @@ package cmd
 
 import (
 	"github.com/mitchellh/cli"
-	"version.uuzu.com/zhuhuipeng/djob/djob"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+	"version.uuzu.com/zhuhuipeng/djob/djob"
 )
 
 type AgentCmd struct {
 	Ui      cli.Ui
 	agent   *djob.Agent
 	args    []string
-	version string
+	Version string
 }
 
-func (c *AgentCmd) Run(args []string, verison string) int {
+func (c *AgentCmd) Run(args []string) int {
 	copy(c.args, args)
-	c.version = verison
-	c.agent = djob.New(c.args, c.version)
+	c.agent = djob.New(c.args, c.Version)
 	go c.agent.Run()
 	return c.handleSignals()
 }
@@ -52,4 +52,20 @@ func (c *AgentCmd) reload() {
 
 func (c *AgentCmd) stop(graceful bool) int {
 	return c.agent.Stop(graceful)
+}
+
+func (c *AgentCmd) Synopsis() string {
+	return "Run djob agent"
+}
+
+func (c *AgentCmd) Help() string {
+	helpText := `
+	Usage: djob agent [options]
+	    Run djob agent
+	Options:
+	    -config=./config     config file path
+	    -pid                 pid file path
+	    -logfile             log file path
+	`
+	return strings.TrimSpace(helpText)
 }

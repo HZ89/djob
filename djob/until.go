@@ -1,61 +1,30 @@
 package djob
 
 import (
-	"errors"
-
 	"fmt"
-	"github.com/Knetic/govaluate"
-	"github.com/Sirupsen/logrus"
-	"github.com/gogo/protobuf/proto"
-	"github.com/hashicorp/serf/serf"
 	"reflect"
+	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/Knetic/govaluate"
+	"github.com/gogo/protobuf/proto"
+	"github.com/hashicorp/serf/serf"
+	"github.com/mattn/go-shellwords"
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
 	"version.uuzu.com/zhuhuipeng/djob/scheduler"
 )
 
-var (
-	ErrCanNotFoundNode = errors.New("could not found any node can use")
-	ErrSameJob         = errors.New("This job set himself as his parent")
-	ErrNoCmd           = errors.New("A job must have a Command")
-	ErrNoReg           = errors.New("A job must have a region")
-	ErrNoExp           = errors.New("A job must have a Expression")
-	ErrScheduleParse   = errors.New("Can't parse job schedule")
-)
-
 func (a *Agent) createSerfQueryParam(expression string) (*serf.QueryParam, error) {
 	var queryParam serf.QueryParam
-	exp, err := govaluate.NewEvaluableExpression(expression)
+	nodeNames, err := a.processFilteredNodes(expression)
 	if err != nil {
 		return nil, err
 	}
-	parameters := make(map[string]interface{})
 
-	suspected := make(map[string]map[string]string)
-	for _, v := range exp.Vars() {
-		for mk, mv := range a.memberCache[v] {
-			suspected[mk][v] = mv
-		}
-	}
-	var foundServerName []string
-	for sk, sv := range suspected {
-		for _, v := range exp.Vars() {
-			if tv, exits := sv[v]; exits {
-				parameters[v] = tv
-			}
-		}
-		result, err := exp.Evaluate(parameters)
-		if err != nil {
-			return nil, err
-		}
-		if result.(bool) {
-			foundServerName = append(foundServerName, sk)
-		}
-	}
-	if len(foundServerName) > 0 {
+	if len(nodeNames) > 0 {
 		queryParam = serf.QueryParam{
-			FilterNodes: foundServerName,
+			FilterNodes: nodeNames,
 			RequestAck:  true,
 		}
 		return &queryParam, nil
@@ -63,51 +32,35 @@ func (a *Agent) createSerfQueryParam(expression string) (*serf.QueryParam, error
 	return nil, ErrCanNotFoundNode
 }
 
-func (a *Agent) handleMemberCache(eventType serf.EventType, members []serf.Member) {
-
-	a.mutex.Lock()
-	defer a.mutex.Unlock()
-
-	for _, member := range members {
-		for tk, tv := range member.Tags {
-			if _, exits := a.memberCache[tk]; exits {
-				if _, exits := a.memberCache[tk][member.Name]; exits {
-					if eventType == serf.EventMemberJoin || eventType == serf.EventMemberUpdate {
-						a.memberCache[tk][member.Name] = tv
-
-						if eventType == serf.EventMemberJoin {
-							Log.Warn("Agent: get a new member event, but already have it'k cache")
-							Log.WithFields(logrus.Fields{
-								"memberName": member.Name,
-								"tags":       member.Tags,
-							}).Debug("Agent: get a new member event, but already have it'k cache")
-						}
-
-					}
-					if eventType == serf.EventMemberReap || eventType == serf.EventMemberFailed || eventType == serf.EventMemberLeave {
-						delete(a.memberCache[tk], member.Name)
-						Log.Infof("Agent: delte member %s tags %s from cache", member.Name, tk)
-					}
-					// remove no value key
-					if len(a.memberCache[tk]) == 0 {
-						delete(a.memberCache, tk)
-					}
-				} else {
-					if eventType == serf.EventMemberJoin || eventType == serf.EventMemberUpdate {
-						a.memberCache[tk][member.Name] = tv
-					} else {
-						Log.Warn("Agent: get a member delete event, but have not cache")
-					}
+func (a *Agent) processFilteredNodes(expression string) ([]string, error) {
+	exp, err := govaluate.NewEvaluableExpression(expression)
+	if err != nil {
+		return nil, err
+	}
+	wt := exp.Vars()
+	sort.Sort(sort.StringSlice(wt))
+	var nodeNames []string
+	for _, member := range a.serf.Members() {
+		if member.Status == serf.StatusAlive {
+			mtks := reflect.ValueOf(member.Tags).MapKeys()
+			intersection := intersect(mtks, wt)
+			sort.Sort(sort.StringSlice(intersection.([]string)))
+			if reflect.DeepEqual(wt, intersection) {
+				parameters := make(map[string]interface{})
+				for _, tk := range wt {
+					parameters[tk] = member.Tags[tk]
 				}
-			} else {
-				if eventType == serf.EventMemberUpdate || eventType == serf.EventMemberJoin {
-					a.memberCache[tk][member.Name] = tv
-				} else {
-					Log.Warn("Agent: get a member delete event, but have not cache")
+				result, err := exp.Evaluate(parameters)
+				if err != nil {
+					return nil, err
+				}
+				if result.(bool) {
+					nodeNames = append(nodeNames, member.Name)
 				}
 			}
 		}
 	}
+	return nodeNames, nil
 }
 
 func verifyJob(job *pb.Job) error {
@@ -125,6 +78,17 @@ func verifyJob(job *pb.Job) error {
 
 	if job.Expression == "" {
 		return ErrNoExp
+	}
+
+	if _, err := govaluate.NewEvaluableExpression(job.Expression); err != nil {
+		return err
+	}
+
+	if !job.Shell {
+		_, err := shellwords.Parse(job.Command)
+		if err != nil {
+			return err
+		}
 	}
 
 	if job.ParentJob == "" {
@@ -167,4 +131,27 @@ func getType(obj interface{}) string {
 	} else {
 		return t.Name()
 	}
+}
+
+func intersect(a, b interface{}) interface{} {
+	set := make([]interface{}, 0)
+	av := reflect.ValueOf(a)
+	for i := 0; i < av.Len(); i++ {
+		el := av.Index(i).Interface()
+		if contains(b, el) {
+			set = append(set, el)
+		}
+	}
+	return set
+}
+
+func contains(a interface{}, e interface{}) bool {
+	v := reflect.ValueOf(a)
+
+	for i := 0; i < v.Len(); i++ {
+		if v.Index(i).Interface() == e {
+			return true
+		}
+	}
+	return false
 }

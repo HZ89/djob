@@ -10,7 +10,3 @@ import pb "version.uuzu.com/zhuhuipeng/djob/message"
 func (a *Agent) ExecDone(execution *pb.Execution) error {
 	return nil
 }
-
-func (a *Agent) ExecutionInfo(executionName string) (*pb.Execution, error) {
-	return nil, nil
-}

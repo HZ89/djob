@@ -1,10 +1,10 @@
 package main
 
 import (
-	"os"
-	"github.com/mitchellh/cli"
-	"version.uuzu.com/zhuhuipeng/djob/cmd"
 	"fmt"
+	"github.com/mitchellh/cli"
+	"os"
+	"version.uuzu.com/zhuhuipeng/djob/cmd"
 )
 
 const VERSION string = "0.1.0"
@@ -31,12 +31,18 @@ func main() {
 		"version": func() (cli.Command, error) {
 			return &cmd.VersionCmd{
 				Version: VERSION,
-				Ui: ui,
+				Ui:      ui,
 			}, nil
 		},
 		"keygen": func() (cli.Command, error) {
 			return &cmd.KeygenCmd{
 				Ui: ui,
+			}, nil
+		},
+		"agent": func() (cli.Command, error) {
+			return &cmd.AgentCmd{
+				Ui:      ui,
+				Version: VERSION,
 			}, nil
 		},
 	}

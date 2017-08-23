@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"fmt"
+	google_protobuf "github.com/golang/protobuf/ptypes/empty"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -13,7 +14,6 @@ import (
 type DjobServer interface {
 	JobInfo(name, region string) (*pb.Job, error)
 	ExecDone(execution *pb.Execution) error
-	ExecutionInfo(executionName string) (*pb.Execution, error)
 }
 
 type RpcServer struct {
@@ -53,21 +53,11 @@ func (s *RpcServer) GetJob(ctx context.Context, params *pb.Params) (*pb.Job, err
 	return job, nil
 }
 
-func (s *RpcServer) GetExecution(ctx context.Context, params *pb.Params) (*pb.Execution, error) {
-	return nil, nil
-}
-
-func (s *RpcServer) ExecDone(ctx context.Context, execution *pb.Execution) (*pb.Result, error) {
+func (s *RpcServer) ExecDone(ctx context.Context, execution *pb.Execution) (*google_protobuf.Empty, error) {
 	if err := s.dserver.ExecDone(execution); err != nil {
-		return &pb.Result{
-			Status:  255,
-			Message: err.Error(),
-		}, nil
+		return nil, err
 	}
-	return &pb.Result{
-		Status:  0,
-		Message: "Succeed",
-	}, nil
+	return &google_protobuf.Empty{}, nil
 }
 
 func (s *RpcServer) listen() error {
@@ -78,7 +68,7 @@ func (s *RpcServer) listen() error {
 
 	var opts []grpc.ServerOption
 
-	if s.tlsopt {
+	if s.tlsopt != nil {
 		creds, err := credentials.NewServerTLSFromFile(s.tlsopt.CertFile, s.tlsopt.KeyFile)
 		if err != nil {
 			return err
@@ -138,7 +128,7 @@ func NewRpcClient(serveraddr string, serverport int, tlsopt *TlsOpt) (*RpcClient
 		serverPort: serverport,
 		tlsopt:     tlsopt,
 	}
-	if client.tlsopt {
+	if client.tlsopt != nil {
 		var sn string
 		if client.tlsopt.ServerHost != "" {
 			sn = client.tlsopt.ServerHost
@@ -183,11 +173,10 @@ func (c *RpcClient) GetJob(name, region string) (*pb.Job, error) {
 	return job, nil
 }
 
-func (c *RpcClient) ExecDone(execution *pb.Execution) (int, error) {
-
-	result, err := c.client.ExecDone(context.Background(), execution)
+func (c *RpcClient) ExecDone(execution *pb.Execution) error {
+	_, err := c.client.ExecDone(context.Background(), execution)
 	if err != nil {
-		return 1, err
+		return err
 	}
-	return int(result.Status), nil
+	return nil
 }

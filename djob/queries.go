@@ -5,6 +5,8 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/gogo/protobuf/proto"
 	"github.com/hashicorp/serf/serf"
+	"math/rand"
+	"time"
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
 )
 
@@ -18,7 +20,7 @@ const (
 
 func (a *Agent) sendJobDeleteQuery(name, region, nodeName string) (*pb.Result, error) {
 	params := &serf.QueryParam{
-		FilterNodes: []string(nodeName),
+		FilterNodes: []string{nodeName},
 		FilterTags: map[string]string{
 			"server": "true",
 			"region": region,
@@ -197,7 +199,7 @@ func (a *Agent) receiveJobCountQuery(query *serf.Query) {
 func (a *Agent) sendNewJobQuery(name, region, nodeName string) (*pb.Result, error) {
 
 	params := &serf.QueryParam{
-		FilterNodes: []string(nodeName),
+		FilterNodes: []string{nodeName},
 		FilterTags: map[string]string{
 			"server": "true",
 			"region": region,
@@ -356,6 +358,64 @@ func (a *Agent) receiveNewJobQuery(query *serf.Query) {
 }
 
 func (a *Agent) sendRunJobQuery(job *pb.Job) {
+	ex := pb.Execution{
+		Group:             time.Now().UnixNano(),
+		SchedulerNodeName: a.config.Nodename,
+		JobName:           job.Name,
+		Region:            job.Region,
+	}
+	exPb, err := proto.Marshal(&ex)
+	if err != nil {
+		Log.WithError(err).Fatal("Agent: Encode failed")
+	}
+
+	params, err := a.createSerfQueryParam(job.Expression)
+	if err != nil {
+		Log.WithFields(logrus.Fields{
+			"Query": QueryRunJob,
+			"stage": "prepare",
+		}).WithError(err).Error("Agent: Create serf query param failed")
+		return
+	}
+
+	Log.WithFields(logrus.Fields{
+		"query_name": QueryNewJob,
+		"job_name":   job.Name,
+		"job_region": job.Region,
+		"playload":   string(exPb),
+	}).Debug("Agent: Sending query")
+
+	qr, err := a.serf.Query(QueryRunJob, exPb, params)
+	if err != nil {
+		Log.WithField("query", QueryRunJob).WithError(err).Fatal("Agent: Sending query error")
+	}
+	defer qr.Close()
+
+	ackCh := qr.AckCh()
+	respCh := qr.ResponseCh()
+	for !qr.Finished() {
+		select {
+		case ack, ok := <-ackCh:
+			if ok {
+				Log.WithFields(logrus.Fields{
+					"query": QueryRunJob,
+					"from":  ack,
+				}).Debug("Agent: Received ack")
+			}
+
+		case resp, ok := <-respCh:
+			if ok {
+				Log.WithFields(logrus.Fields{
+					"query":   QueryRunJob,
+					"payload": string(resp.Payload),
+				}).Debug("Agent: Received response")
+			}
+
+		}
+	}
+	Log.WithFields(logrus.Fields{
+		"query": QueryRunJob,
+	}).Debug("Agent: Done receiving acks and responses")
 
 }
 
@@ -365,9 +425,12 @@ func (a *Agent) receiveRunJobQuery(query *serf.Query) {
 
 func (a *Agent) sendGetRPCConfigQuery(nodeName string) (string, int, error) {
 	params := &serf.QueryParam{
-		FilterNodes: []string(nodeName),
-		FilterTags:  map[string]string{"server": "true"},
-		RequestAck:  true,
+		FilterTags: map[string]string{"server": "true"},
+		RequestAck: true,
+	}
+
+	if nodeName != "" {
+		params.FilterNodes = []string{nodeName}
 	}
 
 	qr, err := a.serf.Query(QueryRPCConfig, nil, params)
@@ -382,7 +445,7 @@ func (a *Agent) sendGetRPCConfigQuery(nodeName string) (string, int, error) {
 
 	ackCh := qr.AckCh()
 	respCh := qr.ResponseCh()
-	var payloadPb []byte
+	var payloads [][]byte
 	for !qr.Finished() {
 		select {
 		case ack, ok := <-ackCh:
@@ -394,7 +457,7 @@ func (a *Agent) sendGetRPCConfigQuery(nodeName string) (string, int, error) {
 			}
 		case resp, ok := <-respCh:
 			if ok {
-				payloadPb = resp.Payload
+				payloads = append(payloads, resp.Payload)
 				Log.WithFields(logrus.Fields{
 					"query":   QueryRPCConfig,
 					"from":    resp.From,
@@ -408,7 +471,7 @@ func (a *Agent) sendGetRPCConfigQuery(nodeName string) (string, int, error) {
 	}).Debug("Agent: Received ack and response Done")
 
 	var payload pb.GetRPCConfigResp
-	if err := proto.Unmarshal(payloadPb, &payload); err != nil {
+	if err := proto.Unmarshal(payloads[rand.Intn(len(payloads))], &payload); err != nil {
 		Log.WithError(err).Error("Agent: Payload decode failed")
 		return "", 0, nil
 	}

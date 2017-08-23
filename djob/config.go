@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/spf13/viper"
-	"version.uuzu.com/zhuhuipeng/djob/cmd"
 	"net"
 	"os"
 )
@@ -53,12 +52,6 @@ const (
 	DefaultKeySpeace    string = "djob"
 )
 
-//func init() {
-//	viper.SetConfigFile("djob")
-//	viper.AddConfigPath("./config")
-//	viper.SetConfigType("yaml")
-//}
-
 func newConfig(args []string, version string) (*Config, error) {
 
 	cmdFlags := flag.NewFlagSet("agent", flag.ContinueOnError)
@@ -66,7 +59,7 @@ func newConfig(args []string, version string) (*Config, error) {
 	cmdFlags.String("pid", DefaultPidFile, "pid file path")
 	cmdFlags.String("logfile", DefaultLogFile, "log file path")
 
-	if err := cmdFlags.Parse(args[1:]); err != nil {
+	if err := cmdFlags.Parse(args); err != nil {
 		return nil, err
 	}
 	viper.SetConfigFile(cmdFlags.Lookup("config").Value.String())
@@ -188,7 +181,7 @@ func handleAdvertise(oaddr string, daddr string) (string, int, error) {
 		oaddr = daddr
 	}
 	addr, _ := net.ResolveTCPAddr("tcp", oaddr)
-	if net.IPv6zero.Equal(addr.IP) {
+	if !net.IPv6zero.Equal(addr.IP) {
 		var privateIp net.IP
 		var publicIp net.IP
 		ifaces, err := net.Interfaces()
@@ -248,7 +241,8 @@ BEGIN:
 	if es, ok := err.(*net.AddrError); ok && es.Err == "missing port in address" {
 		address = fmt.Sprintf("%s:%d", address, defaultport)
 		goto BEGIN
-	} else {
+	}
+	if err != nil {
 		return "", 0, err
 	}
 

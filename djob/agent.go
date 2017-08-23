@@ -26,21 +26,20 @@ var (
 const gracefulTime = 5 * time.Second
 
 type Agent struct {
-	jobLockers  map[string]store.Locker
-	config      *Config
-	serf        *serf.Serf
-	eventCh     chan serf.Event
-	ready       bool
-	rpcServer   *rpc.RpcServer
-	rpcClient   *rpc.RpcClient
-	store       *KVStore
-	memStore    *MemStore
-	memberCache map[string]map[string]string
-	mutex       *sync.Mutex
-	scheduler   *scheduler.Scheduler
-	apiServer   *api.APIServer
-	version     string
-	runJobCh    chan *pb.Job
+	jobLockers map[string]store.Locker
+	config     *Config
+	serf       *serf.Serf
+	eventCh    chan serf.Event
+	ready      bool
+	rpcServer  *rpc.RpcServer
+	rpcClient  *rpc.RpcClient
+	store      *KVStore
+	memStore   *MemStore
+	mutex      *sync.Mutex
+	scheduler  *scheduler.Scheduler
+	apiServer  *api.APIServer
+	version    string
+	runJobCh   chan *pb.Job
 }
 
 func (a *Agent) setupSerf() *serf.Serf {
@@ -52,7 +51,6 @@ func (a *Agent) setupSerf() *serf.Serf {
 
 	serfConfig := serf.DefaultConfig()
 
-	//noinspection GoBinaryAndUnaryExpressionTypesCompatibility
 	serfConfig.MemberlistConfig = memberlist.DefaultWANConfig()
 
 	serfConfig.MemberlistConfig.BindAddr = a.config.SerfBindIP
@@ -126,7 +124,7 @@ func (a *Agent) lock(name, region string, obj interface{}) (store.Locker, error)
 
 	select {
 	case <-freeCh:
-		return &l, nil
+		return l, nil
 	case err := <-errCh:
 		return nil, err
 	case <-timeoutCh:
@@ -148,17 +146,13 @@ func (a *Agent) serfEventLoop() {
 			}).Debug("Agent: Received event")
 
 			if memberevent, ok := e.(serf.MemberEvent); ok {
-				var memberNames []string
 				for _, member := range memberevent.Members {
-					memberNames = append(memberNames, member.Name)
+					Log.WithFields(logrus.Fields{
+						"node":    a.config.Nodename,
+						"members": member.Name,
+						"event":   e.EventType(),
+					}).Debug("Agent: Member event got")
 				}
-				Log.WithFields(logrus.Fields{
-					"node":    a.config.Nodename,
-					"members": memberNames,
-					"event":   e.EventType(),
-				}).Debug("Agent: Member event got")
-
-				/* go a.handleMemberCache(memberevent.Type, memberevent.Members) */
 			}
 
 			// handle custom query event
@@ -369,14 +363,13 @@ func New(args []string, version string) *Agent {
 	}
 
 	return &Agent{
-		jobLockers:  make(map[string]store.Locker),
-		eventCh:     make(chan serf.Event, 64),
-		memberCache: make(map[string]map[string]string),
-		runJobCh:    make(chan *pb.Job),
-		memStore:    NewMemStore(),
-		config:      config,
-		version:     version,
-		mutex:       &sync.Mutex{},
+		jobLockers: make(map[string]store.Locker),
+		eventCh:    make(chan serf.Event, 64),
+		runJobCh:   make(chan *pb.Job),
+		memStore:   NewMemStore(),
+		config:     config,
+		version:    version,
+		mutex:      &sync.Mutex{},
 	}
 
 }

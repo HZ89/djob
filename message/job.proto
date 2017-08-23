@@ -1,23 +1,23 @@
 syntax = "proto3";
 //import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
 
 package message;
 
 service job {
     rpc GetJob (Params) returns (Job) {
     }
-    rpc GetExecution (Params) returns (Execution) {
+    rpc ExecDone (Execution) returns (google.protobuf.Empty) {
     }
-    rpc ExecDone (Execution) returns (Result) {}
 }
 
 message Params {
-    string Name = 1;
-    string Region = 2;
+    string Name = 1; // Job name
+    string Region = 2; // Job region
 }
 
 message Job {
-    string Name = 1; // Job name. Must bt unique
+    string Name = 1; // Job name. Must be unique
     string Region = 2; // Job run in this region normally.
     string schedule = 3;
     bool Shell = 4; // Use shell to run command
@@ -41,15 +41,16 @@ message JobStatus {
 }
 
 message Execution {
-    string Name = 1;
-    string Cmd = 2;
-    bytes Output = 3;
-    bool Succeed = 4;
-    string StartTime = 5;
-    string FinishTime = 6;
-    string NodeName = 7;
-    string JobName = 8;
-    int64 Retries = 9; // Number of times to retry a execution
+    string SchedulerNodeName = 1;
+    bytes Output = 2;
+    bool Succeed = 3;
+    string StartTime = 4;
+    string FinishTime = 5;
+    string RunNodeName = 6;
+    string JobName = 7;
+    int64 Retries = 8; // Number of times to retry a execution
+    int64 Group = 9;
+    string Region = 10; // The region of job
 }
 
 message Result {
