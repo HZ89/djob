@@ -38,6 +38,7 @@ type Config struct {
 	RPCAdcertiseIP    string // sames to serf advertise addr
 	RPCAdcertisePort  int
 	SerfSnapshotPath  string //serf use this path to save snapshot of joined server
+	DSN               string
 }
 
 const (
@@ -50,6 +51,10 @@ const (
 	DefaultPidFile      string = "./djob.pid"
 	DefaultLogFile      string = "./djob.log"
 	DefaultKeySpeace    string = "djob"
+	DefaultSQLPort      int    = 3306
+	DefaultSQLHost      string = "localhost"
+	DefaultSQLUser      string = "djob"
+	DefaultDBName       string = "djob"
 )
 
 func newConfig(args []string, version string) (*Config, error) {
@@ -75,6 +80,10 @@ func newConfig(args []string, version string) (*Config, error) {
 	viper.SetDefault("serf_snapshot_dir", DefaultSnapshotPath)
 	viper.SetDefault("pid", cmdFlags.Lookup("pid").Value.String())
 	viper.SetDefault("logfile", cmdFlags.Lookup("logfile").Value.String())
+	viper.SetDefault("sql_port", DefaultSQLPort) // sql backend used to save execution
+	viper.SetDefault("sql_host", DefaultSQLHost)
+	viper.SetDefault("sql_user", DefaultSQLUser)
+	viper.SetDefault("sql_dbname", DefaultDBName)
 
 	return ReadConfig(version)
 }
@@ -141,6 +150,22 @@ func ReadConfig(version string) (*Config, error) {
 		return nil, err
 	}
 
+	sqlPasswd := viper.GetString("sql_password")
+	unixSocket := viper.GetString("sql_unix")
+	sqlAddr := fmt.Sprintf("%s:%d", viper.GetString("sql_host"), viper.GetInt("sql_port"))
+	dbName := viper.GetString("sql_dbname")
+	dsn := viper.GetString("sql_user")
+
+	if sqlPasswd != "" {
+		dsn = dsn + ":" + sqlPasswd
+	}
+	if unixSocket != "" {
+		dsn = dsn + "@unix(" + unixSocket + ")"
+	} else {
+		dsn = dsn + "@tcp(" + sqlAddr + ")"
+	}
+	dsn = dsn + "/" + dbName + "?parseTime=true&loc=Local&autocommit=1"
+
 	return &Config{
 		Server:            server,
 		Region:            tags["region"],
@@ -168,6 +193,7 @@ func ReadConfig(version string) (*Config, error) {
 		Nodename:          nodeName,
 		encryptKey:        viper.GetString("encrypt_key"),
 		SerfSnapshotPath:  viper.GetString("serf_snapshot_dir"),
+		DSN:               dsn,
 	}, nil
 }
 

@@ -1,42 +1,63 @@
 package: version.uuzu.com/zhuhuipeng/djob
 import:
+- package: github.com/Knetic/govaluate
+  version: ~3.0.0
 - package: github.com/Sirupsen/logrus
-- package: github.com/golang/protobuf
-  subpackages:
-  - proto
-  - ptypes
-  - ptypes/timestamp
-- package: github.com/mitchellh/cli
-- package: github.com/spf13/viper
-- package: google.golang.org/grpc
-  subpackages:
-  - credentials
+  version: ~1.0.3
+- package: github.com/armon/circbuf
 - package: github.com/docker/libkv
   version: ~0.2.1
   subpackages:
   - store
-- package: golang.org/x/net
-- package: github.com/hashicorp/consul
-  version: ~0.8.3
+  - store/consul
+  - store/etcd
+  - store/zookeeper
+- package: github.com/gin-contrib/gzip
+- package: github.com/gin-gonic/gin
+  version: ~1.2.0
+- package: github.com/go-sql-driver/mysql
+  version: ~1.3.0
+- package: github.com/gogo/protobuf
+  version: ~0.4.0
   subpackages:
-  - api
-- package: github.com/Knetic/govaluate
-  version: ~3.0.0
+  - proto
+- package: github.com/golang/protobuf
+  subpackages:
+  - jsonpb
+  - proto
+  - ptypes
+  - ptypes/empty
+  - ptypes/timestamp
+- package: github.com/hashicorp/memberlist
+  version: ~0.1.0
 - package: github.com/hashicorp/serf
   version: ~0.8.1
   subpackages:
   - serf
-  - testutil
-- package: github.com/gin-gonic/gin
-  version: ~1.2.0
-- package: github.com/gin-gonic/contrib
-  subpackages:
-  - jwt
-- package: github.com/gin-contrib/gzip
-- package: github.com/pingcap/goleveldb
 - package: github.com/juju/errors
-- package: github.com/hashicorp/memberlist
-  version: ~0.1.0
-- package: github.com/armon/circbuf
+- package: github.com/lestrrat/go-file-rotatelogs
+  version: ~2.1.0
 - package: github.com/mattn/go-shellwords
   version: ~1.0.3
+- package: github.com/mitchellh/cli
+- package: github.com/pingcap/goleveldb
+  subpackages:
+  - leveldb
+  - leveldb/comparer
+  - leveldb/iterator
+  - leveldb/memdb
+  - leveldb/util
+- package: github.com/prometheus/common
+  subpackages:
+  - log
+- package: github.com/spf13/viper
+  version: ~1.0.0
+- package: golang.org/x/net
+  subpackages:
+  - context
+- package: google.golang.org/grpc
+  version: ~1.5.2
+  subpackages:
+  - credentials
+- package: github.com/jinzhu/gorm
+  version: ~1.0.0

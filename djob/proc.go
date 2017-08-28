@@ -21,7 +21,7 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 	cmd.Stdout = buf
 
 	var success bool
-	ex.StartTime = time.Now().String()
+	ex.StartTime = time.Now().UnixNano()
 	err := cmd.Start()
 	if err != nil {
 		success = false
@@ -52,7 +52,7 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 		}
 	}
 
-	ex.FinishTime = time.Now().String()
+	ex.FinishTime = time.Now().UnixNano()
 	ex.Succeed = success
 	ex.Output = buf.Bytes()
 	ex.RunNodeName = a.config.Nodename
@@ -63,7 +63,13 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 	}
 
 	rpcClient := a.newRPCClient(ip, port)
-	return rpcClient.ExecDone(ex)
+	defer rpcClient.Shutdown()
+
+	if err := rpcClient.ExecDone(ex); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func buildCmd(job *pb.Job) (cmd *exec.Cmd) {

@@ -1,9 +1,8 @@
 syntax = "proto3";
-//import "google/protobuf/timestamp.proto";
+import "google/protobuf/timestamp.proto";
 import "google/protobuf/empty.proto";
 
 package message;
-
 service job {
     rpc GetJob (Params) returns (Job) {
     }
@@ -41,16 +40,26 @@ message JobStatus {
 }
 
 message Execution {
+    // @inject_tag: gorm:"size:64;not null"
     string SchedulerNodeName = 1;
+    // @inject_tag: gorm:"type:blob"
     bytes Output = 2;
+    // @inject_tag: gorm:"type:tinyint(4)"
     bool Succeed = 3;
-    string StartTime = 4;
-    string FinishTime = 5;
-    string RunNodeName = 6;
-    string JobName = 7;
+    // @inject_tag: gorm:"type:bigint(21);not null"
+    int64 StartTime = 4;
+    // @inject_tag: gorm:"type:bigint(21);not null"
+    int64 FinishTime = 5;
+    // @inject_tag: gorm:"size:64;not null;primary_key"
+    string JobName = 6;
+    // @inject_tag: gorm:"size:64;not null;primary_key"
+    string Region = 7; // The region of job
+    // @inject_tag: gorm:"type:int(11);not null"
     int64 Retries = 8; // Number of times to retry a execution
+    // @inject_tag: gorm:"type:bigint(21);not null;primary_key"
     int64 Group = 9;
-    string Region = 10; // The region of job
+    // @inject_tag: gorm:"size:64;not null;primary_key"
+    string RunNodeName = 10;
 }
 
 message Result {

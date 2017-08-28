@@ -110,3 +110,19 @@ func (a *Agent) JobList(region string) ([]*pb.Job, error) {
 	}
 	return jobs, nil
 }
+
+func (a *Agent) JobRun(name, region string) (*pb.Execution, error) {
+	job, err := a.store.GetJob(name, region)
+	if err != nil {
+		return nil, err
+	}
+	ex := pb.Execution{
+		SchedulerNodeName: job.SchedulerNodeName,
+		JobName:           job.Name,
+		Region:            job.Region,
+		Group:             time.Now().UnixNano(),
+		Retries:           0,
+	}
+	go a.sendRunJobQuery(&ex)
+	return &ex, nil
+}

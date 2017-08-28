@@ -22,7 +22,7 @@ type Backend interface {
 	JobInfo(name, region string) (*pb.Job, error)
 	JobDelete(name, region string) (*pb.Job, error)
 	JobList(region string) ([]*pb.Job, error)
-	JobRun(name, region string) error
+	JobRun(name, region string) (*pb.Execution, error)
 }
 
 type KayPair struct {
@@ -119,7 +119,23 @@ func (a *APIServer) prepareGin() *gin.Engine {
 	web.GET("/:region/jobs", a.getJobList)
 	web.GET("/:region/jobs/:name", a.getJob)
 	web.DELETE("/:region/jobs/:name", a.deleteJob)
+	web.GET("/:region/jobs/:name/run", a.runJob)
 	return r
+}
+
+func (a *APIServer) runJob(c *gin.Context) {
+	name := c.Params.ByName("name")
+	region := c.Params.ByName("region")
+	ex, err := a.backend.JobRun(name, region)
+	if err != nil {
+		a.respondWithError(http.StatusInternalServerError, &pb.RespJob{Status: http.StatusInternalServerError, Message: err.Error()}, c)
+	}
+	resp := pb.RespExec{
+		Status:  0,
+		Message: "succeed",
+		Data:    []*pb.Execution{ex},
+	}
+	c.Render(http.StatusOK, pbjson{data: resp})
 }
 
 func (a *APIServer) deleteJob(c *gin.Context) {

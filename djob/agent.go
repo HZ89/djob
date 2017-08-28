@@ -13,6 +13,8 @@ import (
 	"github.com/docker/libkv/store"
 	"github.com/hashicorp/memberlist"
 	"github.com/hashicorp/serf/serf"
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/mysql"
 	"sort"
 	"version.uuzu.com/zhuhuipeng/djob/scheduler"
 	"version.uuzu.com/zhuhuipeng/djob/web/api"
@@ -23,7 +25,11 @@ var (
 	LockTimeOut    = 2 * time.Second
 )
 
-const gracefulTime = 5 * time.Second
+const (
+	gracefulTime      = 5 * time.Second
+	sqlMaxOpenConnect = 100
+	sqlMaxIdleConnect = 20
+)
 
 type Agent struct {
 	jobLockers map[string]store.Locker
@@ -40,6 +46,7 @@ type Agent struct {
 	apiServer  *api.APIServer
 	version    string
 	runJobCh   chan *pb.Job
+	db         *gorm.DB
 }
 
 func (a *Agent) setupSerf() *serf.Serf {
@@ -176,6 +183,9 @@ func (a *Agent) serfEventLoop() {
 						"payload": string(query.Payload),
 						"at":      query.LTime,
 					}).Debug("Agent: Running job")
+
+					go a.receiveRunJobQuery(query)
+
 				case QueryRPCConfig:
 					if a.config.Server {
 						Log.WithFields(logrus.Fields{
@@ -183,8 +193,29 @@ func (a *Agent) serfEventLoop() {
 							"payload": string(query.Payload),
 							"at":      query.LTime,
 						}).Debug("Agent: Server receive a rpc config query")
+
+						go a.receiveGetRPCConfigQuery(query)
 					}
-					go a.receiveGetRPCConfigQuery(query)
+				case QueryJobCount:
+					if a.config.Server {
+						Log.WithFields(logrus.Fields{
+							"query":   query.Name,
+							"payload": string(query.Payload),
+							"at":      query.LTime,
+						}).Debug("Agent: Server receive a job count query")
+
+						go a.receiveJobCountQuery(query)
+					}
+				case QueryJobDelete:
+					if a.config.Server {
+						Log.WithFields(logrus.Fields{
+							"query":   query.Name,
+							"payload": string(query.Payload),
+							"at":      query.LTime,
+						}).Debug("Agent: Server receive a job delete query")
+
+						go a.receiveJobDeleteQuery(query)
+					}
 				default:
 					Log.Warn("Agent: get a unknow message")
 					Log.WithFields(logrus.Fields{
@@ -217,6 +248,17 @@ func (a *Agent) Run() {
 
 	if a.config.Server {
 
+		db, err := gorm.Open("mysql", a.config.DSN)
+		if err != nil {
+			Log.WithError(err).Fatal("Agent: init failed")
+		}
+		db.DB().SetMaxOpenConns(sqlMaxOpenConnect)
+		db.DB().SetMaxIdleConns(sqlMaxIdleConnect)
+		db.SetLogger(Log)
+		db.AutoMigrate(&pb.Execution{})
+
+		a.db = db
+
 		var tls rpc.TlsOpt
 		var keyPair api.KayPair
 		if a.config.RPCTls {
@@ -231,8 +273,7 @@ func (a *Agent) Run() {
 			}
 		}
 
-		a.scheduler = scheduler.New(a.runJobCh)
-		a.scheduler.Start()
+		// connect to kv store
 		a.store, err = NewKVStore(a.config.JobStore, a.config.JobStoreServers, a.config.JobStoreKeyspace)
 		if err != nil {
 			Log.WithFields(logrus.Fields{
@@ -251,8 +292,40 @@ func (a *Agent) Run() {
 			Log.Info("Agent: RPC Server started")
 		}()
 
+		// run scheduler
+		a.scheduler = scheduler.New(a.runJobCh)
+		a.scheduler.Start()
+
+		// try to load job
 		a.loadJobs(a.config.Region)
 
+		// wait run job
+		go func() {
+			for {
+				job := <-a.runJobCh
+				Log.WithFields(logrus.Fields{
+					"JobName":  job.Name,
+					"Region":   job.Region,
+					"cmd":      job.Command,
+					"Schedule": job.Schedule,
+				}).Debug("Agent: Job ready to run")
+				ex := pb.Execution{
+					SchedulerNodeName: job.SchedulerNodeName,
+					JobName:           job.Name,
+					Region:            job.Region,
+					Group:             time.Now().UnixNano(),
+					Retries:           0,
+				}
+				go a.sendRunJobQuery(&ex)
+				Log.WithFields(logrus.Fields{
+					"JobName": ex.JobName,
+					"Region":  ex.Region,
+					"Group":   ex.Group,
+				}).Debug("Agent: Job Run serf query has been send")
+			}
+		}()
+
+		// start api server
 		a.apiServer, err = api.NewAPIServer(a.config.APIBindIP, a.config.APIBindPort, Log, make(map[string]string), a.config.RPCTls, &keyPair)
 		if err != nil {
 			Log.Fatalf("Agent: New API Server Failed: %s", err)
@@ -329,6 +402,7 @@ func (a *Agent) Stop(graceful bool) int {
 			wg.Done()
 		}()
 		wg.Wait()
+		a.db.Close()
 		gracefulCh <- struct{}{}
 	}()
 
@@ -340,6 +414,7 @@ func (a *Agent) Stop(graceful bool) int {
 	}
 }
 
+// TODO: use a rpc client pool
 func (a *Agent) newRPCClient(ip string, port int) *rpc.RpcClient {
 	var tls *rpc.TlsOpt
 	if a.config.RPCTls {
@@ -359,9 +434,8 @@ func (a *Agent) newRPCClient(ip string, port int) *rpc.RpcClient {
 func New(args []string, version string) *Agent {
 	config, err := newConfig(args, version)
 	if err != nil {
-		Log.Fatalln(err)
+		Log.WithError(err).Fatal("Agent:init failed")
 	}
-
 	return &Agent{
 		jobLockers: make(map[string]store.Locker),
 		eventCh:    make(chan serf.Event, 64),

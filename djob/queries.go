@@ -428,7 +428,45 @@ func (a *Agent) sendRunJobQuery(ex *pb.Execution) {
 }
 
 func (a *Agent) receiveRunJobQuery(query *serf.Query) {
+	var ex pb.Execution
+	if err := proto.Unmarshal(query.Payload, &ex); err != nil {
+		Log.WithError(err).Fatal("Agent: Error decode query payload")
+	}
 
+	Log.WithFields(logrus.Fields{
+		"job":    ex.JobName,
+		"region": ex.Region,
+		"group":  ex.Group,
+	}).Info("Agent: Starting job")
+
+	ip, port, err := a.sendGetRPCConfigQuery(ex.SchedulerNodeName)
+	if err != nil {
+		Log.WithError(err).Fatal("Agent: get rpc config failed")
+	}
+
+	rpcc := a.newRPCClient(ip, port)
+	defer rpcc.Shutdown()
+
+	job, err := rpcc.GetJob(ex.JobName, ex.Region)
+	if err != nil {
+		Log.WithError(err).Fatal("Agent: rpc call GetJob Failed")
+	}
+	logrus.WithFields(logrus.Fields{
+		"job":    job.Name,
+		"region": job.Region,
+		"cmd":    job.Command,
+	}).Debug("Agent: Got job by rpc call GetJob")
+
+	go func() {
+		if err := a.execJob(job, &ex); err != nil {
+			Log.WithError(err).Error("Proc: Exec job Failed")
+		}
+		Log.WithFields(logrus.Fields{
+			"job":    ex.JobName,
+			"region": ex.Region,
+			"group":  ex.Group,
+		}).Info("Agent: Job done")
+	}()
 }
 
 func (a *Agent) sendGetRPCConfigQuery(nodeName string) (string, int, error) {
