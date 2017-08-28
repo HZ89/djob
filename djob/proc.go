@@ -3,7 +3,6 @@ package djob
 import (
 	"github.com/armon/circbuf"
 	"github.com/mattn/go-shellwords"
-	"github.com/prometheus/common/log"
 	"os/exec"
 	"time"
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
@@ -42,7 +41,7 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 		if err := cmd.Process.Kill(); err != nil {
 			Log.WithError(err).Errorf("Proc: Job '%s' kill failed", job.Name)
 		}
-		log.Warnf("Proc: Job '%s' reach max run time(one hour), has been killed", job.Name)
+		Log.Warnf("Proc: Job '%s' reach max run time(one hour), has been killed", job.Name)
 	case err := <-done:
 		if err != nil {
 			Log.WithError(err).Errorf("Proc: Job '%s' cmd exec error output", job.Name)

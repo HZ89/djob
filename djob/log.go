@@ -25,11 +25,14 @@ func InitLogger(logLevel string, node string, file string) {
 		}
 		//fd.Sync()
 		fd.Close()
-		writer := rotatelogs.New(
+		writer, err := rotatelogs.New(
 			file+".%Y%m%d%H%M",
 			rotatelogs.WithLinkName(file),
 			rotatelogs.WithRotationTime(time.Duration(2073600)*time.Second),
 		)
+		if err != nil {
+			Log.WithError(err).Fatal("Create rotate log failed")
+		}
 		formattedLogger.Out = writer
 
 		//formattedLogger.Hooks.Add(lfshook.NewHook(lfshook.WriterMap{
