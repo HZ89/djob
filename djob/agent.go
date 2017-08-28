@@ -234,28 +234,37 @@ func (a *Agent) serfEventLoop() {
 }
 
 // Run func start a Agent process
-func (a *Agent) Run() {
+func (a *Agent) Run() error {
 	var err error
 	if err != nil {
 		Log.Fatalln(err)
+		return err
 	}
 	if a.serf = a.setupSerf(); a.serf == nil {
 		Log.Fatalln("Start serf failed!")
+		return errors.New("Start serf failed")
 	}
 	a.serfJion(a.config.SerfJoin, true)
 	// TODO: add prometheus support
 	// start prometheus client
 
 	if a.config.Server {
-
+		Log.Info("Agent: Init server")
+		Log.WithFields(logrus.Fields{
+			"dsn": a.config.DSN,
+		}).Debug("Agent: Connect to database")
 		db, err := gorm.Open("mysql", a.config.DSN)
 		if err != nil {
-			Log.WithError(err).Fatal("Agent: init failed")
+			Log.WithError(err).Error("Agent: init failed")
+			return err
 		}
 		db.DB().SetMaxOpenConns(sqlMaxOpenConnect)
 		db.DB().SetMaxIdleConns(sqlMaxIdleConnect)
-		db.SetLogger(Log)
-		db.AutoMigrate(&pb.Execution{})
+		db.LogMode(false)
+		if err := db.AutoMigrate(&pb.Execution{}).Error; err != nil {
+			Log.WithError(err).Error("Agent: Migrate database failed")
+			return err
+		}
 
 		a.db = db
 
@@ -274,6 +283,11 @@ func (a *Agent) Run() {
 		}
 
 		// connect to kv store
+		Log.WithFields(logrus.Fields{
+			"backend":  a.config.JobStore,
+			"server":   a.config.JobStoreServers,
+			"keySpace": a.config.JobStoreKeyspace,
+		}).Debug("Agent: Connect to job store")
 		a.store, err = NewKVStore(a.config.JobStore, a.config.JobStoreServers, a.config.JobStoreKeyspace)
 		if err != nil {
 			Log.WithFields(logrus.Fields{
@@ -281,16 +295,19 @@ func (a *Agent) Run() {
 				"servers":  a.config.JobStoreServers,
 				"keyspace": a.config.JobStoreKeyspace,
 			}).Debug("Agent: Connect Backend Failed")
-			Log.Fatalf("Agent: Connent Backend Failed: %s", err)
+			Log.WithError(err).Error("Agent: Connent Backend Failed")
+			return err
 		}
 		// run rpc server
+		Log.WithFields(logrus.Fields{
+			"BindIp":   a.config.RPCBindIP,
+			"BindPort": a.config.RPCBindPort,
+		}).Debug("Agent: Start RPC server")
 		a.rpcServer = rpc.NewRPCServer(a.config.RPCBindIP, a.config.RPCBindPort, a, &tls)
-		go func() {
-			if err := a.rpcServer.Run(); err != nil {
-				Log.Fatalf("Agent: Start RPC Srever Failed: %s", err)
-			}
-			Log.Info("Agent: RPC Server started")
-		}()
+		if err := a.rpcServer.Run(); err != nil {
+			Log.WithError(err).Error("Agent: Start RPC Srever Failed")
+			return err
+		}
 
 		// run scheduler
 		a.scheduler = scheduler.New(a.runJobCh)
@@ -326,20 +343,17 @@ func (a *Agent) Run() {
 		}()
 
 		// start api server
-		a.apiServer, err = api.NewAPIServer(a.config.APIBindIP, a.config.APIBindPort, Log, make(map[string]string), a.config.RPCTls, &keyPair)
+		a.apiServer, err = api.NewAPIServer(a.config.APIBindIP, a.config.APIBindPort, Log,
+			a.config.APITokens, a.config.RPCTls, &keyPair)
 		if err != nil {
-			Log.Fatalf("Agent: New API Server Failed: %s", err)
+			Log.WithError(err).Error("Agent: New API Server Failed")
+			return err
 		}
-		go func() {
-			if err := a.apiServer.Run(); err != nil {
-				Log.Fatalf("Agent: Start API Server Failed: %s", err)
-			}
-			Log.Info("Agent: API Server started")
-		}()
-
+		a.apiServer.Run()
 	}
 
-	a.serfEventLoop()
+	go a.serfEventLoop()
+	return nil
 }
 
 func (a *Agent) loadJobs(region string) {

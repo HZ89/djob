@@ -40,7 +40,7 @@ message JobStatus {
 }
 
 message Execution {
-    // @inject_tag: gorm:"size:64;not null"
+    // @inject_tag: gorm:"type:varchar(64);not null"
     string SchedulerNodeName = 1;
     // @inject_tag: gorm:"type:blob"
     bytes Output = 2;
@@ -50,15 +50,15 @@ message Execution {
     int64 StartTime = 4;
     // @inject_tag: gorm:"type:bigint(21);not null"
     int64 FinishTime = 5;
-    // @inject_tag: gorm:"size:64;not null;primary_key"
+    // @inject_tag: gorm:"type:varchar(64);primary_key;not null"
     string JobName = 6;
-    // @inject_tag: gorm:"size:64;not null;primary_key"
+    // @inject_tag: gorm:"type:varchar(64);primary_key;not null"
     string Region = 7; // The region of job
     // @inject_tag: gorm:"type:int(11);not null"
     int64 Retries = 8; // Number of times to retry a execution
-    // @inject_tag: gorm:"type:bigint(21);not null;primary_key"
+    // @inject_tag: gorm:"type:bigint(21);primary_key;not null"
     int64 Group = 9;
-    // @inject_tag: gorm:"size:64;not null;primary_key"
+    // @inject_tag: gorm:"type:varchar(64);primary_key;not null"
     string RunNodeName = 10;
 }
 

@@ -86,10 +86,20 @@ func (s *RpcServer) listen() error {
 }
 
 func (s *RpcServer) Run() error {
-	if err := s.listen(); err != nil {
+	errCh := make(chan error, 1)
+	doneCh := make(chan struct{}, 1)
+	go func() {
+		if err := s.listen(); err != nil {
+			errCh <- err
+		}
+		doneCh <- struct{}{}
+	}()
+	select {
+	case err := <-errCh:
 		return err
+	case <-doneCh:
+		return nil
 	}
-	return nil
 }
 
 func (s *RpcServer) Shutdown(timeout time.Duration) error {

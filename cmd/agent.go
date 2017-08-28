@@ -19,7 +19,12 @@ type AgentCmd struct {
 func (c *AgentCmd) Run(args []string) int {
 	copy(c.args, args)
 	c.agent = djob.New(c.args, c.Version)
-	go c.agent.Run()
+	err := c.agent.Run()
+	if err != nil {
+		c.Ui.Error(err.Error())
+		c.Ui.Error("Cmd: Start agent failed")
+		return 1
+	}
 	return c.handleSignals()
 }
 
@@ -63,9 +68,9 @@ func (c *AgentCmd) Help() string {
 	Usage: djob agent [options]
 	    Run djob agent
 	Options:
-	    -config=./config     config file path
-	    -pid                 pid file path
-	    -logfile             log file path
+	    --config=./config     config file path
+	    --pid                 pid file path
+	    --logfile             log file path
 	`
 	return strings.TrimSpace(helpText)
 }

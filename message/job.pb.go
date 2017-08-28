@@ -205,26 +205,26 @@ func (m *JobStatus) GetLastError() string {
 }
 
 type Execution struct {
-	// @inject_tag: gorm:"size:64;not null"
-	SchedulerNodeName string `protobuf:"bytes,1,opt,name=SchedulerNodeName" json:"SchedulerNodeName,omitempty"`
+	// @inject_tag: gorm:"type:varchar(64);not null"
+	SchedulerNodeName string `protobuf:"bytes,1,opt,name=SchedulerNodeName" json:"SchedulerNodeName,omitempty" gorm:"type:varchar(64);not null"`
 	// @inject_tag: gorm:"type:blob"
-	Output []byte `protobuf:"bytes,2,opt,name=Output,proto3" json:"Output,omitempty"`
+	Output []byte `protobuf:"bytes,2,opt,name=Output,proto3" json:"Output,omitempty" gorm:"type:blob"`
 	// @inject_tag: gorm:"type:tinyint(4)"
-	Succeed bool `protobuf:"varint,3,opt,name=Succeed" json:"Succeed,omitempty"`
+	Succeed bool `protobuf:"varint,3,opt,name=Succeed" json:"Succeed,omitempty" gorm:"type:tinyint(4)"`
 	// @inject_tag: gorm:"type:bigint(21);not null"
-	StartTime int64 `protobuf:"varint,4,opt,name=StartTime" json:"StartTime,omitempty"`
+	StartTime int64 `protobuf:"varint,4,opt,name=StartTime" json:"StartTime,omitempty" gorm:"type:bigint(21);not null"`
 	// @inject_tag: gorm:"type:bigint(21);not null"
-	FinishTime int64 `protobuf:"varint,5,opt,name=FinishTime" json:"FinishTime,omitempty"`
-	// @inject_tag: gorm:"size:64;not null;primary_key"
-	JobName string `protobuf:"bytes,6,opt,name=JobName" json:"JobName,omitempty"`
-	// @inject_tag: gorm:"size:64;not null;primary_key"
-	Region string `protobuf:"bytes,7,opt,name=Region" json:"Region,omitempty"`
+	FinishTime int64 `protobuf:"varint,5,opt,name=FinishTime" json:"FinishTime,omitempty" gorm:"type:bigint(21);not null"`
+	// @inject_tag: gorm:"type:varchar(64);primary_key;not null"
+	JobName string `protobuf:"bytes,6,opt,name=JobName" json:"JobName,omitempty" gorm:"type:varchar(64);primary_key;not null"`
+	// @inject_tag: gorm:"type:varchar(64);primary_key;not null"
+	Region string `protobuf:"bytes,7,opt,name=Region" json:"Region,omitempty" gorm:"type:varchar(64);primary_key;not null"`
 	// @inject_tag: gorm:"type:int(11);not null"
-	Retries int64 `protobuf:"varint,8,opt,name=Retries" json:"Retries,omitempty"`
-	// @inject_tag: gorm:"type:bigint(21);not null;primary_key"
-	Group int64 `protobuf:"varint,9,opt,name=Group" json:"Group,omitempty"`
-	// @inject_tag: gorm:"size:64;not null;primary_key"
-	RunNodeName string `protobuf:"bytes,10,opt,name=RunNodeName" json:"RunNodeName,omitempty"`
+	Retries int64 `protobuf:"varint,8,opt,name=Retries" json:"Retries,omitempty" gorm:"type:int(11);not null"`
+	// @inject_tag: gorm:"type:bigint(21);primary_key;not null"
+	Group int64 `protobuf:"varint,9,opt,name=Group" json:"Group,omitempty" gorm:"type:bigint(21);primary_key;not null"`
+	// @inject_tag: gorm:"type:varchar(64);primary_key;not null"
+	RunNodeName string `protobuf:"bytes,10,opt,name=RunNodeName" json:"RunNodeName,omitempty" gorm:"type:varchar(64);primary_key;not null"`
 }
 
 func (m *Execution) Reset()                    { *m = Execution{} }

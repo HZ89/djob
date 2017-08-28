@@ -39,6 +39,7 @@ type Config struct {
 	RPCAdcertisePort  int
 	SerfSnapshotPath  string //serf use this path to save snapshot of joined server
 	DSN               string
+	APITokens         map[string]string
 }
 
 const (
@@ -100,9 +101,16 @@ func ReadConfig(version string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	tokens := make(map[string]string)
 
 	if server {
 		tags["server"] = "true"
+		tokens = viper.GetStringMapString("tokens")
+		if len(tokens) == 0 {
+			tokens = map[string]string{
+				"defualt": "djob-token",
+			}
+		}
 	}
 
 	tags["version"] = version
@@ -111,7 +119,7 @@ func ReadConfig(version string) (*Config, error) {
 
 	withTls := viper.GetBool("rpc_tls")
 	keyFile := viper.GetString("rpc_key_file")
-	certFile := viper.GetString("rpc_vert_file")
+	certFile := viper.GetString("rpc_cert_file")
 	caFile := viper.GetString("rpc_ca_file")
 	if withTls {
 		if server {
@@ -194,6 +202,7 @@ func ReadConfig(version string) (*Config, error) {
 		encryptKey:        viper.GetString("encrypt_key"),
 		SerfSnapshotPath:  viper.GetString("serf_snapshot_dir"),
 		DSN:               dsn,
+		APITokens:         tokens,
 	}, nil
 }
 

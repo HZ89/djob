@@ -221,12 +221,12 @@ func (a *APIServer) logMiddleware() gin.HandlerFunc {
 		latency := end.Sub(start)
 
 		entry := a.loger.WithFields(logrus.Fields{
-			"client_ip":    c.ClientIP(),
-			"method":       c.Request.Method,
-			"path":         path,
-			"latency":      latency,
-			"user-agent":   c.Request.UserAgent(),
-			"respond-time": end.Format(time.RFC3339),
+			"client_ip":  c.ClientIP(),
+			"method":     c.Request.Method,
+			"path":       path,
+			"status":     c.Writer.Status(),
+			"latency":    latency,
+			"user-agent": c.Request.UserAgent(),
 		})
 
 		if len(c.Errors) > 0 {
@@ -238,11 +238,7 @@ func (a *APIServer) logMiddleware() gin.HandlerFunc {
 }
 
 func (a *APIServer) respondWithError(code int, pb interface{}, c *gin.Context) {
-	resp, err := proto.Marshal(pb.(proto.Message))
-	if err != nil {
-		c.String(http.StatusInternalServerError, "protp decode error: %s", err.Error())
-	}
-	c.Render(code, pbjson{data: resp})
+	c.Render(code, pbjson{data: pb.(proto.Message)})
 	c.AbortWithStatus(code)
 }
 
@@ -251,19 +247,19 @@ func (a *APIServer) tokenAuthMiddleware() gin.HandlerFunc {
 		token := c.Request.Header.Get("X-Auth-Token")
 
 		if token == "" {
-			a.respondWithError(http.StatusUnauthorized, "API token required", c)
+			a.respondWithError(http.StatusUnauthorized, &pb.RespJob{Status: http.StatusUnauthorized, Message: "API token required"}, c)
 			return
 		}
 		if _, exist := a.tokenList[token]; exist {
 			c.Next()
 		} else {
-			a.respondWithError(http.StatusUnauthorized, "API token Error", c)
+			a.respondWithError(http.StatusUnauthorized, &pb.RespJob{Status: http.StatusUnauthorized, Message: "API token Error"}, c)
 			return
 		}
 	}
 }
 
-func (a *APIServer) Run() error {
+func (a *APIServer) Run() {
 	r := a.prepareGin()
 	a.server = &http.Server{
 		Addr:    fmt.Sprintf("%s:%d", a.bindIP, a.bindPort),
@@ -279,12 +275,16 @@ func (a *APIServer) Run() error {
 				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 				tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
 				tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 			},
 		}
 		a.server.TLSNextProto = make(map[string]func(*http.Server, *tls.Conn, http.Handler), 0)
-		return a.server.ListenAndServeTLS(a.keyPair.Cert, a.keyPair.Key)
+		go a.server.ListenAndServeTLS(a.keyPair.Cert, a.keyPair.Key)
+		return
 	}
-	return a.server.ListenAndServe()
+	go a.server.ListenAndServe()
+	return
 }
 
 func (a *APIServer) Stop(wait time.Duration) error {

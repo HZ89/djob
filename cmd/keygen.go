@@ -1,25 +1,25 @@
 package cmd
 
 import (
-	"github.com/mitchellh/cli"
-	"time"
-	"flag"
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
-	"fmt"
-	"os"
-	"encoding/pem"
 	"crypto/x509"
-	"math/big"
 	"crypto/x509/pkix"
-	"io/ioutil"
-	"net"
-	"strings"
-	"bytes"
-	"errors"
 	"encoding/base64"
+	"encoding/pem"
+	"errors"
+	"flag"
+	"fmt"
+	"github.com/mitchellh/cli"
+	"io/ioutil"
+	"math/big"
+	"net"
+	"os"
+	"strings"
+	"time"
 )
 
 type KeygenCmd struct {
@@ -206,7 +206,7 @@ func (c *KeygenCmd) createKeypair(selfSign bool, template *x509.Certificate, par
 			KeyUsage:              cert.KeyUsage,
 			ExtKeyUsage:           cert.ExtKeyUsage,
 			BasicConstraintsValid: cert.BasicConstraintsValid,
-			IsCA:                  cert.IsCA,
+			IsCA: cert.IsCA,
 		}
 		parent = &p
 	}
@@ -248,19 +248,29 @@ func (c *KeygenCmd) Help() string {
 	  Generates a new encryption that can be used to configure the agent to encrypt traffic.
 	  The output of key command is already in the proper format that the agent expects.
 	  Tls command will generates tls files. Include ca pk, pub key.
+	options:
+	  --help      This help
+	  --host      Comma-separated hostnames and IPs to generate a certificate for
+	  --duration  Duration that certificate is valid for, unit is hour
+	  --initca    Create a root ca keypair
+	  --ca        Ca public key
+	  --cakey     Ca private key
 	`
 	return strings.TrimSpace(helpText)
 }
 
 func (c *KeygenCmd) Run(args []string) int {
-	if args[0] == "tls" {
-		c.config = newConfig(args[1:])
-		return c.genCert()
+	if len(args) > 0 {
+		if args[0] == "tls" {
+			c.config = newConfig(args[1:])
+			return c.genCert()
+		}
+		if args[0] == "key" {
+			return c.genKey()
+		}
 	}
-	if args[0] == "key" {
-		return c.genCert()
-	}
-	c.Ui.Error(fmt.Sprintf("Unknow arg: %s", args[0]))
+
+	c.Ui.Error("Args Error")
 	c.Ui.Output(c.Help())
 	return 1
 }
