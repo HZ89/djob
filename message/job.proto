@@ -18,7 +18,7 @@ message Params {
 message Job {
     string Name = 1; // Job name. Must be unique
     string Region = 2; // Job run in this region normally.
-    string schedule = 3;
+    string Schedule = 3;
     bool Shell = 4; // Use shell to run command
     string Command = 5; // Command to run
     string Expression = 6; // A expression used for filter agent node, job will run in the node when this expression is true

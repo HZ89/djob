@@ -96,11 +96,14 @@ func ReadConfig(version string) (*Config, error) {
 	}
 	tags := viper.GetStringMapString("tags")
 	server := viper.GetBool("server")
-
-	nodeName, err := os.Hostname()
-	if err != nil {
-		return nil, err
+	nodeName := viper.GetString("node")
+	if nodeName == "" {
+		nodeName, err = os.Hostname()
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	tokens := make(map[string]string)
 
 	if server {

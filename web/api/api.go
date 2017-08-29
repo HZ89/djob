@@ -18,7 +18,7 @@ import (
 )
 
 type Backend interface {
-	JobModify(job *pb.Job) (*pb.Job, error)
+	JobModify(*pb.Job) (*pb.Job, error)
 	JobInfo(name, region string) (*pb.Job, error)
 	JobDelete(name, region string) (*pb.Job, error)
 	JobList(region string) ([]*pb.Job, error)
@@ -83,7 +83,7 @@ type APIServer struct {
 }
 
 func NewAPIServer(ip string, port int, loger *logrus.Entry,
-	tokens map[string]string, tls bool, pair *KayPair) (*APIServer, error) {
+	tokens map[string]string, tls bool, pair *KayPair, backend Backend) (*APIServer, error) {
 	if len(tokens) == 0 {
 		return nil, errors.New("Have no tokens")
 	}
@@ -102,6 +102,7 @@ func NewAPIServer(ip string, port int, loger *logrus.Entry,
 		tokenList: n,
 		tls:       tls,
 		keyPair:   pair,
+		backend:   backend,
 	}, nil
 }
 
@@ -129,13 +130,14 @@ func (a *APIServer) runJob(c *gin.Context) {
 	ex, err := a.backend.JobRun(name, region)
 	if err != nil {
 		a.respondWithError(http.StatusInternalServerError, &pb.RespJob{Status: http.StatusInternalServerError, Message: err.Error()}, c)
+		return
 	}
 	resp := pb.RespExec{
 		Status:  0,
 		Message: "succeed",
 		Data:    []*pb.Execution{ex},
 	}
-	c.Render(http.StatusOK, pbjson{data: resp})
+	c.Render(http.StatusOK, pbjson{data: &resp})
 }
 
 func (a *APIServer) deleteJob(c *gin.Context) {
@@ -144,13 +146,14 @@ func (a *APIServer) deleteJob(c *gin.Context) {
 	job, err := a.backend.JobDelete(name, region)
 	if err != nil {
 		a.respondWithError(http.StatusInternalServerError, &pb.RespJob{Status: http.StatusInternalServerError, Message: err.Error()}, c)
+		return
 	}
 	resp := pb.RespJob{
 		Status:  0,
 		Message: "succeed",
 		Data:    []*pb.Job{job},
 	}
-	c.Render(http.StatusOK, pbjson{data: resp})
+	c.Render(http.StatusOK, pbjson{data: &resp})
 }
 
 // TODO: add a data filter
@@ -158,14 +161,15 @@ func (a *APIServer) getJobList(c *gin.Context) {
 	region := c.Params.ByName("region")
 	jobs, err := a.backend.JobList(region)
 	if err != nil {
-		a.respondWithError(http.StatusInternalServerError, &pb.RespJob{Status: http.StatusInternalServerError, Message: err.Error()}, c)
+		a.respondWithError(http.StatusNotFound, &pb.RespJob{Status: http.StatusNotFound, Message: err.Error()}, c)
+		return
 	}
 	resp := pb.RespJob{
 		Status:  0,
 		Message: "succeed",
 		Data:    jobs,
 	}
-	c.Render(http.StatusOK, pbjson{data: resp})
+	c.Render(http.StatusOK, pbjson{data: &resp})
 }
 func (a *APIServer) getJob(c *gin.Context) {
 	name := c.Params.ByName("name")
@@ -173,34 +177,37 @@ func (a *APIServer) getJob(c *gin.Context) {
 	job, err := a.backend.JobInfo(name, region)
 	if err != nil {
 		a.respondWithError(http.StatusInternalServerError, &pb.RespJob{Status: http.StatusInternalServerError, Message: err.Error()}, c)
+		return
 	}
 	resp := pb.RespJob{
 		Status:  0,
 		Message: "succeed",
 		Data:    []*pb.Job{job},
 	}
-	c.Render(http.StatusOK, pbjson{data: resp})
+	c.Render(http.StatusOK, pbjson{data: &resp})
 }
 
 func (a *APIServer) modJob(c *gin.Context) {
 	var (
-		job  *pb.Job
-		resp *pb.RespJob
+		job  pb.Job
+		resp pb.RespJob
 		err  error
 	)
-	err = c.MustBindWith(job, jsonpbBinding{})
+	err = c.MustBindWith(&job, jsonpbBinding{})
 	if err != nil {
 		a.respondWithError(http.StatusBadRequest, &pb.RespJob{Status: http.StatusBadRequest, Message: err.Error()}, c)
+		return
 	}
-	job, err = a.backend.JobModify(job)
+	rj, err := a.backend.JobModify(&job)
 	if err != nil {
 		a.respondWithError(http.StatusInternalServerError, &pb.RespJob{Status: http.StatusInternalServerError, Message: err.Error()}, c)
+		return
 	}
 	resp.Status = 0
 	resp.Message = "succeed"
-	resp.Data = append(resp.Data, job)
+	resp.Data = append(resp.Data, rj)
 
-	c.Render(http.StatusOK, pbjson{data: resp})
+	c.Render(http.StatusOK, pbjson{data: &resp})
 }
 
 func (a *APIServer) tlsHeaderMiddleware() gin.HandlerFunc {

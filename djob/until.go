@@ -42,9 +42,12 @@ func (a *Agent) processFilteredNodes(expression string) ([]string, error) {
 	var nodeNames []string
 	for _, member := range a.serf.Members() {
 		if member.Status == serf.StatusAlive {
-			mtks := reflect.ValueOf(member.Tags).MapKeys()
-			intersection := intersect(mtks, wt)
-			sort.Sort(sort.StringSlice(intersection.([]string)))
+			var mtks []string
+			for k := range member.Tags {
+				mtks = append(mtks, k)
+			}
+			intersection := intersect([]string(mtks), wt)
+			sort.Sort(sort.StringSlice(intersection))
 			if reflect.DeepEqual(wt, intersection) {
 				parameters := make(map[string]interface{})
 				for _, tk := range wt {
@@ -133,11 +136,11 @@ func getType(obj interface{}) string {
 	}
 }
 
-func intersect(a, b interface{}) interface{} {
-	set := make([]interface{}, 0)
-	av := reflect.ValueOf(a)
-	for i := 0; i < av.Len(); i++ {
-		el := av.Index(i).Interface()
+func intersect(a, b []string) []string {
+	set := make([]string, 0)
+	//	av := reflect.ValueOf(a)
+	for i := 0; i < len(a); i++ {
+		el := a[i]
 		if contains(b, el) {
 			set = append(set, el)
 		}

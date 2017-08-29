@@ -56,7 +56,7 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 	ex.Output = buf.Bytes()
 	ex.RunNodeName = a.config.Nodename
 
-	ip, port, err := a.sendGetRPCConfigQuery("")
+	ip, port, err := a.sendGetRPCConfigQuery("", ex.Region)
 	if err != nil {
 		return err
 	}

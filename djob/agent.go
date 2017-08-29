@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/serf/serf"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
+	"io/ioutil"
 	"sort"
 	"version.uuzu.com/zhuhuipeng/djob/scheduler"
 	"version.uuzu.com/zhuhuipeng/djob/web/api"
@@ -74,8 +75,10 @@ func (a *Agent) setupSerf() *serf.Serf {
 	serfConfig.UserQuiescentPeriod = time.Second
 	serfConfig.EnableNameConflictResolution = true
 
-	//	a.eventCh = make(chan serf.Event, 64)
 	serfConfig.EventCh = a.eventCh
+
+	serfConfig.LogOutput = ioutil.Discard
+	serfConfig.MemberlistConfig.LogOutput = ioutil.Discard
 
 	Log.Info("Agent: Djob agent starting")
 
@@ -344,7 +347,7 @@ func (a *Agent) Run() error {
 
 		// start api server
 		a.apiServer, err = api.NewAPIServer(a.config.APIBindIP, a.config.APIBindPort, Log,
-			a.config.APITokens, a.config.RPCTls, &keyPair)
+			a.config.APITokens, a.config.RPCTls, &keyPair, a)
 		if err != nil {
 			Log.WithError(err).Error("Agent: New API Server Failed")
 			return err

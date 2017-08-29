@@ -47,23 +47,22 @@ func NewKVStore(backend string, servers []string, keyspace string) (*KVStore, er
 	}, nil
 }
 
-func (k *KVStore) GetJobList(region string) ([]*pb.Job, error) {
+func (k *KVStore) GetJobList(region string) (jobs []*pb.Job, err error) {
 	res, err := k.Client.List(fmt.Sprintf("%s/%s/jobs/", k.keyspace, generateSlug(region)))
 	if err != nil && err != store.ErrKeyNotFound {
 		return nil, err
 	}
 	if res == nil {
-		return []*pb.Job{}, nil
+		return
 	}
-	jobs := make([]*pb.Job, 0)
 	for _, entry := range res {
 		var job pb.Job
-		if err := proto.Unmarshal(entry.Value, &job); err != nil {
-			return nil, err
+		if err = proto.Unmarshal(entry.Value, &job); err != nil {
+			return
 		}
 		jobs = append(jobs, &job)
 	}
-	return jobs, nil
+	return
 }
 
 func (k *KVStore) GetJob(name, region string) (*pb.Job, error) {
