@@ -41,15 +41,10 @@ func NewRPCServer(bindIp string, port int, server DjobServer, tlsopt *TlsOpt) *R
 }
 
 func (s *RpcServer) GetJob(ctx context.Context, params *pb.Params) (*pb.Job, error) {
-	jobInfo, err := s.dserver.JobInfo(params.Name, params.Region)
+	job, err := s.dserver.JobInfo(params.Name, params.Region)
 	if err != nil {
 		return nil, err
 	}
-
-	job := &pb.Job{
-		Name: jobInfo.Name,
-	}
-
 	return job, nil
 }
 

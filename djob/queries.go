@@ -250,7 +250,7 @@ func (a *Agent) sendNewJobQuery(name, region, nodeName string) (*pb.Result, erro
 		case ack, ok := <-ackCh:
 			if ok {
 				Log.WithFields(logrus.Fields{
-					"query": QueryRunJob,
+					"query": QueryNewJob,
 					"from":  ack,
 				}).Debug("Agent: Received ack")
 			}
@@ -258,7 +258,7 @@ func (a *Agent) sendNewJobQuery(name, region, nodeName string) (*pb.Result, erro
 		case resp, ok := <-respCh:
 			if ok {
 				Log.WithFields(logrus.Fields{
-					"query":   QueryRunJob,
+					"query":   QueryNewJob,
 					"payload": string(resp.Payload),
 				}).Debug("Agent: Received response")
 				payloadPb = resp.Payload
