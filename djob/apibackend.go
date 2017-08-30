@@ -7,7 +7,7 @@ import (
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
 )
 
-var APITimeOut = 500000 * time.Second
+var APITimeOut = 30 * time.Second
 
 func (a *Agent) JobModify(job *pb.Job) (*pb.Job, error) {
 

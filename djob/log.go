@@ -28,7 +28,7 @@ func InitLogger(logLevel string, node string, file string) {
 		writer, err := rotatelogs.New(
 			file+".%Y%m%d%H%M",
 			rotatelogs.WithLinkName(file),
-			rotatelogs.WithRotationTime(time.Duration(2073600)*time.Second),
+			rotatelogs.WithRotationTime(time.Duration(86400)*time.Second),
 		)
 		if err != nil {
 			Log.WithError(err).Fatal("Create rotate log failed")

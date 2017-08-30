@@ -31,12 +31,13 @@ message Job {
 }
 
 message JobStatus {
-    string Name = 1;
-    int64 SuccessCount = 2; // Number of successful executions of this job
-    int64 ErrorCount = 3; // Number of errors of this job
-    string LastHandleAgent = 4; // The agent node name which exec the job last time
-    string LastSuccess = 5; // Last time this jon executed successful in rfc 3339
-    string LastError = 6; // Last time this job failed
+    string JobName = 1;
+    string Region = 2;
+    int64 SuccessCount = 3; // Number of successful executions of this job
+    int64 ErrorCount = 4; // Number of errors of this job
+    string LastHandleAgent = 5; // The agent node name which exec the job last time
+    string LastSuccess = 6; // Last time this jon executed successful in rfc 3339
+    string LastError = 7; // Last time this job failed
 }
 
 message Execution {

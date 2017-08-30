@@ -13,8 +13,6 @@ import (
 	"github.com/docker/libkv/store"
 	"github.com/hashicorp/memberlist"
 	"github.com/hashicorp/serf/serf"
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/mysql"
 	"io/ioutil"
 	"sort"
 	"version.uuzu.com/zhuhuipeng/djob/scheduler"
@@ -47,7 +45,7 @@ type Agent struct {
 	apiServer  *api.APIServer
 	version    string
 	runJobCh   chan *pb.Job
-	db         *gorm.DB
+	sqlStore   *SQLStore
 }
 
 func (a *Agent) setupSerf() *serf.Serf {
@@ -106,16 +104,28 @@ func (a *Agent) serfJion(addrs []string, replay bool) (n int, err error) {
 	return
 }
 
+func (a *Agent) isLocked(name, region string, obj interface{}) bool {
+	lockkey := fmt.Sprintf("%s/%s/%s_locks/%s", a.store.keyspace, generateSlug(region), getType(obj), generateSlug(name))
+	l, err := a.store.Client.Get(lockkey)
+	if err != nil && err != store.ErrKeyNotFound {
+		Log.WithField("key", lockkey).WithError(err).Fatal("Agent get key failed")
+	}
+	if l != nil {
+		return true
+	}
+	return false
+}
+
 func (a *Agent) lock(name, region string, obj interface{}) (store.Locker, error) {
 
 	t := getType(obj)
 
-	lockkey := fmt.Sprintf("%s/%s/%s_locks/%s", a.store.keyspace, region, t, name)
+	lockkey := fmt.Sprintf("%s/%s/%s_locks/%s", a.store.keyspace, generateSlug(region), t, generateSlug(name))
 
 	//l, err := a.store.Client.NewLock(lockkey, &store.LockOptions{RenewLock:reNewCh})
 	l, err := a.store.Client.NewLock(lockkey, &store.LockOptions{})
 	if err != nil {
-		Log.WithField("name", name).WithError(err).Fatal("Agent: New lock failed")
+		Log.WithField("key", lockkey).WithError(err).Fatal("Agent: New lock failed")
 	}
 
 	errCh := make(chan error)
@@ -253,23 +263,18 @@ func (a *Agent) Run() error {
 
 	if a.config.Server {
 		Log.Info("Agent: Init server")
+
 		Log.WithFields(logrus.Fields{
 			"dsn": a.config.DSN,
 		}).Debug("Agent: Connect to database")
-		db, err := gorm.Open("mysql", a.config.DSN)
+		sqlStroe, err := NewSQLStore("mysql", a.config.DSN)
 		if err != nil {
-			Log.WithError(err).Error("Agent: init failed")
-			return err
+			Log.WithError(err).Fatal("Agent: Connect to database failed")
 		}
-		db.DB().SetMaxOpenConns(sqlMaxOpenConnect)
-		db.DB().SetMaxIdleConns(sqlMaxIdleConnect)
-		db.LogMode(false)
-		if err := db.AutoMigrate(&pb.Execution{}).Error; err != nil {
-			Log.WithError(err).Error("Agent: Migrate database failed")
-			return err
+		if err := sqlStroe.Migrate(false, &pb.Execution{}); err != nil {
+			Log.WithError(err).Fatal("Agent: Migrate database table failed")
 		}
-
-		a.db = db
+		a.sqlStore = sqlStroe
 
 		var tls rpc.TlsOpt
 		var keyPair api.KayPair
@@ -419,7 +424,7 @@ func (a *Agent) Stop(graceful bool) int {
 			wg.Done()
 		}()
 		wg.Wait()
-		a.db.Close()
+		a.sqlStore.Close()
 		gracefulCh <- struct{}{}
 	}()
 
