@@ -13,6 +13,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
+	"time"
 )
 
 type KVStore struct {
@@ -49,6 +50,58 @@ func NewKVStore(backend string, servers []string, keyspace string) (*KVStore, er
 	}, nil
 }
 
+func (k *KVStore) GetJobStatus(name, region string) (status *pb.JobStatus, err error) {
+	res, err := k.Client.Get(fmt.Sprintf("%s/%s/Status/%s", k.keyspace, generateSlug(region), generateSlug(name)))
+	if err != nil && err != store.ErrKeyNotFound {
+		return nil, err
+	}
+	if res != nil {
+		var es pb.JobStatus
+		if err = proto.Unmarshal([]byte(res.Value), &es); err != nil {
+			return nil, err
+		}
+		return &es, nil
+	}
+	return &pb.JobStatus{
+		JobName: name,
+		Region:  region,
+	}, nil
+}
+
+func (k *KVStore) SetJobStatus(ex *pb.Execution) error {
+	key := fmt.Sprintf("%s/%s/Status/%s", k.keyspace, generateSlug(ex.Region), generateSlug(ex.JobName))
+	es, err := k.GetJobStatus(ex.JobName, ex.Region)
+	if err != nil {
+		return err
+	}
+	if ex.Succeed {
+		es.SuccessCount += 1
+		es.LastSuccess = time.Unix(0, ex.FinishTime).String()
+	} else {
+		es.ErrorCount += 1
+		es.LastError = time.Unix(0, ex.FinishTime).String()
+	}
+	es.LastHandleAgent = ex.RunNodeName
+
+	Log.WithFields(logrus.Fields{
+		"Name":         es.JobName,
+		"Region":       es.Region,
+		"SuccessCount": es.SuccessCount,
+		"ErrorCount":   es.ErrorCount,
+		"LastSuccess":  es.LastSuccess,
+		"LastError":    es.LastError,
+	}).Debug("Store: save jobstatus to kv store")
+
+	entry, err := proto.Marshal(es)
+	if err != nil {
+		return err
+	}
+	if err := k.Client.Put(key, entry, nil); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (k *KVStore) GetJobList(region string) (jobs []*pb.Job, err error) {
 	res, err := k.Client.List(fmt.Sprintf("%s/%s/Jobs/", k.keyspace, generateSlug(region)))
 	if err != nil && err != store.ErrKeyNotFound {
@@ -59,7 +112,7 @@ func (k *KVStore) GetJobList(region string) (jobs []*pb.Job, err error) {
 	}
 	for _, entry := range res {
 		var job pb.Job
-		if err = proto.Unmarshal(entry.Value, &job); err != nil {
+		if err = proto.Unmarshal([]byte(entry.Value), &job); err != nil {
 			return
 		}
 		jobs = append(jobs, &job)
@@ -103,7 +156,7 @@ func (k *KVStore) SetJob(job *pb.Job) error {
 		"expression": job.Expression,
 		"scheduler":  job.Schedule,
 		"marshal":    string(jobpb),
-	}).Debug("Store: save job to etcd")
+	}).Debug("Store: save job to kv store")
 	if err := k.Client.Put(jobkey, jobpb, nil); err != nil {
 		return err
 	}

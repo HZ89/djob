@@ -23,6 +23,7 @@ type Backend interface {
 	JobDelete(name, region string) (*pb.Job, error)
 	JobList(region string) ([]*pb.Job, error)
 	JobRun(name, region string) (*pb.Execution, error)
+	JobStatus(name, region string) (*pb.JobStatus, error)
 }
 
 type KayPair struct {
@@ -39,7 +40,7 @@ type pbjson struct {
 
 func (j pbjson) Render(w http.ResponseWriter) error {
 	var buf bytes.Buffer
-	marshaler := &jsonpb.Marshaler{}
+	marshaler := &jsonpb.Marshaler{EmitDefaults: true}
 	if err := marshaler.Marshal(&buf, j.data.(proto.Message)); err != nil {
 		return err
 	}
@@ -116,12 +117,36 @@ func (a *APIServer) prepareGin() *gin.Engine {
 	}
 	web := r.Group("/web")
 	web.Use(gzip.Gzip(gzip.DefaultCompression))
-	web.POST("/jobs", a.modJob)
-	web.GET("/:region/jobs", a.getJobList)
-	web.GET("/:region/jobs/:name", a.getJob)
-	web.DELETE("/:region/jobs/:name", a.deleteJob)
-	web.GET("/:region/jobs/:name/run", a.runJob)
+
+	jobAPI := web.Group("/job")
+	jobAPI.POST("/", a.modJob)
+	jobAPI.GET("/:region", a.getJobList)
+	jobAPI.GET("/:region/:name", a.getJob)
+	jobAPI.DELETE("/:region/:name", a.deleteJob)
+	jobAPI.GET("/:region/:name/run", a.runJob)
+	jobAPI.GET("/:region/:name/status", a.getJobStatus)
+
+	//executionAPI := web.Group("/execution")
+	//executionAPI.GET("/:region", a.getAllExecutions)
+	//executionAPI.GET("/:region/:name", a.getJobAllExecutions)
+	//executionAPI.GET("/:region/:name/:group", a.getExecution)
 	return r
+}
+
+func (a *APIServer) getJobStatus(c *gin.Context) {
+	name := c.Params.ByName("name")
+	region := c.Params.ByName("region")
+	js, err := a.backend.JobStatus(name, region)
+	if err != nil {
+		a.respondWithError(http.StatusInternalServerError, &pb.RespStatus{Status: http.StatusInternalServerError, Message: err.Error()}, c)
+		return
+	}
+	resp := pb.RespStatus{
+		Status:  0,
+		Message: "succeed",
+		Data:    js,
+	}
+	c.Render(http.StatusOK, pbjson{data: &resp})
 }
 
 func (a *APIServer) runJob(c *gin.Context) {

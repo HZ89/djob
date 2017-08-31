@@ -322,6 +322,7 @@ func (a *Agent) Run() error {
 		a.scheduler.Start()
 
 		// try to load job
+		Log.Info("Agent: Load jobs from KV store")
 		a.loadJobs(a.config.Region)
 
 		// wait run job
@@ -365,7 +366,23 @@ func (a *Agent) Run() error {
 }
 
 func (a *Agent) loadJobs(region string) {
-
+	jobs, err := a.store.GetJobList(region)
+	if err != nil && err != store.ErrKeyNotFound {
+		Log.WithError(err).Fatal("Agent: Get job list failed")
+	}
+	if len(jobs) == 0 {
+		return
+	}
+	for _, job := range jobs {
+		if !a.isLocked(job.Name, job.Region, &pb.Job{}) {
+			locker, err := a.lock(job.Name, job.Region, &pb.Job{})
+			if err != nil {
+				Log.WithError(err).Fatal("Agent: Lock job failed")
+			}
+			a.addLocker(job.Name, locker)
+			a.scheduler.AddJob(job)
+		}
+	}
 }
 
 func (a *Agent) Reload(args []string) {

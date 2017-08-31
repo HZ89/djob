@@ -13,3 +13,9 @@ message RespExec {
     string Message = 2;
     repeated Execution Data = 3;
 }
+
+message RespStatus {
+    int32 Status = 1;
+    string Message = 2;
+    JobStatus Data = 3;
+}

@@ -23,7 +23,6 @@ func InitLogger(logLevel string, node string, file string) {
 				Log.WithError(err).Fatal("Create log file failed")
 			}
 		}
-		//fd.Sync()
 		fd.Close()
 		writer, err := rotatelogs.New(
 			file+".%Y%m%d%H%M",
@@ -34,16 +33,6 @@ func InitLogger(logLevel string, node string, file string) {
 			Log.WithError(err).Fatal("Create rotate log failed")
 		}
 		formattedLogger.Out = writer
-
-		//formattedLogger.Hooks.Add(lfshook.NewHook(lfshook.WriterMap{
-		//	logrus.InfoLevel:  writer,
-		//	logrus.DebugLevel: writer,
-		//	logrus.PanicLevel: writer,
-		//	logrus.ErrorLevel: writer,
-		//	logrus.FatalLevel: writer,
-		//	logrus.WarnLevel:  writer,
-		//}))
-
 	}
 
 	formattedLogger.Formatter = &logrus.TextFormatter{FullTimestamp: true}

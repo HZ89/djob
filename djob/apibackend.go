@@ -2,6 +2,7 @@ package djob
 
 import (
 	"errors"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/libkv/store"
 	"time"
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
@@ -123,6 +124,18 @@ func (a *Agent) JobRun(name, region string) (*pb.Execution, error) {
 		Group:             time.Now().UnixNano(),
 		Retries:           0,
 	}
+	Log.WithFields(logrus.Fields{
+		"name":   ex.JobName,
+		"region": ex.Region,
+		"group":  ex.Group}).Debug("API: Prepare to run job")
 	go a.sendRunJobQuery(&ex)
 	return &ex, nil
+}
+
+func (a *Agent) JobStatus(name, region string) (*pb.JobStatus, error) {
+	js, err := a.store.GetJobStatus(name, region)
+	if err != nil {
+		return nil, err
+	}
+	return js, nil
 }
