@@ -7,7 +7,10 @@ import (
 	"strings"
 	"unicode"
 
+	"bytes"
+	"encoding/json"
 	"github.com/Knetic/govaluate"
+	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
 	"github.com/hashicorp/serf/serf"
 	"github.com/mattn/go-shellwords"
@@ -157,4 +160,30 @@ func contains(a interface{}, e interface{}) bool {
 		}
 	}
 	return false
+}
+
+func pbToJSON(obj interface{}) ([]byte, error) {
+	msg, ok := obj.(proto.Message)
+	if !ok {
+		return nil, ErrType
+	}
+	var buf bytes.Buffer
+	marshaler := &jsonpb.Marshaler{EmitDefaults: true}
+	if err := marshaler.Marshal(&buf, msg); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func jsonToPb(b []byte, obj interface{}) error {
+	pb, ok := obj.(proto.Message)
+	if !ok {
+		return ErrType
+	}
+	jsondec := json.NewDecoder(bytes.NewReader(b))
+	unmarshaler := &jsonpb.Unmarshaler{AllowUnknownFields: false}
+	if err := unmarshaler.UnmarshalNext(jsondec, pb); err != nil {
+		return err
+	}
+	return nil
 }

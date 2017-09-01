@@ -15,4 +15,5 @@ var (
 	ErrNoReg             = errors.New("A job must have a region")
 	ErrNoExp             = errors.New("A job must have a Expression")
 	ErrScheduleParse     = errors.New("Can't parse job schedule")
+	ErrType              = errors.New("Only accept proto.message")
 )

@@ -138,7 +138,7 @@ func (a *APIServer) getJobStatus(c *gin.Context) {
 	region := c.Params.ByName("region")
 	js, err := a.backend.JobStatus(name, region)
 	if err != nil {
-		a.respondWithError(http.StatusInternalServerError, &pb.RespStatus{Status: http.StatusInternalServerError, Message: err.Error()}, c)
+		a.respondWithError(http.StatusBadRequest, &pb.RespStatus{Status: http.StatusBadRequest, Message: err.Error()}, c)
 		return
 	}
 	resp := pb.RespStatus{
@@ -154,7 +154,7 @@ func (a *APIServer) runJob(c *gin.Context) {
 	region := c.Params.ByName("region")
 	ex, err := a.backend.JobRun(name, region)
 	if err != nil {
-		a.respondWithError(http.StatusInternalServerError, &pb.RespJob{Status: http.StatusInternalServerError, Message: err.Error()}, c)
+		a.respondWithError(http.StatusBadRequest, &pb.RespJob{Status: http.StatusBadRequest, Message: err.Error()}, c)
 		return
 	}
 	resp := pb.RespExec{
@@ -170,7 +170,7 @@ func (a *APIServer) deleteJob(c *gin.Context) {
 	region := c.Params.ByName("region")
 	job, err := a.backend.JobDelete(name, region)
 	if err != nil {
-		a.respondWithError(http.StatusInternalServerError, &pb.RespJob{Status: http.StatusInternalServerError, Message: err.Error()}, c)
+		a.respondWithError(http.StatusBadRequest, &pb.RespJob{Status: http.StatusBadRequest, Message: err.Error()}, c)
 		return
 	}
 	resp := pb.RespJob{
@@ -201,7 +201,7 @@ func (a *APIServer) getJob(c *gin.Context) {
 	region := c.Params.ByName("region")
 	job, err := a.backend.JobInfo(name, region)
 	if err != nil {
-		a.respondWithError(http.StatusInternalServerError, &pb.RespJob{Status: http.StatusInternalServerError, Message: err.Error()}, c)
+		a.respondWithError(http.StatusBadRequest, &pb.RespJob{Status: http.StatusBadRequest, Message: err.Error()}, c)
 		return
 	}
 	resp := pb.RespJob{
@@ -225,7 +225,7 @@ func (a *APIServer) modJob(c *gin.Context) {
 	}
 	rj, err := a.backend.JobModify(&job)
 	if err != nil {
-		a.respondWithError(http.StatusInternalServerError, &pb.RespJob{Status: http.StatusInternalServerError, Message: err.Error()}, c)
+		a.respondWithError(http.StatusBadRequest, &pb.RespJob{Status: http.StatusBadRequest, Message: err.Error()}, c)
 		return
 	}
 	resp.Status = 0
