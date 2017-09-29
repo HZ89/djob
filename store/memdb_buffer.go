@@ -13,7 +13,7 @@
 // distributed under the License is distributed on an "AS IS" BASIS,
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package djob
+package store
 
 import (
 	"sync/atomic"
@@ -24,6 +24,8 @@ import (
 	"github.com/pingcap/goleveldb/leveldb/iterator"
 	"github.com/pingcap/goleveldb/leveldb/memdb"
 	"github.com/pingcap/goleveldb/leveldb/util"
+
+	derrors "version.uuzu.com/zhuhuipeng/djob/errors"
 )
 
 // Those limits is enforced to make sure the transaction can be well handled by TiKV.
@@ -87,7 +89,7 @@ func (m *memDbBuffer) SeekReverse(k Key) (*memDbIter, error) {
 func (m *memDbBuffer) Get(k Key) ([]byte, error) {
 	v, err := m.db.Get(k)
 	if err == leveldb.ErrNotFound {
-		return nil, ErrNotExist
+		return nil, derrors.ErrNotExist
 	}
 	return v, nil
 }
@@ -95,18 +97,18 @@ func (m *memDbBuffer) Get(k Key) ([]byte, error) {
 // Set associates key with value.
 func (m *memDbBuffer) Set(k Key, v []byte) error {
 	if len(v) == 0 {
-		return ErrCannotSetNilValue
+		return derrors.ErrCannotSetNilValue
 	}
 	if len(k)+len(v) > m.entrySizeLimit {
-		return ErrEntryTooLarge
+		return derrors.ErrEntryTooLarge
 	}
 
 	err := m.db.Put(k, v)
 	if m.Size() > m.bufferSizeLimit {
-		return ErrTxnTooLarge
+		return derrors.ErrTxnTooLarge
 	}
 	if m.Len() > int(m.bufferLenLimit) {
-		return ErrTxnTooLarge
+		return derrors.ErrTxnTooLarge
 	}
 	return errors.Trace(err)
 }

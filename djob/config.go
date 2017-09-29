@@ -2,12 +2,15 @@ package djob
 
 import (
 	"encoding/base64"
-	"errors"
 	"flag"
 	"fmt"
-	"github.com/spf13/viper"
 	"net"
 	"os"
+
+	"github.com/spf13/viper"
+
+	"version.uuzu.com/zhuhuipeng/djob/errors"
+	"version.uuzu.com/zhuhuipeng/djob/log"
 )
 
 // agent config
@@ -127,16 +130,16 @@ func ReadConfig(version string) (*Config, error) {
 	if withTls {
 		if server {
 			if keyFile == "" || certFile == "" {
-				return nil, errors.New("have no key file or cert file path.")
+				return nil, errors.ErrMissKeyFile
 			}
 		} else {
 			if caFile == "" {
-				return nil, errors.New("have no ca file path.")
+				return nil, errors.ErrMissCaFile
 			}
 		}
 	}
 	// init logger
-	InitLogger(viper.GetString("log_level"), nodeName, viper.GetString("logfile"))
+	log.InitLogger(viper.GetString("log_level"), nodeName, viper.GetString("logfile"))
 
 	SerfBindIP, serfBindport, err := splitNetAddr(viper.GetString("serf_bind_addr"), DefaultSerfPort)
 	if err != nil {

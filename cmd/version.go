@@ -1,12 +1,12 @@
 package cmd
 
 import (
-	"github.com/mitchellh/cli"
 	"bytes"
 	"fmt"
-	"github.com/hashicorp/serf/serf"
-)
 
+	"github.com/hashicorp/serf/serf"
+	"github.com/mitchellh/cli"
+)
 
 type VersionCmd struct {
 	Version string

@@ -1,26 +1,27 @@
-package djob
+package log
 
 import (
+	"os"
+	"time"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/lestrrat/go-file-rotatelogs"
 	//	"github.com/rifflock/lfshook"
-	"os"
-	"time"
 )
 
-var Log = logrus.NewEntry(logrus.New())
+var Loger = logrus.NewEntry(logrus.New())
 
 func InitLogger(logLevel string, node string, file string) {
 	formattedLogger := logrus.New()
 	if file != "" {
 		fd, err := os.Open(file)
 		if err != nil && err != os.ErrNotExist {
-			Log.WithError(err).Fatal("Open log file failed")
+			Loger.WithError(err).Fatal("Open log file failed")
 		}
 		if fd == nil {
 			fd, err = os.Create(file)
 			if err != nil {
-				Log.WithError(err).Fatal("Create log file failed")
+				Loger.WithError(err).Fatal("Create log file failed")
 			}
 		}
 		fd.Close()
@@ -30,7 +31,7 @@ func InitLogger(logLevel string, node string, file string) {
 			rotatelogs.WithRotationTime(time.Duration(86400)*time.Second),
 		)
 		if err != nil {
-			Log.WithError(err).Fatal("Create rotate log failed")
+			Loger.WithError(err).Fatal("Create rotate log failed")
 		}
 		formattedLogger.Out = writer
 	}
@@ -44,6 +45,5 @@ func InitLogger(logLevel string, node string, file string) {
 	}
 
 	formattedLogger.Level = level
-	Log = logrus.NewEntry(formattedLogger).WithField("node", node)
-
+	Loger = logrus.NewEntry(formattedLogger).WithField("node", node)
 }

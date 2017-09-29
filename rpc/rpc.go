@@ -2,12 +2,14 @@ package rpc
 
 import (
 	"fmt"
+	"net"
+	"time"
+
 	google_protobuf "github.com/golang/protobuf/ptypes/empty"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"net"
-	"time"
+
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
 )
 

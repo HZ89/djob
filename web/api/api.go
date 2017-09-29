@@ -7,13 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
-	"net/http"
-	"time"
+
+	"version.uuzu.com/zhuhuipeng/djob/log"
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
 )
 
@@ -83,7 +86,7 @@ type APIServer struct {
 	server    *http.Server
 }
 
-func NewAPIServer(ip string, port int, loger *logrus.Entry,
+func NewAPIServer(ip string, port int,
 	tokens map[string]string, tls bool, pair *KayPair, backend Backend) (*APIServer, error) {
 	if len(tokens) == 0 {
 		return nil, errors.New("Have no tokens")
@@ -99,7 +102,7 @@ func NewAPIServer(ip string, port int, loger *logrus.Entry,
 	return &APIServer{
 		bindIP:    ip,
 		bindPort:  port,
-		loger:     loger,
+		loger:     log.Loger,
 		tokenList: n,
 		tls:       tls,
 		keyPair:   pair,

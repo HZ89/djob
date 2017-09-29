@@ -1,10 +1,12 @@
 package djob
 
 import (
-	"github.com/armon/circbuf"
-	"github.com/mattn/go-shellwords"
 	"os/exec"
 	"time"
+
+	"github.com/armon/circbuf"
+	"github.com/mattn/go-shellwords"
+	"version.uuzu.com/zhuhuipeng/djob/log"
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
 )
 
@@ -27,7 +29,7 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 	}
 
 	if buf.TotalWritten() > buf.Size() {
-		Log.Warnf("Proc: Job '%s' generated %d bytes of output, truncated to %d", job.Name, buf.TotalWritten(), buf.Size())
+		log.Loger.Warnf("Proc: Job '%s' generated %d bytes of output, truncated to %d", job.Name, buf.TotalWritten(), buf.Size())
 	}
 
 	done := make(chan error, 1)
@@ -37,14 +39,14 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 
 	select {
 	case <-time.After(maxRunTime):
-		Log.Warnf("Proc: Job '%s' reach max run time(one hour), will be kill it", job.Name)
+		log.Loger.Warnf("Proc: Job '%s' reach max run time(one hour), will be kill it", job.Name)
 		if err := cmd.Process.Kill(); err != nil {
-			Log.WithError(err).Errorf("Proc: Job '%s' kill failed", job.Name)
+			log.Loger.WithError(err).Errorf("Proc: Job '%s' kill failed", job.Name)
 		}
-		Log.Warnf("Proc: Job '%s' reach max run time(one hour), has been killed", job.Name)
+		log.Loger.Warnf("Proc: Job '%s' reach max run time(one hour), has been killed", job.Name)
 	case err := <-done:
 		if err != nil {
-			Log.WithError(err).Errorf("Proc: Job '%s' cmd exec error output", job.Name)
+			log.Loger.WithError(err).Errorf("Proc: Job '%s' cmd exec error output", job.Name)
 			success = false
 		} else {
 			success = true

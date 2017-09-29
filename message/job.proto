@@ -16,7 +16,9 @@ message Params {
 }
 
 message Job {
+    // @inject_tag: form:"Name"
     string Name = 1; // Job name. Must be unique
+    // @inject_tag: form:"Region"
     string Region = 2; // Job run in this region normally.
     string Schedule = 3;
     bool Shell = 4; // Use shell to run command
@@ -31,7 +33,9 @@ message Job {
 }
 
 message JobStatus {
-    string JobName = 1;
+    // @inject_tag: form:"Name"
+    string Name = 1;
+    // @inject_tag: form:"Region"
     string Region = 2;
     int64 SuccessCount = 3; // Number of successful executions of this job
     int64 ErrorCount = 4; // Number of errors of this job
@@ -51,19 +55,14 @@ message Execution {
     int64 StartTime = 4;
     // @inject_tag: gorm:"type:bigint(21);not null"
     int64 FinishTime = 5;
-    // @inject_tag: gorm:"type:varchar(64);primary_key;not null"
-    string JobName = 6;
-    // @inject_tag: gorm:"type:varchar(64);primary_key;not null"
+    // @inject_tag: gorm:"type:varchar(64);primary_key;not null" form:"Name"
+    string Name = 6;
+    // @inject_tag: gorm:"type:varchar(64);primary_key;not null" form:"Rgion"
     string Region = 7; // The region of job
     // @inject_tag: gorm:"type:int(11);not null"
     int64 Retries = 8; // Number of times to retry a execution
-    // @inject_tag: gorm:"type:bigint(21);primary_key;not null"
+    // @inject_tag: gorm:"type:bigint(21);primary_key;not null" form:"Group"
     int64 Group = 9;
-    // @inject_tag: gorm:"type:varchar(64);primary_key;not null"
+    // @inject_tag: gorm:"type:varchar(64);primary_key;not null" form:"NodeName"
     string RunNodeName = 10;
-}
-
-message Result {
-    int32 Status = 1;
-    string Message = 2;
 }

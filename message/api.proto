@@ -5,17 +5,30 @@ package message;
 message RespJob {
     int32 Status = 1;
     string Message = 2;
-    repeated Job Data = 3;
+    string Node = 3;
+    repeated Job Result = 4;
 }
 
 message RespExec {
     int32 Status = 1;
     string Message = 2;
-    repeated Execution Data = 3;
+    repeated Execution Result = 3;
 }
 
 message RespStatus {
     int32 Status = 1;
     string Message = 2;
-    JobStatus Data = 3;
+    repeated JobStatus Result = 3;
+}
+
+message RespJobs {
+    repeated RespJob Data = 1;
+}
+
+message RespExecs {
+    repeated RespExec Data = 1;
+}
+
+message RespStatuses {
+    repeated RespStatus Data = 1;
 }

@@ -1,11 +1,12 @@
 package cmd
 
 import (
-	"github.com/mitchellh/cli"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+
+	"github.com/mitchellh/cli"
 	"version.uuzu.com/zhuhuipeng/djob/djob"
 )
 

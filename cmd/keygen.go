@@ -13,13 +13,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/mitchellh/cli"
 	"io/ioutil"
 	"math/big"
 	"net"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/mitchellh/cli"
 )
 
 type KeygenCmd struct {
