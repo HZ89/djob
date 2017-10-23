@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	QueryNewJob    = "job:new"
+	QueryModJob    = "job:mod"
 	QueryRunJob    = "job:run"
+	QueryGetJob    = "job:get"
 	QueryRPCConfig = "rpc:config"
 	QueryJobCount  = "job:count"
 	QueryJobDelete = "job:delete"
@@ -205,15 +206,15 @@ func (a *Agent) sendNewJobQuery(name, region, nodeName string) (*pb.QueryResult,
 	qpPb, _ := proto.Marshal(qp)
 
 	log.Loger.WithFields(logrus.Fields{
-		"query_name": QueryNewJob,
+		"query_name": QueryModJob,
 		"job_name":   name,
 		"job_region": region,
 		"payload":    qp.String(),
 	}).Debug("Agent: Sending query")
 
-	qr, err := a.serf.Query(QueryNewJob, qpPb, params)
+	qr, err := a.serf.Query(QueryModJob, qpPb, params)
 	if err != nil {
-		log.Loger.WithField("query", QueryNewJob).WithError(err).Fatal("Agent: Sending query error")
+		log.Loger.WithField("query", QueryModJob).WithError(err).Fatal("Agent: Sending query error")
 	}
 	defer qr.Close()
 
@@ -228,7 +229,7 @@ func (a *Agent) sendNewJobQuery(name, region, nodeName string) (*pb.QueryResult,
 		case ack, ok := <-ackCh:
 			if ok {
 				log.Loger.WithFields(logrus.Fields{
-					"query": QueryNewJob,
+					"query": QueryModJob,
 					"from":  ack,
 				}).Debug("Agent: Received ack")
 			}
@@ -236,7 +237,7 @@ func (a *Agent) sendNewJobQuery(name, region, nodeName string) (*pb.QueryResult,
 		case resp, ok := <-respCh:
 			if ok {
 				log.Loger.WithFields(logrus.Fields{
-					"query":   QueryNewJob,
+					"query":   QueryModJob,
 					"payload": string(resp.Payload),
 				}).Debug("Agent: Received response")
 				payloadPb = resp.Payload
@@ -295,7 +296,7 @@ func (a *Agent) receiveNewJobQuery(query *serf.Query) {
 		query.Respond(rb)
 		return
 	}
-	ip, port, err := a.sendGetRPCConfigQuery(params.SourceNodeName, params.Region)
+	ip, port, err := a.sendGetRPCConfigQuery(params.SourceNodeName)
 	if err != nil {
 		log.Loger.WithFields(logrus.Fields{
 			"SourceNodeName": params.SourceNodeName,
@@ -331,7 +332,7 @@ func (a *Agent) receiveNewJobQuery(query *serf.Query) {
 		return
 	}
 
-	a.scheduler.DeleteJob(job.Name)
+	a.scheduler.DeleteJob(job)
 
 	// add job
 	err = a.scheduler.AddJob(job)
@@ -387,7 +388,7 @@ func (a *Agent) sendRunJobQuery(ex *pb.Execution) {
 	}
 
 	log.Loger.WithFields(logrus.Fields{
-		"query_name": QueryNewJob,
+		"query_name": QueryModJob,
 		"job_name":   job.Name,
 		"job_region": job.Region,
 		"payload":    string(exPb),
@@ -439,7 +440,7 @@ func (a *Agent) receiveRunJobQuery(query *serf.Query) {
 		"group":  ex.Group,
 	}).Info("Agent: Starting job")
 
-	ip, port, err := a.sendGetRPCConfigQuery(ex.SchedulerNodeName, ex.Region)
+	ip, port, err := a.sendGetRPCConfigQuery(ex.SchedulerNodeName)
 	if err != nil {
 		log.Loger.WithError(err).Fatal("Agent: get rpc config failed")
 	}
@@ -458,7 +459,7 @@ func (a *Agent) receiveRunJobQuery(query *serf.Query) {
 	}).Debug("Agent: Got job by rpc call GetJob")
 
 	go func() {
-		if err := a.execJob(job, &ex); err != nil {
+		if err = a.execJob(job, &ex); err != nil {
 			log.Loger.WithError(err).Error("Proc: Exec job Failed")
 		}
 		log.Loger.WithFields(logrus.Fields{
@@ -469,14 +470,9 @@ func (a *Agent) receiveRunJobQuery(query *serf.Query) {
 	}()
 }
 
-func (a *Agent) sendGetRPCConfigQuery(nodeName, region string) (string, int, error) {
-	params, err := a.createSerfQueryParam(fmt.Sprintf("server=='true'&&region=='%s'", region))
-	if err != nil {
-		return "", 0, err
-	}
-
-	if nodeName != "" {
-		params.FilterNodes = []string{nodeName}
+func (a *Agent) sendGetRPCConfigQuery(nodeName string) (string, int, error) {
+	params := &serf.QueryParam{
+		FilterNodes: []string{nodeName},
 	}
 
 	qr, err := a.serf.Query(QueryRPCConfig, nil, params)

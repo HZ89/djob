@@ -1,7 +1,9 @@
 package djob
 
 import (
+	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"reflect"
 	"sort"
 	"sync"
@@ -20,7 +22,7 @@ import (
 	"version.uuzu.com/zhuhuipeng/djob/rpc"
 	"version.uuzu.com/zhuhuipeng/djob/scheduler"
 	"version.uuzu.com/zhuhuipeng/djob/store"
-	"version.uuzu.com/zhuhuipeng/djob/until"
+	"version.uuzu.com/zhuhuipeng/djob/util"
 	"version.uuzu.com/zhuhuipeng/djob/web/api"
 )
 
@@ -35,7 +37,6 @@ type Agent struct {
 	eventCh     chan serf.Event
 	ready       bool
 	rpcServer   *rpc.RpcServer
-	rpcClient   *rpc.RpcClient
 	store       *store.KVStore
 	memStore    *store.MemStore
 	scheduler   *scheduler.Scheduler
@@ -128,7 +129,7 @@ func (a *Agent) serfEventLoop() {
 				query := e.(*serf.Query)
 
 				switch qname := query.Name; qname {
-				case QueryNewJob:
+				case QueryModJob:
 					if a.config.Server {
 						log.Loger.WithFields(logrus.Fields{
 							"query":   query.Name,
@@ -219,7 +220,7 @@ func (a *Agent) Run() error {
 		if err != nil {
 			log.Loger.WithError(err).Fatal("Agent: Connect to database failed")
 		}
-		if err := sqlStroe.Migrate(false, &pb.Execution{}); err != nil {
+		if err = sqlStroe.Migrate(false, &pb.Execution{}, &pb.Job{}); err != nil {
 			log.Loger.WithError(err).Fatal("Agent: Migrate database table failed")
 		}
 		a.sqlStore = sqlStroe
@@ -471,6 +472,14 @@ func (a *Agent) minimalLoadServer(region string) (string, error) {
 	}
 }
 
+func (a *Agent) randomPickServer(region string) (string, error) {
+	p, err := a.createSerfQueryParam(fmt.Sprintf("server=='true'&&region=='%s'", region))
+	if err != nil {
+		return "", err
+	}
+	return p.FilterNodes[rand.Intn(len(p.FilterNodes))], nil
+}
+
 func (a *Agent) createSerfQueryParam(expression string) (*serf.QueryParam, error) {
 	var queryParam serf.QueryParam
 	nodeNames, err := a.processFilteredNodes(expression)
@@ -502,7 +511,7 @@ func (a *Agent) processFilteredNodes(expression string) ([]string, error) {
 			for k := range member.Tags {
 				mtks = append(mtks, k)
 			}
-			intersection := until.Intersect([]string(mtks), wt)
+			intersection := util.Intersect([]string(mtks), wt)
 			sort.Sort(sort.StringSlice(intersection))
 			if reflect.DeepEqual(wt, intersection) {
 				parameters := make(map[string]interface{})

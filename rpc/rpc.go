@@ -3,6 +3,7 @@ package rpc
 import (
 	"fmt"
 	"net"
+	"reflect"
 	"time"
 
 	google_protobuf "github.com/golang/protobuf/ptypes/empty"
@@ -10,12 +11,25 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
+	"github.com/golang/protobuf/ptypes/any"
+	"version.uuzu.com/zhuhuipeng/djob/errors"
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
 )
+
+var registry = make(map[string]reflect.Type)
+
+func init() {
+	registry["Job"] = reflect.TypeOf(&pb.Job{})
+	registry["Execution"] = reflect.TypeOf(&pb.Execution{})
+	registry["JobStatus"] = reflect.TypeOf(&pb.JobStatus{})
+}
 
 type DjobServer interface {
 	JobInfo(name, region string) (*pb.Job, error)
 	ExecDone(execution *pb.Execution) error
+	DoOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int, error)
 }
 
 type RpcServer struct {
@@ -42,8 +56,8 @@ func NewRPCServer(bindIp string, port int, server DjobServer, tlsopt *TlsOpt) *R
 	}
 }
 
-func (s *RpcServer) GetJob(ctx context.Context, params *pb.Params) (*pb.Job, error) {
-	job, err := s.dserver.JobInfo(params.Name, params.Region)
+func (s *RpcServer) GetJob(ctx context.Context, job *pb.Job) (*pb.Job, error) {
+	job, err := s.dserver.JobInfo(job.Name, job.Region)
 	if err != nil {
 		return nil, err
 	}
@@ -55,6 +69,36 @@ func (s *RpcServer) ExecDone(ctx context.Context, execution *pb.Execution) (*goo
 		return nil, err
 	}
 	return &google_protobuf.Empty{}, nil
+}
+
+func (s *RpcServer) DoOps(ctx context.Context, p *pb.Params) (*pb.Result, error) {
+	class := p.Obj.TypeUrl
+	t, ok := registry[class]
+	if !ok {
+		return nil, errors.ErrType
+	}
+	instance := reflect.New(t).Interface()
+	if err := ptypes.UnmarshalAny(p.Obj, instance.(proto.Message)); err != nil {
+		return nil, err
+	}
+	r, count, err := s.dserver.DoOps(instance, p.Ops, p.Search)
+	if err != nil {
+		return nil, err
+	}
+	var rs []*any.Any
+	for _, i := range r {
+		b, err := ptypes.MarshalAny(i.(proto.Message))
+		if err != nil {
+			return nil, err
+		}
+		rs = append(rs, b)
+	}
+	return &pb.Result{
+		Succeed:    true,
+		Objs:       rs,
+		MaxPageNum: int32(count),
+	}, nil
+
 }
 
 func (s *RpcServer) listen() error {
@@ -171,7 +215,7 @@ func (c *RpcClient) Shutdown() error {
 }
 
 func (c *RpcClient) GetJob(name, region string) (*pb.Job, error) {
-	p := pb.Params{Name: name, Region: region}
+	p := pb.Job{Name: name, Region: region}
 	job, err := c.client.GetJob(context.Background(), &p)
 	if err != nil {
 		return nil, err
@@ -186,4 +230,28 @@ func (c *RpcClient) ExecDone(execution *pb.Execution) error {
 		return err
 	}
 	return nil
+}
+
+func (c *RpcClient) DoOps(obj interface{}, ops pb.Ops, search *pb.Search) (instances []interface{}, count int, err error) {
+	pbObj, err := ptypes.MarshalAny(obj.(proto.Message))
+	if err != nil {
+		return nil, 0, err
+	}
+	r, err := c.client.DoOps(context.Background(), &pb.Params{Obj: pbObj, Ops: ops, Search: search})
+	if err != nil {
+		return nil, 0, err
+	}
+	count = int(r.MaxPageNum)
+	for _, o := range r.Objs {
+		t, ok := registry[o.TypeUrl]
+		if !ok {
+			return nil, 0, errors.ErrType
+		}
+		instance := reflect.New(t).Interface()
+		if err = ptypes.UnmarshalAny(o, instance.(proto.Message)); err != nil {
+			return
+		}
+		instances = append(instances, instance)
+	}
+	return
 }

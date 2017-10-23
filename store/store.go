@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 	"version.uuzu.com/zhuhuipeng/djob/errors"
 	"version.uuzu.com/zhuhuipeng/djob/log"
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
-	"version.uuzu.com/zhuhuipeng/djob/until"
+	"version.uuzu.com/zhuhuipeng/djob/util"
 )
 
 func init() {
@@ -31,6 +32,8 @@ const (
 	sqlMaxOpenConnect = 100
 	sqlMaxIdleConnect = 20
 	LockTimeOut       = 2 * time.Second
+	waitTimeOut       = 50 * time.Millisecond
+	defaultPageSize   = 10
 )
 
 type LockType int
@@ -51,6 +54,7 @@ func (lt LockType) String() string {
 	return lockTypes[lt-1]
 }
 
+// TODO: use sync.Map replace map
 type LockerChain struct {
 	chain map[string]libstore.Locker
 	mutex *sync.Mutex
@@ -68,9 +72,16 @@ func (l *LockerChain) HaveIt(name string) bool {
 	return exist
 }
 
+func (l *LockerChain) GetLocker(name string) (libstore.Locker, error) {
+	if l.HaveIt(name) {
+		return l.chain[name], nil
+	}
+	return nil, errors.ErrNotExist
+}
+
 func (l *LockerChain) AddLocker(name string, locker libstore.Locker) error {
 	if l.HaveIt(name) {
-		return errors.ErrAlreadyHaveIt
+		return errors.ErrRepetition
 	}
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
@@ -130,21 +141,21 @@ func NewKVStore(backend string, servers []string, keyspace string) (*KVStore, er
 }
 
 func (k *KVStore) buildLockKey(obj interface{}, lockType LockType) (key string, err error) {
-	name := until.GetFieldValue(obj, "Name")
-	region := until.GetFieldValue(obj, "Region")
+	name := util.GetFieldValue(obj, "Name")
+	region := util.GetFieldValue(obj, "Region")
 	if name == nil || region == nil {
 		log.Loger.WithFields(logrus.Fields{
-			"ObjType":         until.GetType(obj),
-			"NameFieldType":   until.GetFieldType(obj, "Name"),
-			"RegionFieldType": until.GetFieldType(obj, "Region"),
+			"ObjType":         util.GetType(obj),
+			"NameFieldType":   util.GetFieldType(obj, "Name"),
+			"RegionFieldType": util.GetFieldType(obj, "Region"),
 		}).Debug("Store: build lock key failed")
 		return "", errors.ErrType
 	}
 	key = fmt.Sprintf("%s/%s/%s_locks/%s/%s",
 		k.keyspace,
-		until.GenerateSlug(region.(string)),
-		until.GetType(obj),
-		until.GenerateSlug(name.(string)),
+		util.GenerateSlug(region.(string)),
+		util.GetType(obj),
+		util.GenerateSlug(name.(string)),
 		lockType)
 	return
 }
@@ -214,15 +225,15 @@ func (k *KVStore) buildKey(obj interface{}) string {
 	case pb.Job:
 		if obj.(pb.Job).Name == "" {
 			return fmt.Sprintf("%s/%s/Jobs/",
-				k.keyspace, until.GenerateSlug(obj.(pb.Job).Region))
+				k.keyspace, util.GenerateSlug(obj.(pb.Job).Region))
 		}
 		return fmt.Sprintf("%s/%s/Jobs/%s",
-			k.keyspace, until.GenerateSlug(obj.(pb.Job).Region),
-			until.GenerateSlug(obj.(pb.Job).Name))
+			k.keyspace, util.GenerateSlug(obj.(pb.Job).Region),
+			util.GenerateSlug(obj.(pb.Job).Name))
 	case pb.JobStatus:
 		return fmt.Sprintf("%s/%s/Status/%s",
-			k.keyspace, until.GenerateSlug(obj.(pb.JobStatus).Region),
-			until.GenerateSlug(obj.(pb.JobStatus).Name))
+			k.keyspace, util.GenerateSlug(obj.(pb.JobStatus).Region),
+			util.GenerateSlug(obj.(pb.JobStatus).Name))
 	default:
 		return ""
 	}
@@ -242,7 +253,7 @@ func (k *KVStore) Watch(obj interface{}, resCh chan interface{}) (stopCh chan st
 	go func() {
 		select {
 		case kp := <-kpCh:
-			err = until.JsonToPb(kp.Value, v)
+			err = util.JsonToPb(kp.Value, v)
 			if err != nil {
 				return
 			}
@@ -255,37 +266,67 @@ func (k *KVStore) Watch(obj interface{}, resCh chan interface{}) (stopCh chan st
 	return
 }
 
+func (k *KVStore) untilUnlock(obj interface{}, timeout time.Duration) bool {
+	var round int
+
+	for k.IsLocked(obj, RW) {
+		if round >= 5 {
+			return false
+		}
+		round += 1
+		time.Sleep(timeout)
+	}
+	return true
+}
+
+func (k *KVStore) DeleteJobStatus(status *pb.JobStatus) (out *pb.JobStatus, err error) {
+	if !k.untilUnlock(status, waitTimeOut) {
+		return nil, errors.ErrLockTimeout
+	}
+	out, err = k.GetJobStatus(status)
+	if err != nil {
+		return
+	}
+	if err = k.client.Delete(k.buildKey(out)); err != nil {
+		return nil, err
+	}
+	return
+}
+
 // Get JobStatus from KV store
 // if the job do not exists, return nil
-// if job exist, return *pb.JobStatus
-func (k *KVStore) GetJobStatus(name, region string) (status *pb.JobStatus, err error) {
+// wait JobStatus lock 5 times
+func (k *KVStore) GetJobStatus(in *pb.JobStatus) (out *pb.JobStatus, err error) {
 	// if job do not exist just return status not exist
-	_, err = k.GetJob(name, region)
+	_, err = k.GetJob(in.Name, in.Region)
 	if err != nil {
 		return
 	}
 
-	status = &pb.JobStatus{
-		Name:   name,
-		Region: region,
+	out = &pb.JobStatus{
+		Name:   in.Name,
+		Region: in.Region,
+	}
+	if !k.untilUnlock(in, waitTimeOut) {
+		return nil, errors.ErrLockTimeout
 	}
 
-	res, err := k.client.Get(k.buildKey(status))
+	res, err := k.client.Get(k.buildKey(out))
 	if err != nil && err != libstore.ErrKeyNotFound {
 		return nil, err
 	}
 
 	// fill data to status
 	if res != nil {
-		if err = until.JsonToPb(res.Value, status); err != nil {
+		if err = util.JsonToPb(res.Value, out); err != nil {
 			return nil, err
 		}
 		log.Loger.WithFields(logrus.Fields{
-			"Name":         status.Name,
-			"Region":       status.Region,
-			"SuccessCount": status.SuccessCount,
-			"ErrorCount":   status.ErrorCount,
-			"LastError":    status.LastError,
+			"Name":         out.Name,
+			"Region":       out.Region,
+			"SuccessCount": out.SuccessCount,
+			"ErrorCount":   out.ErrorCount,
+			"LastError":    out.LastError,
 			"OrginData":    string(res.Value),
 		}).Debug("Store: get jobstatus from kv store")
 		return
@@ -294,40 +335,28 @@ func (k *KVStore) GetJobStatus(name, region string) (status *pb.JobStatus, err e
 	return
 }
 
-// Calculate JobStatus and save to KV store
-// For safely edit data, need to lock JobStatus first
-func (k *KVStore) SetJobStatus(ex *pb.Execution) error {
-	es, err := k.GetJobStatus(ex.Name, ex.Region)
-	if err != nil {
-		return err
-	}
-	if ex.Succeed {
-		es.SuccessCount += 1
-		es.LastSuccess = time.Unix(0, ex.FinishTime).String()
-	} else {
-		es.ErrorCount += 1
-		es.LastError = time.Unix(0, ex.FinishTime).String()
-	}
-	es.LastHandleAgent = ex.RunNodeName
+// set job status to kv store
+// safely set jobstatus need lock it with RW locker first
+func (k *KVStore) SetJobStatus(status *pb.JobStatus) (*pb.JobStatus, error) {
 
-	entry, err := until.PbToJSON(es)
+	entry, err := util.PbToJSON(status)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	log.Loger.WithFields(logrus.Fields{
-		"Name":         es.Name,
-		"Region":       es.Region,
-		"SuccessCount": es.SuccessCount,
-		"ErrorCount":   es.ErrorCount,
-		"LastSuccess":  es.LastSuccess,
-		"LastError":    es.LastError,
-		"OrginData":    string(entry),
-	}).Debug("Store: save jobstatus to kv store")
+		"Name":         status.Name,
+		"Region":       status.Region,
+		"SuccessCount": status.SuccessCount,
+		"ErrorCount":   status.ErrorCount,
+		"LastSuccess":  status.LastSuccess,
+		"LastError":    status.LastError,
+		"OriginData":   string(entry),
+	}).Debug("Store: save job status to kv store")
 
-	if err = k.client.Put(k.buildKey(es), entry, nil); err != nil {
-		return err
+	if err = k.client.Put(k.buildKey(status), entry, nil); err != nil {
+		return nil, err
 	}
-	return nil
+	return status, nil
 }
 
 func (k *KVStore) GetRegionList() (regions []string, err error) {
@@ -357,7 +386,7 @@ func (k *KVStore) jobs(name, region string) (jobs []*pb.Job, err error) {
 			}
 			res = append(res, r)
 		} else {
-			key := fmt.Sprintf("%s/%s/Jobs/", k.keyspace, until.GenerateSlug(region))
+			key := fmt.Sprintf("%s/%s/Jobs/", k.keyspace, util.GenerateSlug(region))
 			res, err = k.client.List(key)
 			if err != nil && err != libstore.ErrKeyNotFound {
 				log.Loger.WithField("key", key).WithError(err).Fatal("Store: get key failed")
@@ -369,7 +398,7 @@ func (k *KVStore) jobs(name, region string) (jobs []*pb.Job, err error) {
 		}
 		for _, entry := range res {
 			var job pb.Job
-			if err = until.JsonToPb(entry.Value, job); err != nil {
+			if err = util.JsonToPb(entry.Value, job); err != nil {
 				return nil, err
 			}
 			jobs = append(jobs, &job)
@@ -409,7 +438,7 @@ func (k *KVStore) GetJobs() ([]*pb.Job, error) {
 }
 
 func (k *KVStore) SetJob(job *pb.Job) error {
-	if err := until.VerifyJob(job); err != nil {
+	if err := util.VerifyJob(job); err != nil {
 		return err
 	}
 
@@ -419,7 +448,7 @@ func (k *KVStore) SetJob(job *pb.Job) error {
 		return err
 	}
 
-	json, err := until.PbToJSON(job)
+	json, err := util.PbToJSON(job)
 	if err != nil {
 		return err
 	}
@@ -455,7 +484,7 @@ type MemStore struct {
 }
 
 func (m *MemStore) GetJob(name, region string) (*pb.Job, error) {
-	jobKey := Key(fmt.Sprintf("%s-%s", until.GenerateSlug(region), until.GenerateSlug(name)))
+	jobKey := Key(fmt.Sprintf("%s-%s", util.GenerateSlug(region), util.GenerateSlug(name)))
 	res, err := m.memBuf.Get(jobKey)
 	if err != nil {
 		return nil, err
@@ -468,7 +497,7 @@ func (m *MemStore) GetJob(name, region string) (*pb.Job, error) {
 }
 
 func (m *MemStore) SetJob(job *pb.Job) error {
-	if err := until.VerifyJob(job); err != nil {
+	if err := util.VerifyJob(job); err != nil {
 		return err
 	}
 
@@ -477,7 +506,7 @@ func (m *MemStore) SetJob(job *pb.Job) error {
 		return err
 	}
 
-	jobKey := Key(fmt.Sprintf("%s-%s", until.GenerateSlug(job.Region), until.GenerateSlug(job.Name)))
+	jobKey := Key(fmt.Sprintf("%s-%s", util.GenerateSlug(job.Region), util.GenerateSlug(job.Name)))
 
 	if err = m.memBuf.Set(jobKey, jobpb); err != nil {
 		return err
@@ -487,7 +516,7 @@ func (m *MemStore) SetJob(job *pb.Job) error {
 }
 
 func (m *MemStore) DeleteJob(name, region string) error {
-	jobKey := Key(fmt.Sprintf("%s-%s", until.GenerateSlug(region), until.GenerateSlug(name)))
+	jobKey := Key(fmt.Sprintf("%s-%s", util.GenerateSlug(region), util.GenerateSlug(name)))
 
 	if err := m.memBuf.Delete(jobKey); err != nil {
 		return err
@@ -503,7 +532,11 @@ func NewMemStore() *MemStore {
 }
 
 type SQLStore struct {
-	db *gorm.DB
+	db           *gorm.DB
+	sqlCondition *sqlCondition
+	pageSize     int
+	pageNum      int
+	Err          error
 }
 
 func NewSQLStore(backend, dsn string) (*SQLStore, error) {
@@ -532,6 +565,104 @@ func (s *SQLStore) Migrate(drop bool, valus ...interface{}) error {
 		return nil
 	}
 	return nil
+}
+
+func (s *SQLStore) Model(obj interface{}) *SQLStore {
+	n := s.clone()
+	n.db = s.db.Model(obj)
+	return n
+}
+
+func (s *SQLStore) Where(search *SearchCondition) *SQLStore {
+	condition := newSQLCondition(search)
+	n := s.clone()
+	n.db = s.db.Where(condition.condition, condition.values...)
+	return n
+}
+
+func (s *SQLStore) PageSize(i int) *SQLStore {
+	n := s.clone()
+	n.pageSize = i
+	return n
+}
+
+func (s *SQLStore) PageNum(i int) *SQLStore {
+	n := s.clone()
+	if n.pageSize == 0 {
+		n.pageSize = defaultPageSize
+	}
+	if i == 0 {
+		i = 1
+	}
+	offSet := i * n.pageSize
+	limit := n.pageSize
+	n.db = s.db.Limit(limit).Offset(offSet)
+	return n
+}
+
+func (s *SQLStore) PageCount(out int) *SQLStore {
+	if s.Err != nil {
+		return s
+	}
+	n := s.clone()
+	n.Err = s.db.Count(out).Error
+	return n
+}
+
+func (s *SQLStore) Find(out interface{}) *SQLStore {
+	if s.Err != nil {
+		return s
+	}
+	n := s.clone()
+	n.Err = s.db.Find(out).Error
+	return n
+}
+
+func (s *SQLStore) Create(obj interface{}) *SQLStore {
+	n := s.clone()
+	out := reflect.New(reflect.TypeOf(obj)).Interface()
+	err := s.db.Where(obj).First(out).Error
+	if err != nil {
+		n.Err = err
+		return n
+	}
+	if out != nil {
+		n.Err = errors.ErrRepetition
+		return n
+	}
+	n.Err = s.db.Create(obj).Error
+	return n
+}
+
+func (s *SQLStore) Modify(obj interface{}) *SQLStore {
+	n := s.clone()
+	out := reflect.New(reflect.TypeOf(obj)).Interface()
+	err := s.db.Where(obj).First(out).Error
+	if err != nil {
+		n.Err = err
+		return n
+	}
+	if out == nil {
+		n.Err = errors.ErrNotExist
+		return n
+	}
+	n.Err = s.db.Model(out).Updates(obj).Error
+	return n
+}
+
+func (s *SQLStore) Delete(obj interface{}) *SQLStore {
+	n := s.clone()
+	out := reflect.New(reflect.TypeOf(obj)).Interface()
+	err := s.db.Where(obj).First(out).Error
+	if err != nil {
+		n.Err = err
+		return n
+	}
+	n.Err = s.db.Delete(out).Error
+	if n.Err == nil {
+		obj = out
+	}
+	return n
 }
 
 func (s *SQLStore) GetExecs(jobName, region, node string, group int64) (exs []*pb.Execution, err error) {
@@ -578,4 +709,111 @@ func (s *SQLStore) SetExec(ex *pb.Execution) error {
 		}
 	}
 	return nil
+}
+
+func (s *SQLStore) clone() *SQLStore {
+	store := SQLStore{db: s.db, sqlCondition: s.sqlCondition, pageSize: s.pageSize, pageNum: s.pageNum, Err: s.Err}
+	return &store
+}
+
+type SearchCondition struct {
+	conditions []map[string]string
+	linkSymbol []LogicSymbol
+}
+
+func NewSearchCondition(conditions, links []string) (*SearchCondition, error) {
+
+	if len(conditions) != len(links)+1 {
+		return nil, errors.ErrLinkNum
+	}
+
+	regex := `$(?P<column>\w+)\s*(?P<symbol>=|>=|>|<=|<|<>)\s*(?P<value>\w+)^`
+	s := SearchCondition{
+		conditions: make([]map[string]string, len(conditions)),
+		linkSymbol: make([]LogicSymbol, len(links)),
+	}
+
+	for _, condition := range conditions {
+		if !util.RegexpMatch(regex, condition) {
+			return nil, errors.ErrConditionFormat
+		}
+		s.conditions = append(s.conditions, util.RegexpGetParams(regex, condition))
+	}
+
+	for _, link := range links {
+		if symbol, ok := StringToLogicSymbol(link); ok {
+			s.linkSymbol = append(s.linkSymbol, symbol)
+		} else {
+			return nil, errors.ErrNotSupportSymbol
+		}
+	}
+	return &s, nil
+}
+
+type LogicSymbol int
+
+const (
+	LogicSymbol_OR  LogicSymbol = 1
+	LogicSymbol_AND LogicSymbol = 2
+	LogicSymbol_EQ  LogicSymbol = 3
+	LogicSymbol_GE  LogicSymbol = 4
+	LogicSymbol_GT  LogicSymbol = 5
+	LogicSymbol_LE  LogicSymbol = 6
+	LogicSymbol_LT  LogicSymbol = 7
+	LogicSymbol_NE  LogicSymbol = 8
+)
+
+var LogicSymbolName = map[int]string{
+	1: "OR",
+	2: "AND",
+	3: "=",
+	4: ">=",
+	5: ">",
+	6: "<=",
+	7: "<",
+	8: "<>",
+}
+
+var LogicSymbolValue = map[string]int{
+	"OR":  1,
+	"AND": 2,
+	"=":   3,
+	">=":  4,
+	">":   5,
+	"<=":  6,
+	"<":   7,
+	"<>":  8,
+}
+
+func (l LogicSymbol) String() string {
+	return LogicSymbolName[int(l)]
+}
+
+func StringToLogicSymbol(s string) (LogicSymbol, bool) {
+	if v, ok := LogicSymbolValue[s]; ok {
+		return LogicSymbol(v), true
+	}
+	return 0, false
+}
+
+type sqlCondition struct {
+	condition string
+	values    []string
+}
+
+func newSQLCondition(search *SearchCondition) *sqlCondition {
+	s := sqlCondition{
+		condition: "",
+		values:    make([]string, len(search.linkSymbol)),
+	}
+	for n, condition := range search.conditions {
+		if n == len(search.conditions)-1 {
+			s.condition += fmt.Sprintf("%s %s ?", condition["column"], condition["symbol"])
+			s.values = append(s.values, condition["value"])
+			break
+		}
+		s.condition += fmt.Sprintf("%s %s ? %s ", condition["column"], condition["symbol"], search.linkSymbol[n])
+		s.values = append(s.values, condition["value"])
+	}
+	return &s
 }

@@ -185,7 +185,7 @@ func (c *KeygenCmd) createKeypair(selfSign bool, template *x509.Certificate, par
 	} else {
 		privBlock, _ := pem.Decode(privPem)
 		if privBlock == nil {
-			return pkInPem, certInPem, errors.New("Failed to decode private pem")
+			return pkInPem, certInPem, errors.New("failed to decode private pem")
 		}
 		priv, err = x509.ParseECPrivateKey(privBlock.Bytes)
 		if err != nil {
@@ -193,7 +193,7 @@ func (c *KeygenCmd) createKeypair(selfSign bool, template *x509.Certificate, par
 		}
 		parentBlock, _ := pem.Decode(parentPem)
 		if privBlock == nil {
-			return pkInPem, certInPem, errors.New("Failed to decode certificate pem")
+			return pkInPem, certInPem, errors.New("failed to decode certificate pem")
 		}
 		cert, err := x509.ParseCertificate(parentBlock.Bytes)
 		if err != nil {

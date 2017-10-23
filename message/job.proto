@@ -1,35 +1,68 @@
 syntax = "proto3";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/empty.proto";
+import "google/protobuf/any.proto";
 
 package message;
 service job {
-    rpc GetJob (Params) returns (Job) {
+    rpc GetJob (Job) returns (Job) {
     }
     rpc ExecDone (Execution) returns (google.protobuf.Empty) {
     }
+    rpc DoOps (Params) returns (Result) {
+    }
+}
+
+enum Ops {
+    READ = 0;
+    ADD = 1;
+    MODIFY = 2;
+    DELETE = 3;
+}
+
+message Search {
+    repeated string Conditions = 1;
+    repeated string Links = 2;
+    int32 PageNum = 3;
+    int32 PageSize = 4;
+    bool Count = 5;
 }
 
 message Params {
-    string Name = 1; // Job name
-    string Region = 2; // Job region
+    google.protobuf.Any Obj = 1;
+    Ops Ops = 2;
+    Search Search = 3;
+}
+
+message Result {
+    bool Succeed = 1;
+    int32 MaxPageNum = 2;
+    repeated google.protobuf.Any Objs = 3;
 }
 
 message Job {
-    // @inject_tag: form:"Name"
-    string Name = 1; // Job name. Must be unique
-    // @inject_tag: form:"Region"
+    // @inject_tag: form:"Name" gorm:"type:varchar(64);not null;unique_index:n_g_idx"
+    string Name = 1; // Job name. Must be unique in one region
+    // @inject_tag: form:"Region" gorm:"type:varchar(64);not null;unique_index:n_g_idx"
     string Region = 2; // Job run in this region normally.
+    // @inject_tag: gorm:"type:varchar(64)"
     string Schedule = 3;
+    // @inject_tag: gorm:"type:tinyint(4)"
     bool Shell = 4; // Use shell to run command
+    // @inject_tag: gorm:"type:varchar(512);not null"
     string Command = 5; // Command to run
+    // @inject_tag: gorm:"type:varchar(64);not null"
     string Expression = 6; // A expression used for filter agent node, job will run in the node when this expression is true
-    repeated string BeingDependentJobs = 7; // Other jobs that depend on this job.
-    string ParentJob = 8; // This job depends on the job.
-    bool Parallel = 9; // Parallel policy for this job. if true, this job will run in all target node.
-    bool Concurrent = 10; // Concurrent or not. if true, the next job will start regardless of whether or not the last time the execution is complete
-    bool Disable = 11; // if true, job don't run
-    string SchedulerNodeName = 12; // which node schedule this job
+    // @inject_tag: gorm:"type:tinyint(4)"
+    bool Idempotent = 7; //
+    // @inject_tag: gorm:"type:tinyint(4)"
+    bool Disable = 8; // if true, job don't run
+    // @inject_tag: gorm:"type:varchar(64); not null"
+    string SchedulerNodeName = 9; // which node schedule this job
+    // @inject_tag: gorm:"type:bigint(21);not null;primary_key"
+    int64 Id = 10; // UUID of this Job
+    // @inject_tag: gorm:"ForeignKey:Id"
+    Job ParentJob = 11;
 }
 
 message JobStatus {

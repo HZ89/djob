@@ -40,11 +40,11 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 	select {
 	case <-time.After(maxRunTime):
 		log.Loger.Warnf("Proc: Job '%s' reach max run time(one hour), will be kill it", job.Name)
-		if err := cmd.Process.Kill(); err != nil {
+		if err = cmd.Process.Kill(); err != nil {
 			log.Loger.WithError(err).Errorf("Proc: Job '%s' kill failed", job.Name)
 		}
 		log.Loger.Warnf("Proc: Job '%s' reach max run time(one hour), has been killed", job.Name)
-	case err := <-done:
+	case err = <-done:
 		if err != nil {
 			log.Loger.WithError(err).Errorf("Proc: Job '%s' cmd exec error output", job.Name)
 			success = false
@@ -58,7 +58,12 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 	ex.Output = buf.Bytes()
 	ex.RunNodeName = a.config.Nodename
 
-	ip, port, err := a.sendGetRPCConfigQuery("", ex.Region)
+	serverNodeName, err := a.randomPickServer(ex.Region)
+	if err != nil {
+		return err
+	}
+
+	ip, port, err := a.sendGetRPCConfigQuery(serverNodeName)
 	if err != nil {
 		return err
 	}
@@ -66,7 +71,7 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 	rpcClient := a.newRPCClient(ip, port)
 	defer rpcClient.Shutdown()
 
-	if err := rpcClient.ExecDone(ex); err != nil {
+	if err = rpcClient.ExecDone(ex); err != nil {
 		return err
 	}
 

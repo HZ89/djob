@@ -161,8 +161,8 @@ func (s *Scheduler) AddJob(job *pb.Job) error {
 	return nil
 }
 
-func (s *Scheduler) DeleteJob(name string) {
-	s.deleteEntry <- name
+func (s *Scheduler) DeleteJob(job *pb.Job) {
+	s.deleteEntry <- job.Name
 }
 
 func (s *Scheduler) JobCount() int {

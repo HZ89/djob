@@ -1,10 +1,11 @@
-package until
+package util
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -18,8 +19,33 @@ import (
 	"version.uuzu.com/zhuhuipeng/djob/scheduler"
 )
 
+/**
+ * Parses url with the given regular expression and returns the
+ * group values defined in the expression.
+ *
+ */
+func RegexpGetParams(regEx, url string) (paramsMap map[string]string) {
+
+	var compRegEx = regexp.MustCompile(regEx)
+	match := compRegEx.FindStringSubmatch(url)
+
+	paramsMap = make(map[string]string)
+	for i, name := range compRegEx.SubexpNames() {
+		if i > 0 && i <= len(match) {
+			paramsMap[name] = match[i]
+		}
+	}
+	return
+}
+
+func RegexpMatch(regEx, url string) bool {
+
+	var compRegEx = regexp.MustCompile(regEx)
+	return compRegEx.MatchString(url)
+}
+
 func VerifyJob(job *pb.Job) error {
-	if job.Name == job.ParentJob {
+	if job.Name == job.ParentJob.Name {
 		return errors.ErrSameJob
 	}
 
@@ -46,7 +72,7 @@ func VerifyJob(job *pb.Job) error {
 		}
 	}
 
-	if job.ParentJob == "" {
+	if job.ParentJob == nil {
 		if _, err := scheduler.Prepare(job.Schedule); err != nil {
 			return fmt.Errorf("%s: %s", errors.ErrScheduleParse.Error(), err)
 		}

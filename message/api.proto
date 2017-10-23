@@ -1,5 +1,5 @@
 syntax = "proto3";
-import "job.proto";
+import "message/job.proto";
 package message;
 
 message RespJob {
