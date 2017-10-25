@@ -163,27 +163,27 @@ func (m *Result) GetObjs() []*google_protobuf2.Any {
 
 type Job struct {
 	// @inject_tag: form:"Name" gorm:"type:varchar(64);not null;unique_index:n_g_idx"
-	Name string `protobuf:"bytes,1,opt,name=Name,proto3" json:"Name,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=Name,proto3" json:"Name,omitempty" form:"Name" gorm:"type:varchar(64);not null;unique_index:n_g_idx"`
 	// @inject_tag: form:"Region" gorm:"type:varchar(64);not null;unique_index:n_g_idx"
-	Region string `protobuf:"bytes,2,opt,name=Region,proto3" json:"Region,omitempty"`
+	Region string `protobuf:"bytes,2,opt,name=Region,proto3" json:"Region,omitempty" form:"Region" gorm:"type:varchar(64);not null;unique_index:n_g_idx"`
 	// @inject_tag: gorm:"type:varchar(64)"
-	Schedule string `protobuf:"bytes,3,opt,name=Schedule,proto3" json:"Schedule,omitempty"`
+	Schedule string `protobuf:"bytes,3,opt,name=Schedule,proto3" json:"Schedule,omitempty" gorm:"type:varchar(64)"`
 	// @inject_tag: gorm:"type:tinyint(4)"
-	Shell bool `protobuf:"varint,4,opt,name=Shell,proto3" json:"Shell,omitempty"`
+	Shell bool `protobuf:"varint,4,opt,name=Shell,proto3" json:"Shell,omitempty" gorm:"type:tinyint(4)"`
 	// @inject_tag: gorm:"type:varchar(512);not null"
-	Command string `protobuf:"bytes,5,opt,name=Command,proto3" json:"Command,omitempty"`
+	Command string `protobuf:"bytes,5,opt,name=Command,proto3" json:"Command,omitempty" gorm:"type:varchar(512);not null"`
 	// @inject_tag: gorm:"type:varchar(64);not null"
-	Expression string `protobuf:"bytes,6,opt,name=Expression,proto3" json:"Expression,omitempty"`
+	Expression string `protobuf:"bytes,6,opt,name=Expression,proto3" json:"Expression,omitempty" gorm:"type:varchar(64);not null"`
 	// @inject_tag: gorm:"type:tinyint(4)"
-	Idempotent bool `protobuf:"varint,7,opt,name=Idempotent,proto3" json:"Idempotent,omitempty"`
+	Idempotent bool `protobuf:"varint,7,opt,name=Idempotent,proto3" json:"Idempotent,omitempty" gorm:"type:tinyint(4)"`
 	// @inject_tag: gorm:"type:tinyint(4)"
-	Disable bool `protobuf:"varint,8,opt,name=Disable,proto3" json:"Disable,omitempty"`
+	Disable bool `protobuf:"varint,8,opt,name=Disable,proto3" json:"Disable,omitempty" gorm:"type:tinyint(4)"`
 	// @inject_tag: gorm:"type:varchar(64); not null"
-	SchedulerNodeName string `protobuf:"bytes,9,opt,name=SchedulerNodeName,proto3" json:"SchedulerNodeName,omitempty"`
+	SchedulerNodeName string `protobuf:"bytes,9,opt,name=SchedulerNodeName,proto3" json:"SchedulerNodeName,omitempty" gorm:"type:varchar(64); not null"`
 	// @inject_tag: gorm:"type:bigint(21);not null;primary_key"
-	Id int64 `protobuf:"varint,10,opt,name=Id,proto3" json:"Id,omitempty"`
+	Id int64 `protobuf:"varint,10,opt,name=Id,proto3" json:"Id,omitempty" gorm:"type:bigint(21);not null;primary_key"`
 	// @inject_tag: gorm:"ForeignKey:Id"
-	ParentJob *Job `protobuf:"bytes,11,opt,name=ParentJob" json:"ParentJob,omitempty"`
+	ParentJob *Job `protobuf:"bytes,11,opt,name=ParentJob" json:"ParentJob,omitempty" gorm:"ForeignKey:Id"`
 }
 
 func (m *Job) Reset()                    { *m = Job{} }
@@ -270,9 +270,9 @@ func (m *Job) GetParentJob() *Job {
 
 type JobStatus struct {
 	// @inject_tag: form:"Name"
-	Name string `protobuf:"bytes,1,opt,name=Name,proto3" json:"Name,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=Name,proto3" json:"Name,omitempty" form:"Name"`
 	// @inject_tag: form:"Region"
-	Region          string `protobuf:"bytes,2,opt,name=Region,proto3" json:"Region,omitempty"`
+	Region          string `protobuf:"bytes,2,opt,name=Region,proto3" json:"Region,omitempty" form:"Region"`
 	SuccessCount    int64  `protobuf:"varint,3,opt,name=SuccessCount,proto3" json:"SuccessCount,omitempty"`
 	ErrorCount      int64  `protobuf:"varint,4,opt,name=ErrorCount,proto3" json:"ErrorCount,omitempty"`
 	LastHandleAgent string `protobuf:"bytes,5,opt,name=LastHandleAgent,proto3" json:"LastHandleAgent,omitempty"`
@@ -336,25 +336,25 @@ func (m *JobStatus) GetLastError() string {
 
 type Execution struct {
 	// @inject_tag: gorm:"type:varchar(64);not null"
-	SchedulerNodeName string `protobuf:"bytes,1,opt,name=SchedulerNodeName,proto3" json:"SchedulerNodeName,omitempty"`
+	SchedulerNodeName string `protobuf:"bytes,1,opt,name=SchedulerNodeName,proto3" json:"SchedulerNodeName,omitempty" gorm:"type:varchar(64);not null"`
 	// @inject_tag: gorm:"type:blob"
-	Output []byte `protobuf:"bytes,2,opt,name=Output,proto3" json:"Output,omitempty"`
+	Output []byte `protobuf:"bytes,2,opt,name=Output,proto3" json:"Output,omitempty" gorm:"type:blob"`
 	// @inject_tag: gorm:"type:tinyint(4)"
-	Succeed bool `protobuf:"varint,3,opt,name=Succeed,proto3" json:"Succeed,omitempty"`
+	Succeed bool `protobuf:"varint,3,opt,name=Succeed,proto3" json:"Succeed,omitempty" gorm:"type:tinyint(4)"`
 	// @inject_tag: gorm:"type:bigint(21);not null"
-	StartTime int64 `protobuf:"varint,4,opt,name=StartTime,proto3" json:"StartTime,omitempty"`
+	StartTime int64 `protobuf:"varint,4,opt,name=StartTime,proto3" json:"StartTime,omitempty" gorm:"type:bigint(21);not null"`
 	// @inject_tag: gorm:"type:bigint(21);not null"
-	FinishTime int64 `protobuf:"varint,5,opt,name=FinishTime,proto3" json:"FinishTime,omitempty"`
+	FinishTime int64 `protobuf:"varint,5,opt,name=FinishTime,proto3" json:"FinishTime,omitempty" gorm:"type:bigint(21);not null"`
 	// @inject_tag: gorm:"type:varchar(64);primary_key;not null" form:"Name"
-	Name string `protobuf:"bytes,6,opt,name=Name,proto3" json:"Name,omitempty"`
+	Name string `protobuf:"bytes,6,opt,name=Name,proto3" json:"Name,omitempty" gorm:"type:varchar(64);primary_key;not null" form:"Name"`
 	// @inject_tag: gorm:"type:varchar(64);primary_key;not null" form:"Rgion"
-	Region string `protobuf:"bytes,7,opt,name=Region,proto3" json:"Region,omitempty"`
+	Region string `protobuf:"bytes,7,opt,name=Region,proto3" json:"Region,omitempty" gorm:"type:varchar(64);primary_key;not null" form:"Rgion"`
 	// @inject_tag: gorm:"type:int(11);not null"
-	Retries int64 `protobuf:"varint,8,opt,name=Retries,proto3" json:"Retries,omitempty"`
+	Retries int64 `protobuf:"varint,8,opt,name=Retries,proto3" json:"Retries,omitempty" gorm:"type:int(11);not null"`
 	// @inject_tag: gorm:"type:bigint(21);primary_key;not null" form:"Group"
-	Group int64 `protobuf:"varint,9,opt,name=Group,proto3" json:"Group,omitempty"`
+	Group int64 `protobuf:"varint,9,opt,name=Group,proto3" json:"Group,omitempty" gorm:"type:bigint(21);primary_key;not null" form:"Group"`
 	// @inject_tag: gorm:"type:varchar(64);primary_key;not null" form:"NodeName"
-	RunNodeName string `protobuf:"bytes,10,opt,name=RunNodeName,proto3" json:"RunNodeName,omitempty"`
+	RunNodeName string `protobuf:"bytes,10,opt,name=RunNodeName,proto3" json:"RunNodeName,omitempty" gorm:"type:varchar(64);primary_key;not null" form:"NodeName"`
 }
 
 func (m *Execution) Reset()                    { *m = Execution{} }

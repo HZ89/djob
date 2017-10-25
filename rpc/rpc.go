@@ -26,17 +26,17 @@ func init() {
 	registry["JobStatus"] = reflect.TypeOf(&pb.JobStatus{})
 }
 
-type DjobServer interface {
-	JobInfo(name, region string) (*pb.Job, error)
-	ExecDone(execution *pb.Execution) error
-	DoOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int, error)
+type Operator interface {
+	GetJob(name, region string) (*pb.Job, error)
+	SendBackExecution(execution *pb.Execution) error
+	PerformOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int, error)
 }
 
 type RpcServer struct {
 	bindIp    string
 	rpcPort   int
 	tlsopt    *TlsOpt
-	dserver   DjobServer
+	operator  Operator
 	rpcServer *grpc.Server
 }
 
@@ -47,17 +47,17 @@ type TlsOpt struct {
 	ServerHost string // The server name use to verify the hostname returned by TLS handshake
 }
 
-func NewRPCServer(bindIp string, port int, server DjobServer, tlsopt *TlsOpt) *RpcServer {
+func NewRPCServer(bindIp string, port int, operator Operator, tlsopt *TlsOpt) *RpcServer {
 	return &RpcServer{
-		bindIp:  bindIp,
-		rpcPort: port,
-		dserver: server,
-		tlsopt:  tlsopt,
+		bindIp:   bindIp,
+		rpcPort:  port,
+		operator: operator,
+		tlsopt:   tlsopt,
 	}
 }
 
 func (s *RpcServer) GetJob(ctx context.Context, job *pb.Job) (*pb.Job, error) {
-	job, err := s.dserver.JobInfo(job.Name, job.Region)
+	job, err := s.operator.GetJob(job.Name, job.Region)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (s *RpcServer) GetJob(ctx context.Context, job *pb.Job) (*pb.Job, error) {
 }
 
 func (s *RpcServer) ExecDone(ctx context.Context, execution *pb.Execution) (*google_protobuf.Empty, error) {
-	if err := s.dserver.ExecDone(execution); err != nil {
+	if err := s.operator.SendBackExecution(execution); err != nil {
 		return nil, err
 	}
 	return &google_protobuf.Empty{}, nil
@@ -81,7 +81,7 @@ func (s *RpcServer) DoOps(ctx context.Context, p *pb.Params) (*pb.Result, error)
 	if err := ptypes.UnmarshalAny(p.Obj, instance.(proto.Message)); err != nil {
 		return nil, err
 	}
-	r, count, err := s.dserver.DoOps(instance, p.Ops, p.Search)
+	r, count, err := s.operator.PerformOps(instance, p.Ops, p.Search)
 	if err != nil {
 		return nil, err
 	}

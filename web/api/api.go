@@ -89,13 +89,13 @@ type APIServer struct {
 func NewAPIServer(ip string, port int,
 	tokens map[string]string, tls bool, pair *KayPair, backend Backend) (*APIServer, error) {
 	if len(tokens) == 0 {
-		return nil, errors.New("Have no tokens")
+		return nil, errors.New("have no tokens")
 	}
 	// reverse tokens
 	n := make(map[string]string)
 	for k, v := range tokens {
 		if _, exist := n[v]; exist {
-			return nil, errors.New("Have repetition token")
+			return nil, errors.New("have repetition token")
 		}
 		n[v] = k
 	}

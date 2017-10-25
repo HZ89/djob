@@ -1,8 +1,6 @@
 package djob
 
 import (
-	"reflect"
-
 	"github.com/Sirupsen/logrus"
 
 	"version.uuzu.com/zhuhuipeng/djob/errors"
@@ -62,13 +60,13 @@ func (a *Agent) remoteOps(obj interface{}, ops pb.Ops, search *pb.Search, nodeNa
 
 // switch obj to each class
 func (a *Agent) localOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int, error) {
-	switch reflect.TypeOf(obj) {
-	case reflect.TypeOf(&pb.Job{}):
-		return a.handleJobOps(obj.(*pb.Job), ops, search)
-	case reflect.TypeOf(&pb.Execution{}):
-		return a.handleExecutionOps(obj.(*pb.Execution), ops, search)
-	case reflect.TypeOf(&pb.JobStatus{}):
-		return a.handleJobStatusOps(obj.(*pb.JobStatus), ops)
+	switch t := obj.(type) {
+	case *pb.Job:
+		return a.handleJobOps(t, ops, search)
+	case *pb.Execution:
+		return a.handleExecutionOps(t, ops, search)
+	case *pb.JobStatus:
+		return a.handleJobStatusOps(t, ops)
 	}
 	return nil, 0, errors.ErrUnknownType
 }
@@ -109,15 +107,15 @@ func (a *Agent) handleExecutionOps(ex *pb.Execution, ops pb.Ops, search *pb.Sear
 				return nil, count, err
 			}
 			if search.Count {
-				err = a.sqlStore.Model(ex).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(rows).PageCount(count).Err
+				err = a.sqlStore.Model(&pb.Execution{}).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(rows).PageCount(count).Err
 			} else {
-				err = a.sqlStore.Model(ex).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(rows).Err
+				err = a.sqlStore.Model(&pb.Execution{}).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(rows).Err
 			}
 			if err != nil {
 				return nil, count, err
 			}
 		} else {
-			err = a.sqlStore.Model(ex).Find(rows).Err
+			err = a.sqlStore.Model(&pb.Execution{}).Where(ex).Find(rows).Err
 			if err != nil {
 				return nil, count, err
 			}
@@ -172,15 +170,15 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 				return nil, count, err
 			}
 			if search.Count {
-				err = a.sqlStore.Model(job).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(rows).PageCount(count).Err
+				err = a.sqlStore.Model(&pb.Job{}).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(rows).PageCount(count).Err
 			} else {
-				err = a.sqlStore.Model(job).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(rows).Err
+				err = a.sqlStore.Model(&pb.Job{}).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(rows).Err
 			}
 			if err != nil {
 				return nil, count, err
 			}
 		} else {
-			err = a.sqlStore.Model(job).Find(rows).Err
+			err = a.sqlStore.Model(&pb.Job{}).Where(job).Find(rows).Err
 			if err != nil {
 				return nil, count, err
 			}

@@ -573,10 +573,15 @@ func (s *SQLStore) Model(obj interface{}) *SQLStore {
 	return n
 }
 
-func (s *SQLStore) Where(search *SearchCondition) *SQLStore {
-	condition := newSQLCondition(search)
+func (s *SQLStore) Where(obj interface{}) *SQLStore {
 	n := s.clone()
-	n.db = s.db.Where(condition.condition, condition.values...)
+	switch t := obj.(type) {
+	case *SearchCondition:
+		condition := newSQLCondition(t)
+		n.db = s.db.Where(condition.condition, condition.values...)
+	default:
+		n.db = s.db.Where(obj)
+	}
 	return n
 }
 
