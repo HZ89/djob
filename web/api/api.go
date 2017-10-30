@@ -5,9 +5,9 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -16,17 +16,21 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 
+	"version.uuzu.com/zhuhuipeng/djob/errors"
 	"version.uuzu.com/zhuhuipeng/djob/log"
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
 )
 
-type Backend interface {
-	JobModify(*pb.Job) (*pb.Job, error)
-	JobInfo(name, region string) (*pb.Job, error)
-	JobDelete(name, region string) (*pb.Job, error)
-	JobList(region string) ([]*pb.Job, error)
-	JobRun(name, region string) (*pb.Execution, error)
-	JobStatus(name, region string) (*pb.JobStatus, error)
+type ApiController interface {
+	ListRegions() ([]string, error)
+	AddJob(*pb.Job) (*pb.Job, error)
+	ModifyJob(*pb.Job) (*pb.Job, error)
+	DeleteJob(*pb.Job) (*pb.Job, error)
+	ListJob(name, region string) ([]*pb.Job, error)
+	RunJob(name, region string) (*pb.Execution, error)
+	GetStatus(name, region string) (*pb.JobStatus, error)
+	ListExecutions(name, region string, group int64) ([]*pb.Execution, error)
+	Search(interface{}, *pb.Search) ([]interface{}, int32, error)
 }
 
 type KayPair struct {
@@ -78,7 +82,7 @@ type APIServer struct {
 	bindIP    string
 	bindPort  int
 	tokenList map[string]string
-	backend   Backend
+	mc        ApiController
 	loger     *logrus.Entry
 	keyPair   *KayPair
 	tls       bool
@@ -87,15 +91,15 @@ type APIServer struct {
 }
 
 func NewAPIServer(ip string, port int,
-	tokens map[string]string, tls bool, pair *KayPair, backend Backend) (*APIServer, error) {
+	tokens map[string]string, tls bool, pair *KayPair, backend ApiController) (*APIServer, error) {
 	if len(tokens) == 0 {
-		return nil, errors.New("have no tokens")
+		return nil, errors.ErrMissApiToken
 	}
 	// reverse tokens
 	n := make(map[string]string)
 	for k, v := range tokens {
 		if _, exist := n[v]; exist {
-			return nil, errors.New("have repetition token")
+			return nil, errors.ErrRepetionToken
 		}
 		n[v] = k
 	}
@@ -106,7 +110,7 @@ func NewAPIServer(ip string, port int,
 		tokenList: n,
 		tls:       tls,
 		keyPair:   pair,
-		backend:   backend,
+		mc:        backend,
 	}, nil
 }
 
@@ -118,123 +122,247 @@ func (a *APIServer) prepareGin() *gin.Engine {
 	if a.tls {
 		r.Use(a.tlsHeaderMiddleware())
 	}
-	web := r.Group("/web")
+	web := r.Group("/api")
 	web.Use(gzip.Gzip(gzip.DefaultCompression))
+	web.GET("/region", a.listRegions)
 
 	jobAPI := web.Group("/job")
-	jobAPI.POST("/", a.modJob)
-	jobAPI.GET("/:region", a.getJobList)
-	jobAPI.GET("/:region/:name", a.getJob)
+	jobAPI.POST("/", a.addJob)
+	jobAPI.PUT("/", a.modifyJob)
+	jobAPI.GET("/", a.listAllJobs)
+	jobAPI.GET("/:region", a.listJobsBelongToRegion)
+	jobAPI.GET("/:region/:name", a.listTheJob)
 	jobAPI.DELETE("/:region/:name", a.deleteJob)
 	jobAPI.GET("/:region/:name/run", a.runJob)
 	jobAPI.GET("/:region/:name/status", a.getJobStatus)
+	jobAPI.POST("/search", a.jobSearch)
 
-	//executionAPI := web.Group("/execution")
-	//executionAPI.GET("/:region", a.getAllExecutions)
-	//executionAPI.GET("/:region/:name", a.getJobAllExecutions)
-	//executionAPI.GET("/:region/:name/:group", a.getExecution)
+	executionAPI := web.Group("/execution")
+	executionAPI.GET("/", a.listAllExecutions)
+	executionAPI.GET("/:region", a.listExecutionsBelongToRgeion)
+	executionAPI.GET("/:region/:name", a.listExecutionsBelongToJob)
+	executionAPI.GET("/:region/:name/:group", a.listExecutionInGroup)
+	executionAPI.POST("/search", a.executionSearch)
+
 	return r
 }
 
-func (a *APIServer) getJobStatus(c *gin.Context) {
-	name := c.Params.ByName("name")
+func (a *APIServer) listAllExecutions(c *gin.Context) {
+	a.listExecutions("", "", 0, c)
+}
+
+func (a *APIServer) listExecutionsBelongToRgeion(c *gin.Context) {
 	region := c.Params.ByName("region")
-	js, err := a.backend.JobStatus(name, region)
+	a.listExecutions("", region, 0, c)
+}
+
+func (a *APIServer) listExecutionsBelongToJob(c *gin.Context) {
+	region := c.Params.ByName("region")
+	name := c.Params.ByName("name")
+	a.listExecutions(name, region, 0, c)
+}
+
+func (a *APIServer) listExecutionInGroup(c *gin.Context) {
+	region := c.Params.ByName("region")
+	name := c.Params.ByName("name")
+	groupStr := c.Params.ByName("group")
+	group, err := strconv.ParseInt(groupStr, 10, 64)
 	if err != nil {
-		a.respondWithError(http.StatusBadRequest, &pb.RespStatus{Status: http.StatusBadRequest, Message: err.Error()}, c)
+		a.respondWithError(http.StatusUnprocessableEntity, &pb.ApiStringResponse{Succeed: false, Message: err.Error()}, c)
 		return
 	}
-	resp := pb.RespStatus{
-		Status:  0,
-		Message: "succeed",
-		Data:    js,
+	a.listExecutions(name, region, group, c)
+}
+
+func (a *APIServer) listExecutions(name, region string, group int64, c *gin.Context) {
+	outs, err := a.mc.ListExecutions(name, region, group)
+	if err != nil {
+		a.respondWithError(http.StatusInternalServerError, &pb.ApiStringResponse{Succeed: false, Message: err.Error()}, c)
+		return
 	}
+	resp := &pb.ApiExecutionResponse{Succeed: true, Message: "Succeed", Data: outs}
 	c.Render(http.StatusOK, pbjson{data: &resp})
 }
 
-func (a *APIServer) runJob(c *gin.Context) {
-	name := c.Params.ByName("name")
-	region := c.Params.ByName("region")
-	ex, err := a.backend.JobRun(name, region)
+func (a *APIServer) jobSearch(c *gin.Context) {
+	var search pb.Search
+	err := c.MustBindWith(&search, jsonpbBinding{})
 	if err != nil {
-		a.respondWithError(http.StatusBadRequest, &pb.RespJob{Status: http.StatusBadRequest, Message: err.Error()}, c)
+		a.respondWithError(http.StatusInternalServerError, &pb.ApiStringResponse{Succeed: false, Message: err.Error()}, c)
 		return
 	}
-	resp := pb.RespExec{
-		Status:  0,
-		Message: "succeed",
-		Data:    []*pb.Execution{ex},
+	a.search(&pb.Job{}, &search, c)
+}
+
+func (a *APIServer) executionSearch(c *gin.Context) {
+	var search pb.Search
+	err := c.MustBindWith(&search, jsonpbBinding{})
+	if err != nil {
+		a.respondWithError(http.StatusInternalServerError, &pb.ApiStringResponse{Succeed: false, Message: err.Error()}, c)
+		return
 	}
+	a.search(&pb.Execution{}, &search, c)
+}
+
+func (a *APIServer) search(obj interface{}, search *pb.Search, c *gin.Context) {
+	outs, count, err := a.mc.Search(obj, search)
+
+	if err != nil {
+		a.respondWithError(http.StatusInternalServerError, &pb.ApiStringResponse{Succeed: false, Message: err.Error()}, c)
+		return
+	}
+
+	switch obj.(type) {
+	case *pb.Job:
+		resp := &pb.ApiJobResponse{}
+		for _, out := range outs {
+			if t, ok := out.(*pb.Job); ok {
+				resp.Data = append(resp.Data, t)
+			} else {
+				a.respondWithError(http.StatusInternalServerError, &pb.ApiJobResponse{Succeed: false, Message: errors.ErrNotExpection.Error()}, c)
+				log.Loger.WithError(errors.ErrNotExpection).Fatal("API: Search result error")
+				return
+			}
+		}
+		resp.MaxPageNum = count
+		resp.Succeed = true
+		c.Render(http.StatusOK, pbjson{data: &resp})
+	case *pb.Execution:
+		resp := &pb.ApiExecutionResponse{}
+		for _, out := range outs {
+			if t, ok := out.(*pb.Execution); ok {
+				resp.Data = append(resp.Data, t)
+			} else {
+				a.respondWithError(http.StatusInternalServerError, &pb.ApiJobResponse{Succeed: false, Message: errors.ErrNotExpection.Error()}, c)
+				log.Loger.WithError(errors.ErrNotExpection).Fatal("API: Search result error")
+				return
+			}
+		}
+		resp.MaxPageNum = count
+		resp.Succeed = true
+		c.Render(http.StatusOK, pbjson{data: &resp})
+	default:
+		a.respondWithError(http.StatusInternalServerError, &pb.ApiStringResponse{Succeed: false, Message: errors.ErrType.Error()}, c)
+		return
+	}
+}
+
+func (a *APIServer) listRegions(c *gin.Context) {
+	var resp pb.ApiStringResponse
+	var err error
+	resp.Data, err = a.mc.ListRegions()
+	if err != nil {
+		resp.Message = err.Error()
+		a.respondWithError(http.StatusInternalServerError, &resp, c)
+		return
+	}
+	resp.Succeed = true
+	resp.Message = "Succeed"
 	c.Render(http.StatusOK, pbjson{data: &resp})
+}
+
+func (a *APIServer) addJob(c *gin.Context) {
+	var job pb.Job
+	err := c.MustBindWith(&job, jsonpbBinding{})
+	if err != nil {
+		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: err.Error()}, c)
+		return
+	}
+	a.jobCRUD(&job, pb.Ops_ADD, c)
+}
+
+func (a *APIServer) modifyJob(c *gin.Context) {
+	var job pb.Job
+	err := c.MustBindWith(&job, jsonpbBinding{})
+	if err != nil {
+		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: err.Error()}, c)
+		return
+	}
+	a.jobCRUD(&job, pb.Ops_MODIFY, c)
+}
+
+func (a *APIServer) listAllJobs(c *gin.Context) {
+	a.jobCRUD(&pb.Job{}, pb.Ops_READ, c)
+}
+
+func (a *APIServer) listJobsBelongToRegion(c *gin.Context) {
+	region := c.Params.ByName("region")
+	a.jobCRUD(&pb.Job{Region: region}, pb.Ops_READ, c)
+}
+
+func (a *APIServer) listTheJob(c *gin.Context) {
+	name := c.Params.ByName("name")
+	region := c.Params.ByName("region")
+	a.jobCRUD(&pb.Job{Name: name, Region: region}, pb.Ops_READ, c)
 }
 
 func (a *APIServer) deleteJob(c *gin.Context) {
 	name := c.Params.ByName("name")
 	region := c.Params.ByName("region")
-	job, err := a.backend.JobDelete(name, region)
+	a.jobCRUD(&pb.Job{Name: name, Region: region}, pb.Ops_DELETE, c)
+}
+
+func (a *APIServer) jobCRUD(in *pb.Job, ops pb.Ops, c *gin.Context) {
+	resp := pb.ApiJobResponse{}
+	var err error
+	var out *pb.Job
+	switch ops {
+	case pb.Ops_READ:
+		resp.Data, err = a.mc.ListJob(in.Name, in.Region)
+	case pb.Ops_ADD:
+		out, err = a.mc.AddJob(in)
+	case pb.Ops_MODIFY:
+		out, err = a.mc.ModifyJob(in)
+	case pb.Ops_DELETE:
+		out, err = a.mc.DeleteJob(in)
+	default:
+		err = errors.ErrUnknownOps
+	}
 	if err != nil {
-		a.respondWithError(http.StatusBadRequest, &pb.RespJob{Status: http.StatusBadRequest, Message: err.Error()}, c)
+		resp.Succeed = false
+		resp.Message = err.Error()
+		a.respondWithError(http.StatusInternalServerError, &resp, c)
 		return
 	}
-	resp := pb.RespJob{
-		Status:  0,
-		Message: "succeed",
-		Data:    []*pb.Job{job},
+	if out != nil {
+		resp.Data = append(resp.Data, out)
 	}
+	resp.Succeed = true
+	resp.Message = "Succeed"
 	c.Render(http.StatusOK, pbjson{data: &resp})
 }
 
-// TODO: add a data filter
-func (a *APIServer) getJobList(c *gin.Context) {
-	region := c.Params.ByName("region")
-	jobs, err := a.backend.JobList(region)
-	if err != nil {
-		a.respondWithError(http.StatusNotFound, &pb.RespJob{Status: http.StatusNotFound, Message: err.Error()}, c)
-		return
-	}
-	resp := pb.RespJob{
-		Status:  0,
-		Message: "succeed",
-		Data:    jobs,
-	}
-	c.Render(http.StatusOK, pbjson{data: &resp})
-}
-func (a *APIServer) getJob(c *gin.Context) {
+func (a *APIServer) getJobStatus(c *gin.Context) {
+	var resp pb.ApiJobStatusResponse
 	name := c.Params.ByName("name")
 	region := c.Params.ByName("region")
-	job, err := a.backend.JobInfo(name, region)
+	status, err := a.mc.GetStatus(name, region)
 	if err != nil {
-		a.respondWithError(http.StatusBadRequest, &pb.RespJob{Status: http.StatusBadRequest, Message: err.Error()}, c)
+		resp.Succeed = false
+		resp.Message = err.Error()
+		a.respondWithError(http.StatusInternalServerError, &resp, c)
 		return
 	}
-	resp := pb.RespJob{
-		Status:  0,
-		Message: "succeed",
-		Data:    []*pb.Job{job},
-	}
+	resp.Succeed = true
+	resp.Message = "Succeed"
+	resp.Data = append(resp.Data, status)
 	c.Render(http.StatusOK, pbjson{data: &resp})
 }
 
-func (a *APIServer) modJob(c *gin.Context) {
-	var (
-		job  pb.Job
-		resp pb.RespJob
-		err  error
-	)
-	err = c.MustBindWith(&job, jsonpbBinding{})
+func (a *APIServer) runJob(c *gin.Context) {
+	var resp pb.ApiExecutionResponse
+	name := c.Params.ByName("name")
+	region := c.Params.ByName("region")
+	execution, err := a.mc.RunJob(name, region)
 	if err != nil {
-		a.respondWithError(http.StatusBadRequest, &pb.RespJob{Status: http.StatusBadRequest, Message: err.Error()}, c)
+		resp.Succeed = false
+		resp.Message = err.Error()
+		a.respondWithError(http.StatusInternalServerError, &resp, c)
 		return
 	}
-	rj, err := a.backend.JobModify(&job)
-	if err != nil {
-		a.respondWithError(http.StatusBadRequest, &pb.RespJob{Status: http.StatusBadRequest, Message: err.Error()}, c)
-		return
-	}
-	resp.Status = 0
-	resp.Message = "succeed"
-	resp.Data = append(resp.Data, rj)
-
+	resp.Data = append(resp.Data, execution)
+	resp.Succeed = true
+	resp.Message = "Succeed"
 	c.Render(http.StatusOK, pbjson{data: &resp})
 }
 
@@ -282,13 +410,13 @@ func (a *APIServer) tokenAuthMiddleware() gin.HandlerFunc {
 		token := c.Request.Header.Get("X-Auth-Token")
 
 		if token == "" {
-			a.respondWithError(http.StatusUnauthorized, &pb.RespJob{Status: http.StatusUnauthorized, Message: "API token required"}, c)
+			a.respondWithError(http.StatusUnauthorized, &pb.ApiJobResponse{Succeed: false, Message: "API token required"}, c)
 			return
 		}
 		if _, exist := a.tokenList[token]; exist {
 			c.Next()
 		} else {
-			a.respondWithError(http.StatusUnauthorized, &pb.RespJob{Status: http.StatusUnauthorized, Message: "API token Error"}, c)
+			a.respondWithError(http.StatusUnauthorized, &pb.ApiJobResponse{Succeed: false, Message: "API token Error"}, c)
 			return
 		}
 	}

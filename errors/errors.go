@@ -32,4 +32,7 @@ var (
 	ErrLinkNum           = errors.New("count of links must equal to conditions plus one")
 	ErrConditionFormat   = errors.New("error format of conditions")
 	ErrNotSupportSymbol  = errors.New("logic symbol not support")
+	ErrMissApiToken      = errors.New("must have Api tokens")
+	ErrRepetionToken     = errors.New("api token must be unique")
+	ErrNotExpection      = errors.New("type does not match expectations")
 )

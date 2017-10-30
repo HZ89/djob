@@ -2,33 +2,30 @@ syntax = "proto3";
 import "message/job.proto";
 package message;
 
-message RespJob {
-    int32 Status = 1;
+message ApiJobResponse {
+    bool Succeed = 1;
     string Message = 2;
-    string Node = 3;
-    repeated Job Result = 4;
+    int32 MaxPageNum = 3;
+    repeated Job Data = 4;
 }
 
-message RespExec {
-    int32 Status = 1;
+message ApiExecutionResponse {
+    bool Succeed = 1;
     string Message = 2;
-    repeated Execution Result = 3;
+    int32 MaxPageNum = 3;
+    repeated Execution Data = 4;
 }
 
-message RespStatus {
-    int32 Status = 1;
+message ApiJobStatusResponse {
+    bool Succeed = 1;
     string Message = 2;
-    repeated JobStatus Result = 3;
+    int32 MaxPageNum = 3;
+    repeated JobStatus Data = 4;
 }
 
-message RespJobs {
-    repeated RespJob Data = 1;
-}
-
-message RespExecs {
-    repeated RespExec Data = 1;
-}
-
-message RespStatuses {
-    repeated RespStatus Data = 1;
+message ApiStringResponse {
+    bool Succeed = 1;
+    string Message = 2;
+    int32 MaxPageNum = 3;
+    repeated string Data = 4;
 }

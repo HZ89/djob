@@ -129,16 +129,6 @@ func (a *Agent) serfEventLoop() {
 				query := e.(*serf.Query)
 
 				switch qname := query.Name; qname {
-				case QueryModJob:
-					if a.config.Server {
-						log.Loger.WithFields(logrus.Fields{
-							"query":   query.Name,
-							"payload": string(query.Payload),
-							"at":      query.LTime,
-						}).Debug("Agent: Server receive a add new job event")
-
-						go a.receiveNewJobQuery(query)
-					}
 				case QueryRunJob:
 					log.Loger.WithFields(logrus.Fields{
 						"query":   query.Name,
@@ -167,16 +157,6 @@ func (a *Agent) serfEventLoop() {
 						}).Debug("Agent: Server receive a job count query")
 
 						go a.receiveJobCountQuery(query)
-					}
-				case QueryJobDelete:
-					if a.config.Server {
-						log.Loger.WithFields(logrus.Fields{
-							"query":   query.Name,
-							"payload": string(query.Payload),
-							"at":      query.LTime,
-						}).Debug("Agent: Server receive a job delete query")
-
-						go a.receiveJobDeleteQuery(query)
 					}
 				default:
 					log.Loger.Warn("Agent: get a unknow message")

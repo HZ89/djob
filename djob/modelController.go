@@ -98,7 +98,7 @@ func (a *Agent) handleExecutionOps(ex *pb.Execution, ops pb.Ops, search *pb.Sear
 	var err error
 	switch ops {
 	case pb.Ops_READ:
-		var rows []*pb.Job
+		var rows []*pb.Execution
 
 		if search != nil {
 			var condition *store.SearchCondition
