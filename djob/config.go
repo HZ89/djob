@@ -1,3 +1,21 @@
+/*
+ * Copyright (c) 2017.  Harrison Zhu <wcg6121@gmail.com>
+ * This file is part of djob <https://github.com/HZ89/djob>.
+ *
+ * djob is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * djob is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with djob.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 package djob
 
 import (
@@ -46,19 +64,19 @@ type Config struct {
 }
 
 const (
-	DefaultRegion       string = "MARS"
-	DefaultSerfPort     int    = 8998
-	DefaultHttpPort     int    = 8088
-	DefaultRPCPort      int    = 7979
-	DefaultSnapshotPath string = "./snapshot"
-	DefaultConfigFile   string = "./conf/djob.yml"
-	DefaultPidFile      string = "./djob.pid"
-	DefaultLogFile      string = "./djob.log"
-	DefaultKeySpeace    string = "djob"
-	DefaultSQLPort      int    = 3306
-	DefaultSQLHost      string = "localhost"
-	DefaultSQLUser      string = "djob"
-	DefaultDBName       string = "djob"
+	DefaultRegion       = "MARS"
+	DefaultSerfPort     = 8998
+	DefaultHttpPort     = 8088
+	DefaultRPCPort      = 7979
+	DefaultSnapshotPath = "./snapshot"
+	DefaultConfigFile   = "./conf/djob.yml"
+	DefaultPidFile      = "./djob.pid"
+	DefaultLogFile      = "./djob.log"
+	DefaultKeySpeace    = "djob"
+	DefaultSQLPort      = 3306
+	DefaultSQLHost      = "localhost"
+	DefaultSQLUser      = "djob"
+	DefaultDBName       = "djob"
 )
 
 func newConfig(args []string, version string) (*Config, error) {

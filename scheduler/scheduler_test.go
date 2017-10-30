@@ -1,9 +1,28 @@
+/*
+ * Copyright (c) 2017.  Harrison Zhu <wcg6121@gmail.com>
+ * This file is part of djob <https://github.com/HZ89/djob>.
+ *
+ * djob is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * djob is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with djob.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 package scheduler
 
 import (
-	pb "version.uuzu.com/zhuhuipeng/djob/message"
 	"reflect"
 	"testing"
+
+	pb "version.uuzu.com/zhuhuipeng/djob/message"
 )
 
 func Test_newEntery(t *testing.T) {
@@ -52,16 +71,16 @@ func TestScheduler_deleteEntryByName(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "test_delete_entry_01",
-			fields: fields{},
-			args: args{name:"test_delete_01"},
+			name:    "test_delete_entry_01",
+			fields:  fields{},
+			args:    args{name: "test_delete_01"},
 			wantErr: true,
 		},
 		{
-			name:"test_delete_entry_02",
+			name: "test_delete_entry_02",
 			fields: fields{
-				entries:[]*entry{
-					&entry{
+				entries: []*entry{
+					{
 						Job: &pb.Job{
 							Name: "job1",
 						},
@@ -71,7 +90,7 @@ func TestScheduler_deleteEntryByName(t *testing.T) {
 					"job1": 0,
 				},
 			},
-			args: args{name:"job1"},
+			args:    args{name: "job1"},
 			wantErr: false,
 		},
 	}
@@ -144,7 +163,7 @@ func TestScheduler_DeleteJob(t *testing.T) {
 		nameToIndex map[string]int
 	}
 	type args struct {
-		name string
+		job *pb.Job
 	}
 	tests := []struct {
 		name   string
@@ -164,7 +183,7 @@ func TestScheduler_DeleteJob(t *testing.T) {
 				entries:     tt.fields.entries,
 				nameToIndex: tt.fields.nameToIndex,
 			}
-			s.DeleteJob(tt.args.name)
+			s.DeleteJob(tt.args.job)
 		})
 	}
 }
