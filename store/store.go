@@ -21,6 +21,7 @@ package store
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -52,6 +53,7 @@ const (
 	LockTimeOut       = 2 * time.Second
 	waitTimeOut       = 50 * time.Millisecond
 	defaultPageSize   = 10
+	separator         = "###"
 )
 
 type LockType int
@@ -315,11 +317,6 @@ func (k *KVStore) DeleteJobStatus(status *pb.JobStatus) (out *pb.JobStatus, err 
 // if the job do not exists, return nil
 // wait JobStatus lock 5 times
 func (k *KVStore) GetJobStatus(in *pb.JobStatus) (out *pb.JobStatus, err error) {
-	// if job do not exist just return status not exist
-	_, err = k.GetJob(in.Name, in.Region)
-	if err != nil {
-		return
-	}
 
 	out = &pb.JobStatus{
 		Name:   in.Name,
@@ -350,14 +347,14 @@ func (k *KVStore) GetJobStatus(in *pb.JobStatus) (out *pb.JobStatus, err error) 
 		return
 	}
 
-	return
+	return nil, errors.ErrNotExist
 }
 
 // set job status to kv store
 // safely set jobstatus need lock it with RW locker first
 func (k *KVStore) SetJobStatus(status *pb.JobStatus) (*pb.JobStatus, error) {
 
-	entry, err := util.PbToJSON(status)
+	e, err := util.PbToJSON(status)
 	if err != nil {
 		return nil, err
 	}
@@ -368,10 +365,10 @@ func (k *KVStore) SetJobStatus(status *pb.JobStatus) (*pb.JobStatus, error) {
 		"ErrorCount":   status.ErrorCount,
 		"LastSuccess":  status.LastSuccess,
 		"LastError":    status.LastError,
-		"OriginData":   string(entry),
+		"OriginData":   string(e),
 	}).Debug("Store: save job status to kv store")
 
-	if err = k.client.Put(k.buildKey(status), entry, nil); err != nil {
+	if err = k.client.Put(k.buildKey(status), e, nil); err != nil {
 		return nil, err
 	}
 	return status, nil
@@ -414,9 +411,9 @@ func (k *KVStore) jobs(name, region string) (jobs []*pb.Job, err error) {
 				return
 			}
 		}
-		for _, entry := range res {
+		for _, e := range res {
 			var job pb.Job
-			if err = util.JsonToPb(entry.Value, job); err != nil {
+			if err = util.JsonToPb(e.Value, job); err != nil {
 				return nil, err
 			}
 			jobs = append(jobs, &job)
@@ -499,54 +496,124 @@ func (k *KVStore) DeleteJob(name, region string) (*pb.Job, error) {
 // used to cache job in local memory
 type MemStore struct {
 	memBuf *memDbBuffer
+	stopCh chan struct{}
 }
 
-func (m *MemStore) GetJob(name, region string) (*pb.Job, error) {
-	jobKey := Key(fmt.Sprintf("%s-%s", util.GenerateSlug(region), util.GenerateSlug(name)))
-	res, err := m.memBuf.Get(jobKey)
+type entry struct {
+	DeadTime time.Time
+	Data     []byte
+}
+
+func (m *MemStore) Set(key string, in interface{}, ttl time.Duration) (err error) {
+	var value []byte
+	e := &entry{}
+	if ttl != 0 {
+		e.DeadTime = time.Now().Add(ttl)
+	} else {
+		e.DeadTime = time.Time{}
+	}
+	e.Data, err = util.GetBytes(in)
+	if err != nil {
+		return
+	}
+	value, err = util.GetBytes(e)
+	if err != nil {
+		return
+	}
+	return m.memBuf.Set(Key(key), value)
+}
+
+func (m *MemStore) Get(key string, out interface{}) (err error) {
+	var e *entry
+	now := time.Now()
+	e, err = m.getEntry(Key(key))
+	if err != nil {
+		return err
+	}
+
+	if !m.isOverdue(e, now) {
+		return util.GetInterface(e.Data, out)
+	}
+	return errors.ErrNotExist
+}
+
+func (m *MemStore) getEntry(key Key) (e *entry, err error) {
+	var v []byte
+	v, err = m.memBuf.Get(key)
+	if err != nil {
+		return
+	}
+	err = util.GetInterface(v, e)
 	if err != nil {
 		return nil, err
 	}
-	var job pb.Job
-	if err = proto.Unmarshal(res, &job); err != nil {
-		return nil, err
-	}
-	return &job, nil
+	return
 }
 
-func (m *MemStore) SetJob(job *pb.Job) error {
-	if err := util.VerifyJob(job); err != nil {
-		return err
-	}
+func (m *MemStore) handleOverdueKey() {
+	go func() {
+		for true {
+			select {
+			case time.After(time.Second):
+				m.releaseOverdueKey()
+			case m.stopCh:
+				return
+			}
+		}
+	}()
+}
 
-	jobpb, err := proto.Marshal(job)
+func (m *MemStore) releaseOverdueKey() {
+	now := time.Now()
+	iter, err := m.memBuf.Seek(nil)
 	if err != nil {
-		return err
+		log.Loger.Fatalf("Store: memBuf Seek failed: %v", err)
 	}
-
-	jobKey := Key(fmt.Sprintf("%s-%s", util.GenerateSlug(job.Region), util.GenerateSlug(job.Name)))
-
-	if err = m.memBuf.Set(jobKey, jobpb); err != nil {
-		return err
+	defer iter.Close()
+	for ; iter.Valid(); iter.Next() {
+		key := iter.Key()
+		var e *entry
+		e, err = m.getEntry(key)
+		if err != nil {
+			log.Loger.Fatalf("Store: memBuf Seek get key filed: %v", err)
+		}
+		if m.isOverdue(e, now) {
+			m.memBuf.Delete(key)
+		}
 	}
-
-	return nil
 }
 
-func (m *MemStore) DeleteJob(name, region string) error {
-	jobKey := Key(fmt.Sprintf("%s-%s", util.GenerateSlug(region), util.GenerateSlug(name)))
-
-	if err := m.memBuf.Delete(jobKey); err != nil {
-		return err
+func (m *MemStore) isOverdue(e *entry, now time.Time) bool {
+	if e.DeadTime.IsZero() {
+		return false
 	}
+	return e.DeadTime.After(now)
+}
 
-	return nil
+func (m *MemStore) buildKey(name string, ttl time.Duration) (Key, error) {
+	a := strings.Split(name, separator)
+	if len(a) > 1 {
+		return nil, errors.ErrIllegalCharacter
+	}
+	if ttl == 0 {
+		return Key(name), nil
+	}
+	overtime := time.Now().Add(ttl)
+	key := fmt.Sprintf("%s%s%s", name, separator, overtime.Format(time.RFC3339))
+	return Key(key), nil
+}
+
+func (m *MemStore) Release() {
+	m.stopCh <- struct{}{}
 }
 
 func NewMemStore() *MemStore {
-	return &MemStore{
+	ms := &MemStore{
 		memBuf: NewMemDbBuffer(),
+		stopCh: make(chan struct{}),
 	}
+	ms.handleOverdueKey()
+	return ms
 }
 
 type SQLStore struct {
@@ -774,17 +841,6 @@ func NewSearchCondition(conditions, links []string) (*SearchCondition, error) {
 }
 
 type LogicSymbol int
-
-const (
-	LogicSymbol_OR  LogicSymbol = 1
-	LogicSymbol_AND LogicSymbol = 2
-	LogicSymbol_EQ  LogicSymbol = 3
-	LogicSymbol_GE  LogicSymbol = 4
-	LogicSymbol_GT  LogicSymbol = 5
-	LogicSymbol_LE  LogicSymbol = 6
-	LogicSymbol_LT  LogicSymbol = 7
-	LogicSymbol_NE  LogicSymbol = 8
-)
 
 var LogicSymbolName = map[int]string{
 	1: "OR",

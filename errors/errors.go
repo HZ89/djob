@@ -20,8 +20,6 @@ package errors
 
 import (
 	"errors"
-
-	"github.com/docker/libkv/store"
 )
 
 var (
@@ -44,7 +42,6 @@ var (
 	ErrStartSerf         = errors.New("start serf failed")
 	ErrMissKeyFile       = errors.New("have no key file or cert file path")
 	ErrMissCaFile        = errors.New("have no ca file path")
-	ErrNotFound          = store.ErrKeyNotFound
 	ErrUnknownOps        = errors.New("unknown ops")
 	ErrRepetition        = errors.New("already have same object")
 	ErrLinkNum           = errors.New("count of links must equal to conditions plus one")
@@ -53,4 +50,5 @@ var (
 	ErrMissApiToken      = errors.New("must have Api tokens")
 	ErrRepetionToken     = errors.New("api token must be unique")
 	ErrNotExpection      = errors.New("type does not match expectations")
+	ErrIllegalCharacter  = errors.New("'###' is not allow used in key")
 )

@@ -32,6 +32,8 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/mattn/go-shellwords"
 
+	"encoding/gob"
+
 	"version.uuzu.com/zhuhuipeng/djob/errors"
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
 	"version.uuzu.com/zhuhuipeng/djob/scheduler"
@@ -204,4 +206,24 @@ func (f *FanOutQueue) Sub() chan struct{} {
 	ch := make(chan struct{})
 	f.outQueues = append(f.outQueues, ch)
 	return ch
+}
+
+func GetBytes(data interface{}) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	err := enc.Encode(data)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func GetInterface(bts []byte, data interface{}) error {
+	buf := bytes.NewBuffer(bts)
+	dec := gob.NewDecoder(buf)
+	err := dec.Decode(data)
+	if err != nil {
+		return err
+	}
+	return nil
 }

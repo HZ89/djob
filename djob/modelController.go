@@ -175,6 +175,9 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		if err = a.sqlStore.Delete(job).Err; err != nil {
 			return nil, count, err
 		}
+		if _, err = a.store.DeleteJobStatus(&pb.JobStatus{Name: job.Name, Region: job.Region}); err != nil {
+			return nil, count, err
+		}
 		out := make([]interface{}, 1)
 		out[0] = job
 		return out, count, err

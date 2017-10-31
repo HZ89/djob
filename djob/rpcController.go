@@ -64,7 +64,7 @@ func (a *Agent) SendBackExecution(ex *pb.Execution) (err error) {
 	defer statusLocker.Unlock()
 
 	out, _, err := a.operationMiddleLayer(status, pb.Ops_READ, nil)
-	if err != nil && err != errors.ErrNotFound {
+	if err != nil && err != errors.ErrNotExist {
 		return err
 	}
 
