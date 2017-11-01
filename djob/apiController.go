@@ -19,41 +19,134 @@
 package djob
 
 import (
+	"time"
+
+	"github.com/hashicorp/serf/serf"
+
+	"version.uuzu.com/zhuhuipeng/djob/errors"
+	"version.uuzu.com/zhuhuipeng/djob/log"
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
 )
 
 func (a *Agent) ListRegions() (regions []string, err error) {
+	err = a.memStore.Get("regions_cache", regions)
+	if err != nil && err != errors.ErrNotExist {
+		return
+	}
+	if len(regions) != 0 {
+		log.Loger.Debug("Agent: regions hit cache")
+		return
+	}
+
+	regionList := make(map[string]bool)
+	for _, m := range a.serf.Members() {
+		if m.Status == serf.StatusAlive {
+			regionList[m.Tags["region"]] = true
+		}
+
+	}
+	for k := range regionList {
+		regions = append(regions, k)
+	}
+	err = a.memStore.Set("regions_cache", regions, 120*time.Second)
+	if err != nil {
+		return
+	}
 	return
 }
 
 func (a *Agent) AddJob(in *pb.Job) (out *pb.Job, err error) {
-	return
+	var res []interface{}
+	res, _, err = a.operationMiddleLayer(in, pb.Ops_ADD, nil)
+	if err != nil {
+		return
+	}
+	if t, ok := res[0].(*pb.Job); ok {
+		out = t
+		return
+	}
+	log.Loger.Fatalf("Agent: API AddJob get type %v is not exception", res)
+	return nil, errors.ErrNotExpectation
 }
 
 func (a *Agent) ModifyJob(in *pb.Job) (out *pb.Job, err error) {
-	return
+	var res []interface{}
+	res, _, err = a.operationMiddleLayer(in, pb.Ops_MODIFY, nil)
+	if err != nil {
+		return
+	}
+	if t, ok := res[0].(*pb.Job); ok {
+		out = t
+		return
+	}
+	log.Loger.Fatalf("Agent: API AddJob get type %v is not exception", res)
+	return nil, errors.ErrNotExpectation
 }
 
 func (a *Agent) DeleteJob(in *pb.Job) (out *pb.Job, err error) {
-	return
+	var res []interface{}
+	res, _, err = a.operationMiddleLayer(in, pb.Ops_DELETE, nil)
+	if err != nil {
+		return
+	}
+	if t, ok := res[0].(*pb.Job); ok {
+		out = t
+		return
+	}
+	log.Loger.Fatalf("Agent: API AddJob get type %v is not exception", res)
+	return nil, errors.ErrNotExpectation
 }
 
 func (a *Agent) ListJob(name, region string) (jobs []*pb.Job, err error) {
-	return
-}
-
-func (a *Agent) RunJob(name, region string) (exec *pb.Execution, err error) {
+	in := &pb.Job{Name: name, Region: region}
+	var res []interface{}
+	res, _, err = a.operationMiddleLayer(in, pb.Ops_READ, nil)
+	if err != nil {
+		return
+	}
+	for _, i := range res {
+		if t, ok := i.(*pb.Job); ok {
+			jobs = append(jobs, t)
+			continue
+		}
+		log.Loger.Fatalf("Agent: API AddJob get type %v is not exception", res)
+	}
 	return
 }
 
 func (a *Agent) GetStatus(name, region string) (out *pb.JobStatus, err error) {
-	return
+	in := &pb.JobStatus{Name: name, Region: region}
+	var res []interface{}
+	res, _, err = a.operationMiddleLayer(in, pb.Ops_READ, nil)
+	if err != nil {
+		return nil, err
+	}
+	if t, ok := res[0].(*pb.JobStatus); ok {
+		out = t
+		return
+	}
+	log.Loger.Fatalf("Agent: API AddJob get type %v is not exception", res)
+	return nil, errors.ErrNotExpectation
 }
 
 func (a *Agent) ListExecutions(name, region string, group int64) (out []*pb.Execution, err error) {
+	in := &pb.Execution{Name: name, Region: region, Group: group}
+	var res []interface{}
+	res, _, err = a.operationMiddleLayer(in, pb.Ops_READ, nil)
+	if err != nil {
+		return
+	}
+	for _, i := range res {
+		if t, ok := i.(*pb.Execution); ok {
+			out = append(out, t)
+			continue
+		}
+		log.Loger.Fatalf("Agent: API AddJob get type %v is not exception", res)
+	}
 	return
 }
 
-func (a *Agent) Search(in interface{}, search *pb.Search) (out []interface{}, count int32, err error) {
+func (a *Agent) Search(in interface{}, search *pb.Search) (out []interface{}, count int, err error) {
+	out, count, err = a.operationMiddleLayer(in, pb.Ops_READ, search)
 	return
 }

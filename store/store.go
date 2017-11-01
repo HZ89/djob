@@ -374,125 +374,6 @@ func (k *KVStore) SetJobStatus(status *pb.JobStatus) (*pb.JobStatus, error) {
 	return status, nil
 }
 
-func (k *KVStore) GetRegionList() (regions []string, err error) {
-	res, err := k.client.List(k.keyspace)
-	if err != nil {
-		return nil, err
-	}
-	for _, re := range res {
-		regions = append(regions, string(re.Value))
-	}
-	return
-}
-
-func (k *KVStore) jobs(name, region string) (jobs []*pb.Job, err error) {
-	if region != "" {
-		var res []*libstore.KVPair
-		if name != "" {
-			var r *libstore.KVPair
-			key := k.buildKey(&pb.Job{Name: name, Region: region})
-			r, err = k.client.Get(key)
-			if err != nil && err != libstore.ErrKeyNotFound {
-				log.Loger.WithField("key", key).WithError(err).Fatal("Store: get key failed")
-			}
-			if res == nil {
-				err = libstore.ErrKeyNotFound
-				return
-			}
-			res = append(res, r)
-		} else {
-			key := fmt.Sprintf("%s/%s/Jobs/", k.keyspace, util.GenerateSlug(region))
-			res, err = k.client.List(key)
-			if err != nil && err != libstore.ErrKeyNotFound {
-				log.Loger.WithField("key", key).WithError(err).Fatal("Store: get key failed")
-			}
-			if len(res) == 0 {
-				err = libstore.ErrKeyNotFound
-				return
-			}
-		}
-		for _, e := range res {
-			var job pb.Job
-			if err = util.JsonToPb(e.Value, job); err != nil {
-				return nil, err
-			}
-			jobs = append(jobs, &job)
-		}
-		return
-	}
-	var regions []string
-	regions, err = k.GetRegionList()
-	if err != nil {
-		return
-	}
-	for _, r := range regions {
-		var rjobs []*pb.Job
-		rjobs, err = k.jobs("", r)
-		if err != nil {
-			return nil, err
-		}
-		jobs = append(jobs, rjobs...)
-	}
-	return
-}
-
-func (k *KVStore) GetRegionJobs(region string) ([]*pb.Job, error) {
-	return k.jobs("", region)
-}
-
-func (k *KVStore) GetJob(name, region string) (*pb.Job, error) {
-	jobs, err := k.jobs(name, region)
-	if err != nil {
-		return nil, err
-	}
-	return jobs[0], nil
-}
-
-func (k *KVStore) GetJobs() ([]*pb.Job, error) {
-	return k.jobs("", "")
-}
-
-func (k *KVStore) SetJob(job *pb.Job) error {
-	if err := util.VerifyJob(job); err != nil {
-		return err
-	}
-
-	_, err := k.GetJob(job.Name, job.Region)
-
-	if err != nil && err != libstore.ErrKeyNotFound {
-		return err
-	}
-
-	json, err := util.PbToJSON(job)
-	if err != nil {
-		return err
-	}
-	log.Loger.WithFields(logrus.Fields{
-		"name":       job.Name,
-		"region":     job.Region,
-		"expression": job.Expression,
-		"scheduler":  job.Schedule,
-		"marshal":    string(json),
-	}).Debug("Store: save job to kv store")
-	if err = k.client.Put(k.buildKey(job), json, nil); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (k *KVStore) DeleteJob(name, region string) (*pb.Job, error) {
-	job, err := k.GetJob(name, region)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = k.client.Delete(k.buildKey(job)); err != nil {
-		return nil, err
-	}
-
-	return job, nil
-}
-
 // used to cache job in local memory
 type MemStore struct {
 	memBuf *memDbBuffer
@@ -726,17 +607,17 @@ func (s *SQLStore) Create(obj interface{}) *SQLStore {
 
 func (s *SQLStore) Modify(obj interface{}) *SQLStore {
 	n := s.clone()
-	out := reflect.New(reflect.TypeOf(obj)).Interface()
-	err := s.db.Where(obj).First(out).Error
+	old := reflect.New(reflect.TypeOf(obj)).Interface()
+	err := s.db.Where(obj).First(old).Error
 	if err != nil {
 		n.Err = err
 		return n
 	}
-	if out == nil {
+	if old == nil {
 		n.Err = errors.ErrNotExist
 		return n
 	}
-	n.Err = s.db.Model(out).Updates(obj).Error
+	n.Err = s.db.Model(old).Updates(obj).Error
 	return n
 }
 
@@ -753,52 +634,6 @@ func (s *SQLStore) Delete(obj interface{}) *SQLStore {
 		obj = out
 	}
 	return n
-}
-
-func (s *SQLStore) GetExecs(jobName, region, node string, group int64) (exs []*pb.Execution, err error) {
-	q := map[string]interface{}{
-		"job_name": jobName,
-		"region":   region,
-	}
-	if group > 0 {
-		q["group"] = group
-	}
-	if node != "" {
-		q["run_node_name"] = node
-	}
-	if err = s.db.Where(q).Find(&exs).Error; err != nil {
-		return nil, err
-	}
-	return
-}
-
-func (s *SQLStore) GetExec(jobName, region, node string, group int64) (ex *pb.Execution, err error) {
-	var exs []*pb.Execution
-	exs, err = s.GetExecs(jobName, region, node, group)
-	if err != nil {
-		return
-	}
-	if len(exs) > 0 {
-		return exs[0], nil
-	}
-	return
-}
-
-func (s *SQLStore) SetExec(ex *pb.Execution) error {
-	ej, err := s.GetExec(ex.Name, ex.Region, ex.RunNodeName, ex.Group)
-	if err != nil {
-		return err
-	}
-	if ej == nil {
-		if err = s.db.Create(ex).Error; err != nil {
-			return err
-		}
-	} else {
-		if err = s.db.Save(ex).Error; err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (s *SQLStore) clone() *SQLStore {

@@ -48,6 +48,7 @@ type Operator interface {
 	GetJob(name, region string) (*pb.Job, error)
 	SendBackExecution(execution *pb.Execution) error
 	PerformOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int, error)
+	RunJob(name, region string) (*pb.Execution, error)
 }
 
 type RpcServer struct {
@@ -72,6 +73,14 @@ func NewRPCServer(bindIp string, port int, operator Operator, tlsopt *TlsOpt) *R
 		operator: operator,
 		tlsopt:   tlsopt,
 	}
+}
+
+func (s *RpcServer) ProxyJobRun(ctx context.Context, in *pb.Job) (*pb.Execution, error) {
+	exec, err := s.operator.RunJob(in.Name, in.Region)
+	if err != nil {
+		return nil, err
+	}
+	return exec, nil
 }
 
 func (s *RpcServer) GetJob(ctx context.Context, job *pb.Job) (*pb.Job, error) {
@@ -230,6 +239,14 @@ func (c *RpcClient) Shutdown() error {
 		return err
 	}
 	return nil
+}
+
+func (c *RpcClient) ProxyJobRun(name, region string) (*pb.Execution, error) {
+	exec, err := c.client.ProxyJobRun(context.Background(), &pb.Job{Name: name, Region: region})
+	if err != nil {
+		return nil, err
+	}
+	return exec, nil
 }
 
 func (c *RpcClient) GetJob(name, region string) (*pb.Job, error) {

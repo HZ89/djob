@@ -107,12 +107,7 @@ func (a *Agent) receiveJobCountQuery(query *serf.Query) {
 	return
 }
 
-func (a *Agent) sendRunJobQuery(ex *pb.Execution) {
-
-	job, err := a.store.GetJob(ex.Name, ex.Region)
-	if err != nil {
-		log.Loger.WithError(err).Fatal("Agent GetJob failed")
-	}
+func (a *Agent) sendRunJobQuery(ex *pb.Execution, job *pb.Job) {
 
 	exPb, err := proto.Marshal(ex)
 	if err != nil {

@@ -19,6 +19,8 @@
 package djob
 
 import (
+	"time"
+
 	"github.com/Sirupsen/logrus"
 
 	"version.uuzu.com/zhuhuipeng/djob/errors"
@@ -160,15 +162,50 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 	var err error
 	var count int
 	switch {
-	case ops == pb.Ops_ADD || ops == pb.Ops_MODIFY:
-		if err = a.sqlStore.Create(job).Err; err != nil {
+	case ops == pb.Ops_ADD:
+
+		if err = util.VerifyJob(job); err != nil {
 			return nil, count, err
 		}
+
+		// set own locker on the job
+		locker, err := a.store.Lock(job, store.OWN, a.config.Nodename)
+		if err != nil {
+			return nil, count, err
+		}
+		a.lockerChain.AddLocker(job.Name, locker)
+
 		if err = a.scheduler.AddJob(job); err != nil {
+			return nil, count, err
+		}
+		job.SchedulerNodeName = a.config.Nodename
+		if err = a.sqlStore.Create(job).Err; err != nil {
 			return nil, count, err
 		}
 		out := make([]interface{}, 1)
 		out[0] = job
+		return out, count, err
+	case ops == pb.Ops_MODIFY:
+		if err = util.VerifyJob(job); err != nil {
+			return nil, count, err
+		}
+
+		var oldJob pb.Job
+		if err = a.sqlStore.Model(&pb.Job{}).Where(&pb.Job{Name: job.Name, Region: job.Region}).Find(&oldJob).Err; err != nil {
+			return nil, count, err
+		}
+		oldJob.Schedule = job.Schedule
+		oldJob.ParentJob = job.ParentJob
+		oldJob.Disable = job.Disable
+		oldJob.Shell = job.Shell
+		oldJob.Expression = job.Expression
+		oldJob.Command = job.Command
+		oldJob.Idempotent = job.Idempotent
+		if err = a.sqlStore.Model(&pb.Job{}).Modify(oldJob).Err; err != nil {
+			return nil, count, err
+		}
+		out := make([]interface{}, 1)
+		out[0] = oldJob
 		return out, count, err
 	case ops == pb.Ops_DELETE:
 		a.scheduler.DeleteJob(job)
@@ -214,4 +251,65 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		return out, count, err
 	}
 	return nil, 0, errors.ErrUnknownOps
+}
+
+func (a *Agent) RunJob(name, region string) (*pb.Execution, error) {
+	in := &pb.Job{Name: name, Region: region}
+	// proxy job run action to the right region
+	if region != a.config.Region {
+		remoteServer, err := a.randomPickServer(region)
+		if err != nil {
+			log.Loger.WithFields(logrus.Fields{
+				"Region": region,
+			}).WithError(err).Error("Agent: can not find server from the region")
+			return nil, err
+		}
+		return a.remoteRunJob(in, remoteServer)
+	}
+
+	res, _, err := a.operationMiddleLayer(in, pb.Ops_READ, nil)
+	if err != nil {
+		return nil, err
+	}
+	var job *pb.Job
+	var ok bool
+	if job, ok = res[0].(*pb.Job); !ok {
+		return nil, errors.ErrNotExpectation
+	}
+
+	// send job run action to job scheduler node
+	if job.SchedulerNodeName != a.config.Nodename {
+		return a.remoteRunJob(job, job.SchedulerNodeName)
+	}
+
+	return a.localRunJob(job)
+}
+
+func (a *Agent) remoteRunJob(job *pb.Job, remoteServer string) (*pb.Execution, error) {
+	rsIp, rsPort, err := a.sendGetRPCConfigQuery(remoteServer)
+	if err != nil {
+		log.Loger.WithFields(logrus.Fields{
+			"Region":   job.Region,
+			"nodeName": remoteServer,
+		}).WithError(err).Error("Agent: RunJob get rpc config filed")
+		return nil, err
+	}
+	rpcClient := a.newRPCClient(rsIp, rsPort)
+	return rpcClient.ProxyJobRun(job.Name, job.Region)
+}
+
+func (a *Agent) localRunJob(job *pb.Job) (*pb.Execution, error) {
+	ex := &pb.Execution{
+		Name:              job.Name,
+		Region:            job.Region,
+		SchedulerNodeName: a.config.Nodename,
+		Group:             time.Now().UnixNano(),
+	}
+	log.Loger.WithFields(logrus.Fields{
+		"name":   ex.Name,
+		"region": ex.Region,
+		"group":  ex.Group,
+	}).Debug("Agent: Ready to perform the execution")
+	go a.sendRunJobQuery(ex, job)
+	return ex, nil
 }

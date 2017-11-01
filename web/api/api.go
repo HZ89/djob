@@ -48,7 +48,7 @@ type ApiController interface {
 	RunJob(name, region string) (*pb.Execution, error)
 	GetStatus(name, region string) (*pb.JobStatus, error)
 	ListExecutions(name, region string, group int64) ([]*pb.Execution, error)
-	Search(interface{}, *pb.Search) ([]interface{}, int32, error)
+	Search(interface{}, *pb.Search) ([]interface{}, int, error)
 }
 
 type KayPair struct {
@@ -237,12 +237,12 @@ func (a *APIServer) search(obj interface{}, search *pb.Search, c *gin.Context) {
 			if t, ok := out.(*pb.Job); ok {
 				resp.Data = append(resp.Data, t)
 			} else {
-				a.respondWithError(http.StatusInternalServerError, &pb.ApiJobResponse{Succeed: false, Message: errors.ErrNotExpection.Error()}, c)
-				log.Loger.WithError(errors.ErrNotExpection).Fatal("API: Search result error")
+				a.respondWithError(http.StatusInternalServerError, &pb.ApiJobResponse{Succeed: false, Message: errors.ErrNotExpectation.Error()}, c)
+				log.Loger.WithError(errors.ErrNotExpectation).Fatal("API: Search result error")
 				return
 			}
 		}
-		resp.MaxPageNum = count
+		resp.MaxPageNum = int32(count)
 		resp.Succeed = true
 		c.Render(http.StatusOK, pbjson{data: &resp})
 	case *pb.Execution:
@@ -251,12 +251,12 @@ func (a *APIServer) search(obj interface{}, search *pb.Search, c *gin.Context) {
 			if t, ok := out.(*pb.Execution); ok {
 				resp.Data = append(resp.Data, t)
 			} else {
-				a.respondWithError(http.StatusInternalServerError, &pb.ApiJobResponse{Succeed: false, Message: errors.ErrNotExpection.Error()}, c)
-				log.Loger.WithError(errors.ErrNotExpection).Fatal("API: Search result error")
+				a.respondWithError(http.StatusInternalServerError, &pb.ApiJobResponse{Succeed: false, Message: errors.ErrNotExpectation.Error()}, c)
+				log.Loger.WithError(errors.ErrNotExpectation).Fatal("API: Search result error")
 				return
 			}
 		}
-		resp.MaxPageNum = count
+		resp.MaxPageNum = int32(count)
 		resp.Succeed = true
 		c.Render(http.StatusOK, pbjson{data: &resp})
 	default:

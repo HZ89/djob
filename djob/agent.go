@@ -29,7 +29,6 @@ import (
 
 	"github.com/Knetic/govaluate"
 	"github.com/Sirupsen/logrus"
-	libstore "github.com/docker/libkv/store"
 	"github.com/gogo/protobuf/proto"
 	"github.com/hashicorp/memberlist"
 	"github.com/hashicorp/serf/serf"
@@ -278,24 +277,23 @@ func (a *Agent) Run() error {
 			for {
 				job := <-a.runJobCh
 				log.Loger.WithFields(logrus.Fields{
-					"JobName":  job.Name,
+					"Name":     job.Name,
 					"Region":   job.Region,
 					"cmd":      job.Command,
 					"Schedule": job.Schedule,
 				}).Debug("Agent: Job ready to run")
-				ex := pb.Execution{
-					SchedulerNodeName: job.SchedulerNodeName,
-					Name:              job.Name,
-					Region:            job.Region,
-					Group:             time.Now().UnixNano(),
-					Retries:           0,
+				ex, err := a.RunJob(job.Name, job.Region)
+				if err != nil {
+					log.Loger.WithFields(logrus.Fields{
+						"Name":   job.Name,
+						"Region": job.Region,
+					}).WithError(err).Error("Agent: Job run failed")
 				}
-				go a.sendRunJobQuery(&ex)
 				log.Loger.WithFields(logrus.Fields{
-					"JobName": ex.Name,
-					"Region":  ex.Region,
-					"Group":   ex.Group,
-				}).Debug("Agent: Job Run serf query has been send")
+					"Name":   ex.Name,
+					"Region": ex.Region,
+					"Group":  ex.Group,
+				}).Debug("Agent: Job has been send to agent")
 			}
 		}()
 
@@ -314,26 +312,7 @@ func (a *Agent) Run() error {
 }
 
 func (a *Agent) loadJobs(region string) {
-	jobs, err := a.store.GetRegionJobs(region)
-	if err != nil && err != libstore.ErrKeyNotFound {
-		log.Loger.WithError(err).Fatal("Agent: Get job list failed")
-	}
-	if len(jobs) == 0 {
-		return
-	}
-	for _, job := range jobs {
-		if !a.store.IsLocked(job, store.OWN) {
-			locker, err := a.store.Lock(job, store.OWN, a.config.Nodename)
-			if err != nil {
-				log.Loger.WithError(err).Fatal("Agent: Lock job failed")
-			}
-			err = a.lockerChain.AddLocker(job.Name, locker)
-			if err != nil {
-				log.Loger.WithError(err).Fatal("Agent: Save locker failed")
-			}
-			a.scheduler.AddJob(job)
-		}
-	}
+
 }
 
 func (a *Agent) Reload(args []string) {
@@ -380,6 +359,8 @@ func (a *Agent) Stop(graceful bool) int {
 				}
 				wg.Done()
 			}()
+			a.memStore.Release()
+			a.sqlStore.Close()
 		}
 		go func() {
 			wg.Add(1)
