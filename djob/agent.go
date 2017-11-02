@@ -312,7 +312,22 @@ func (a *Agent) Run() error {
 }
 
 func (a *Agent) loadJobs(region string) {
-
+	res, _, err := a.operationMiddleLayer(&pb.Job{}, pb.Ops_READ, nil)
+	if err != nil {
+		log.Loger.WithError(err).Fatal("Agent: load job failed")
+	}
+	for _, i := range res {
+		if t, ok := i.(*pb.Job); !ok {
+			if !a.store.IsLocked(t, store.OWN) {
+				_, _, err = a.operationMiddleLayer(t, pb.Ops_ADD, nil)
+				if err != nil {
+					log.Loger.WithError(err).Fatal("Agent: load job, add job failed")
+				}
+			}
+			continue
+		}
+		log.Loger.WithError(errors.ErrNotExpectation).Fatalf("Agent: want job but got %v", i)
+	}
 }
 
 func (a *Agent) Reload(args []string) {
