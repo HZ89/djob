@@ -435,9 +435,9 @@ func (m *MemStore) handleOverdueKey() {
 	go func() {
 		for true {
 			select {
-			case time.After(time.Second):
+			case <-time.After(time.Second):
 				m.releaseOverdueKey()
-			case m.stopCh:
+			case <-m.stopCh:
 				return
 			}
 		}
@@ -544,7 +544,7 @@ func (s *SQLStore) Where(obj interface{}) *SQLStore {
 	switch t := obj.(type) {
 	case *SearchCondition:
 		condition := newSQLCondition(t)
-		n.db = s.db.Where(condition.condition, condition.values...)
+		n.db = s.db.Where(condition.condition, condition.values)
 	default:
 		n.db = s.db.Where(obj)
 	}
