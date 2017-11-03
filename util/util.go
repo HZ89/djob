@@ -28,8 +28,8 @@ import (
 	"unicode"
 
 	"github.com/Knetic/govaluate"
-	"github.com/gogo/protobuf/jsonpb"
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/jsonpb"
+	"github.com/golang/protobuf/proto"
 	"github.com/mattn/go-shellwords"
 
 	"encoding/gob"
@@ -124,6 +124,9 @@ func GetType(obj interface{}) string {
 
 func GetFieldValue(obj interface{}, name string) interface{} {
 	val := reflect.ValueOf(obj)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
 	for i := 0; i < val.NumField(); i++ {
 		if val.Type().Field(i).Name == name {
 			return val.Field(i).Interface()

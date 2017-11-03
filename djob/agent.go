@@ -29,7 +29,7 @@ import (
 
 	"github.com/Knetic/govaluate"
 	"github.com/Sirupsen/logrus"
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/memberlist"
 	"github.com/hashicorp/serf/serf"
 
@@ -312,7 +312,7 @@ func (a *Agent) Run() error {
 }
 
 func (a *Agent) loadJobs(region string) {
-	res, _, err := a.operationMiddleLayer(&pb.Job{}, pb.Ops_READ, nil)
+	res, _, err := a.operationMiddleLayer(&pb.Job{Region: region}, pb.Ops_READ, nil)
 	if err != nil {
 		log.Loger.WithError(err).Fatal("Agent: load job failed")
 	}

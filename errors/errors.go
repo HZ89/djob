@@ -33,7 +33,7 @@ var (
 	ErrCanNotFoundNode   = errors.New("could not found any node can use")
 	ErrSameJob           = errors.New("this job set himself as his parent")
 	ErrNoCmd             = errors.New("a job must have a Command")
-	ErrNoReg             = errors.New("a job must have a region")
+	ErrNoReg             = errors.New("must specify a region")
 	ErrNoExp             = errors.New("a job must have a Expression")
 	ErrScheduleParse     = errors.New("can't parse job schedule")
 	ErrType              = errors.New("type error")

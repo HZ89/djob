@@ -15,16 +15,13 @@ import:
 - package: github.com/gin-contrib/gzip
 - package: github.com/gin-gonic/gin
   version: ~1.2.0
-- package: github.com/gogo/protobuf
-  version: ~0.4.0
-  subpackages:
-  - proto
 - package: github.com/golang/protobuf
   subpackages:
   - jsonpb
   - proto
+  - ptypes
+  - ptypes/any
   - ptypes/empty
-  - ptypes/timestamp
 - package: github.com/hashicorp/memberlist
   version: ~0.1.0
 - package: github.com/hashicorp/serf
@@ -48,12 +45,12 @@ import:
   - leveldb/iterator
   - leveldb/memdb
   - leveldb/util
+- package: github.com/segmentio/ksuid
 - package: github.com/spf13/viper
   version: ~1.0.0
 - package: golang.org/x/net
   subpackages:
   - context
 - package: google.golang.org/grpc
-  version: ~1.5.2
   subpackages:
   - credentials

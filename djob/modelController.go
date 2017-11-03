@@ -34,13 +34,18 @@ import (
 func (a *Agent) operationMiddleLayer(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int, error) {
 	objRegion := util.GetFieldValue(obj, "Region")
 	objName := util.GetFieldValue(obj, "Name")
-	if objRegion == nil || objName == nil {
+	regionString, okr := objRegion.(string)
+	nameString, okn := objName.(string)
+	if !okr && !okn {
 		return nil, 0, errors.ErrType
 	}
+	if regionString == "" {
+		return nil, 0, errors.ErrNoReg
+	}
 
-	if objRegion.(string) == a.config.Region {
+	if regionString == a.config.Region {
 		_, ok := obj.(*pb.Job)
-		if a.lockerChain.HaveIt(objName.(string)) || !ok {
+		if nameString == "" || a.lockerChain.HaveIt(nameString) || !ok {
 			return a.localOps(obj, ops, search)
 		}
 		owner := a.store.WhoLocked(obj, store.OWN)
@@ -53,7 +58,7 @@ func (a *Agent) operationMiddleLayer(obj interface{}, ops pb.Ops, search *pb.Sea
 		}
 		return a.remoteOps(obj, ops, search, owner)
 	}
-	nextHandler, err := a.randomPickServer(objRegion.(string))
+	nextHandler, err := a.randomPickServer(regionString)
 	if err != nil {
 		return nil, 0, err
 	}

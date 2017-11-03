@@ -78,9 +78,9 @@ message Job {
     bool Disable = 8; // if true, job don't run
     // @inject_tag: gorm:"type:varchar(64); not null"
     string SchedulerNodeName = 9; // which node schedule this job
-    // @inject_tag: gorm:"type:bigint(21);not null;primary_key"
-    int64 Id = 10; // UUID of this Job
-    // @inject_tag: gorm:"ForeignKey:Id"
+    // @inject_tag: gorm:"type:varchar(64);not null;primary_key"
+    string Id = 10; // UUID of this Job
+    // @inject_tag: gorm:"type:varchar(64)"
     Job ParentJob = 11;
 }
 
