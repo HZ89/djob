@@ -51,5 +51,4 @@ var (
 	ErrRepetionToken     = errors.New("api token must be unique")
 	ErrNotExpectation    = errors.New("type does not match expectations")
 	ErrIllegalCharacter  = errors.New("'###' is not allow used in key")
-	ErrNoParentJobId     = errors.New("have ParentJob but no Id")
 )
