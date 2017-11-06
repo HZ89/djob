@@ -65,7 +65,7 @@ func RegexpMatch(regEx, url string) bool {
 }
 
 func VerifyJob(job *pb.Job) error {
-	if job.Name == job.ParentJob.Name {
+	if job.Name == job.ParentJobName {
 		return errors.ErrSameJob
 	}
 
@@ -92,7 +92,7 @@ func VerifyJob(job *pb.Job) error {
 		}
 	}
 
-	if job.ParentJob == nil {
+	if job.ParentJobName == "" {
 		if _, err := scheduler.Prepare(job.Schedule); err != nil {
 			return fmt.Errorf("%s: %s", errors.ErrScheduleParse.Error(), err)
 		}

@@ -250,6 +250,13 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		out := make([]interface{}, len(rows))
 
 		for i, row := range rows {
+			if row.ParentJobName != "" {
+				pjob := pb.Job{Name: row.ParentJobName, Region: row.Region}
+				if err = a.sqlStore.Model(&pb.Job{}).Where(&pjob).Find(&pjob).Err; err != nil {
+					return nil, count, err
+				}
+				row.ParentJob = &pjob
+			}
 			out[i] = row
 		}
 
