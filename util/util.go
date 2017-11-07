@@ -20,6 +20,8 @@ package util
 
 import (
 	"bytes"
+	"database/sql"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -28,16 +30,203 @@ import (
 	"unicode"
 
 	"github.com/Knetic/govaluate"
+	"github.com/Sirupsen/logrus"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/mattn/go-shellwords"
 
-	"encoding/gob"
-
 	"version.uuzu.com/zhuhuipeng/djob/errors"
+	"version.uuzu.com/zhuhuipeng/djob/log"
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
 	"version.uuzu.com/zhuhuipeng/djob/scheduler"
 )
+
+/**
+ * Copy field from a struct to another.
+ * if have fieldNames just copy this field, if not copy all same name field
+ */
+func CopyField(toValue, fromValue interface{}, fieldNames ...string) (err error) {
+	var (
+		isSlice      bool
+		amount       = 1
+		from         = Indirect(reflect.ValueOf(fromValue))
+		to           = Indirect(reflect.ValueOf(toValue))
+		fieldNameMap = make(map[string]bool)
+	)
+	for _, v := range fieldNames {
+		fieldNameMap[v] = true
+	}
+
+	if !to.CanAddr() {
+		return errors.ErrCopyToUnaddressable
+	}
+
+	// Return is from value is invalid
+	if !from.IsValid() {
+		return
+	}
+
+	// Just set it if possible to assign
+	if from.Type().AssignableTo(to.Type()) {
+		to.Set(from)
+		return
+	}
+
+	fromType := IndirectType(from.Type())
+	toType := IndirectType(to.Type())
+
+	if fromType.Kind() != reflect.Struct || toType.Kind() != reflect.Struct {
+		return
+	}
+
+	if to.Kind() == reflect.Slice {
+		isSlice = true
+		if from.Kind() == reflect.Slice {
+			amount = from.Len()
+		}
+	}
+
+	for i := 0; i < amount; i++ {
+		var dest, source reflect.Value
+
+		if isSlice {
+			// source
+			if from.Kind() == reflect.Slice {
+				source = Indirect(from.Index(i))
+			} else {
+				source = Indirect(from)
+			}
+
+			// dest
+			dest = Indirect(reflect.New(toType).Elem())
+		} else {
+			source = Indirect(from)
+			dest = Indirect(to)
+		}
+
+		// Copy from field to field or method
+		for _, field := range deepFields(fromType) {
+			name := field.Name
+			if len(fieldNames) != 0 {
+				if _, ok := fieldNameMap[name]; !ok {
+					continue
+				}
+			}
+
+			if fromField := source.FieldByName(name); fromField.IsValid() {
+				// has field
+				if toField := dest.FieldByName(name); toField.IsValid() {
+					if toField.CanSet() {
+						if !set(toField, fromField) {
+							if err := CopyField(toField.Addr().Interface(), fromField.Interface()); err != nil {
+								return err
+							}
+						}
+					}
+				} else {
+					// try to set to method
+					var toMethod reflect.Value
+					if dest.CanAddr() {
+						toMethod = dest.Addr().MethodByName(name)
+					} else {
+						toMethod = dest.MethodByName(name)
+					}
+
+					if toMethod.IsValid() && toMethod.Type().NumIn() == 1 && fromField.Type().AssignableTo(toMethod.Type().In(0)) {
+						toMethod.Call([]reflect.Value{fromField})
+					}
+				}
+			}
+		}
+
+		// Copy from method to field
+		for _, field := range deepFields(toType) {
+			name := field.Name
+
+			var fromMethod reflect.Value
+			if source.CanAddr() {
+				fromMethod = source.Addr().MethodByName(name)
+			} else {
+				fromMethod = source.MethodByName(name)
+			}
+
+			if fromMethod.IsValid() && fromMethod.Type().NumIn() == 0 && fromMethod.Type().NumOut() == 1 {
+				if toField := dest.FieldByName(name); toField.IsValid() && toField.CanSet() {
+					values := fromMethod.Call([]reflect.Value{})
+					if len(values) >= 1 {
+						set(toField, values[0])
+					}
+				}
+			}
+		}
+
+		if isSlice {
+			if dest.Addr().Type().AssignableTo(to.Type().Elem()) {
+				to.Set(reflect.Append(to, dest.Addr()))
+			} else if dest.Type().AssignableTo(to.Type().Elem()) {
+				to.Set(reflect.Append(to, dest))
+			}
+		}
+	}
+	return
+}
+
+func deepFields(reflectType reflect.Type) []reflect.StructField {
+	var fields []reflect.StructField
+
+	if reflectType = IndirectType(reflectType); reflectType.Kind() == reflect.Struct {
+		for i := 0; i < reflectType.NumField(); i++ {
+			v := reflectType.Field(i)
+			if v.Anonymous {
+				fields = append(fields, deepFields(v.Type)...)
+			} else {
+				fields = append(fields, v)
+			}
+		}
+	}
+
+	return fields
+}
+
+func Indirect(reflectValue reflect.Value) reflect.Value {
+	for reflectValue.Kind() == reflect.Ptr {
+		reflectValue = reflectValue.Elem()
+	}
+	return reflectValue
+}
+
+func IndirectType(reflectType reflect.Type) reflect.Type {
+	for reflectType.Kind() == reflect.Ptr || reflectType.Kind() == reflect.Slice {
+		reflectType = reflectType.Elem()
+	}
+	return reflectType
+}
+
+func set(to, from reflect.Value) bool {
+	if from.IsValid() {
+		if to.Kind() == reflect.Ptr {
+			//set `to` to nil if from is nil
+			if from.Kind() == reflect.Ptr && from.IsNil() {
+				to.Set(reflect.Zero(to.Type()))
+				return true
+			} else if to.IsNil() {
+				to.Set(reflect.New(to.Type().Elem()))
+			}
+			to = to.Elem()
+		}
+
+		if from.Type().ConvertibleTo(to.Type()) {
+			to.Set(from.Convert(to.Type()))
+		} else if scanner, ok := to.Addr().Interface().(sql.Scanner); ok {
+			scanner.Scan(from.Interface())
+		} else if from.Kind() == reflect.Ptr {
+			return set(to, from.Elem())
+		} else {
+			return false
+		}
+	}
+	return true
+}
 
 /**
  * Parses url with the given regular expression and returns the
@@ -69,6 +258,19 @@ func VerifyJob(job *pb.Job) error {
 		return errors.ErrSameJob
 	}
 
+	if _, err := scheduler.Prepare(job.Schedule); err != nil {
+		if job.ParentJobName == "" {
+			return fmt.Errorf("%s: %s", errors.ErrScheduleParse.Error(), err)
+		}
+		log.Loger.WithFields(logrus.Fields{
+			"Name":          job.Name,
+			"Region":        job.Region,
+			"Schedule":      job.Schedule,
+			"ParentJobName": job.ParentJobName,
+		}).WithError(err).Warn("Agent: Job schedule no effort")
+		job.Schedule = ""
+	}
+
 	if job.Command == "" {
 		return errors.ErrNoCmd
 	}
@@ -89,12 +291,6 @@ func VerifyJob(job *pb.Job) error {
 		_, err := shellwords.Parse(job.Command)
 		if err != nil {
 			return err
-		}
-	}
-
-	if job.ParentJobName == "" {
-		if _, err := scheduler.Prepare(job.Schedule); err != nil {
-			return fmt.Errorf("%s: %s", errors.ErrScheduleParse.Error(), err)
 		}
 	}
 
@@ -123,10 +319,8 @@ func GetType(obj interface{}) string {
 }
 
 func GetFieldValue(obj interface{}, name string) interface{} {
-	val := reflect.ValueOf(obj)
-	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
+	val := Indirect(reflect.ValueOf(obj))
+
 	for i := 0; i < val.NumField(); i++ {
 		if val.Type().Field(i).Name == name {
 			return val.Field(i).Interface()
@@ -136,7 +330,8 @@ func GetFieldValue(obj interface{}, name string) interface{} {
 }
 
 func GetFieldType(obj interface{}, name string) string {
-	t := reflect.TypeOf(obj)
+	t := IndirectType(reflect.TypeOf(obj))
+
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		if f.Name == name {
@@ -147,15 +342,15 @@ func GetFieldType(obj interface{}, name string) string {
 }
 
 func Intersect(a, b []string) []string {
-	set := make([]string, 0)
+	s := make([]string, 0)
 	//	av := reflect.ValueOf(a)
 	for i := 0; i < len(a); i++ {
 		el := a[i]
 		if Contains(b, el) {
-			set = append(set, el)
+			s = append(s, el)
 		}
 	}
-	return set
+	return s
 }
 
 func Contains(a interface{}, e interface{}) bool {

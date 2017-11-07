@@ -585,19 +585,24 @@ func (s *SQLStore) Find(out interface{}) *SQLStore {
 		return s
 	}
 	n := s.clone()
-	n.Err = s.db.Find(out).Error
+	e := s.db.Find(out).Error
+	if e == gorm.ErrRecordNotFound {
+		n.Err = errors.ErrNotExist
+	} else {
+		n.Err = e
+	}
 	return n
 }
 
 func (s *SQLStore) Create(obj interface{}) *SQLStore {
 	n := s.clone()
-	out := reflect.New(reflect.TypeOf(obj)).Interface()
-	err := s.db.Where(obj).First(out).Error
-	if err != nil {
+	out := reflect.New(util.IndirectType(reflect.TypeOf(obj))).Interface()
+	err := s.db.Where(obj).First(&out).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
 		n.Err = err
 		return n
 	}
-	if out != nil {
+	if &out != nil {
 		n.Err = errors.ErrRepetition
 		return n
 	}
@@ -607,29 +612,33 @@ func (s *SQLStore) Create(obj interface{}) *SQLStore {
 
 func (s *SQLStore) Modify(obj interface{}) *SQLStore {
 	n := s.clone()
-	old := reflect.New(reflect.TypeOf(obj)).Interface()
-	err := s.db.Where(obj).First(old).Error
+	old := reflect.New(util.IndirectType(reflect.TypeOf(obj))).Interface()
+	oldslice := reflect.SliceOf(util.IndirectType(reflect.TypeOf(obj)))
+	// should use primary key build where condition but just Job can be modify, so just copy Name and Region
+	util.CopyField(&old, obj, "Name", "Region")
+	err := s.db.Where(&old).Find(&oldslice).Error
+	if err == gorm.ErrRecordNotFound {
+		n.Err = errors.ErrNotExist
+		return n
+	}
 	if err != nil {
 		n.Err = err
 		return n
 	}
-	if old == nil {
-		n.Err = errors.ErrNotExist
-		return n
-	}
-	n.Err = s.db.Model(old).Updates(obj).Error
+
+	n.Err = s.db.Model(&old).Updates(obj).Error
 	return n
 }
 
 func (s *SQLStore) Delete(obj interface{}) *SQLStore {
 	n := s.clone()
-	out := reflect.New(reflect.TypeOf(obj)).Interface()
-	err := s.db.Where(obj).First(out).Error
+	out := reflect.New(util.IndirectType(reflect.TypeOf(obj))).Interface()
+	err := s.db.Where(obj).First(&out).Error
 	if err != nil {
 		n.Err = err
 		return n
 	}
-	n.Err = s.db.Delete(out).Error
+	n.Err = s.db.Delete(&out).Error
 	if n.Err == nil {
 		obj = out
 	}

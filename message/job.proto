@@ -60,9 +60,9 @@ message Result {
 }
 
 message Job {
-    // @inject_tag: form:"Name" gorm:"type:varchar(64);not null;unique_index:n_g_idx"
+    // @inject_tag: form:"Name" gorm:"type:varchar(64);not null;primary_key"
     string Name = 1; // Job name. Must be unique in one region
-    // @inject_tag: form:"Region" gorm:"type:varchar(64);not null;unique_index:n_g_idx"
+    // @inject_tag: form:"Region" gorm:"type:varchar(64);not null;primary_key"
     string Region = 2; // Job run in this region normally.
     // @inject_tag: gorm:"type:varchar(64)"
     string Schedule = 3;
@@ -82,6 +82,10 @@ message Job {
     string ParentJobName = 10;
     // @inject_tag: gorm:"-"
     Job ParentJob = 11;
+    // @inject_tag: gorm:"type:decimal(3,2);not null;default:'1.00'"
+    double Threshold = 12; // If the success rate of the parent job to achieve this value will trigger the sub-job execution
+    // @inject_tag: gorm:"type:bigint(21);not null;default:'3600'"
+    int32 MaxRunTime = 13;
 }
 
 message JobStatus {

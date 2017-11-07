@@ -166,11 +166,28 @@ func (a *Agent) handleExecutionOps(ex *pb.Execution, ops pb.Ops, search *pb.Sear
 func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]interface{}, int, error) {
 	var err error
 	var count int
+	// ignore user input
+	job.ParentJobName = ""
+
 	switch {
 	case ops == pb.Ops_ADD:
-
 		if err = util.VerifyJob(job); err != nil {
 			return nil, count, err
+		}
+
+		if job.ParentJob != nil {
+			if job.ParentJob.Region != job.Region {
+				return nil, count, errors.ErrParentNotInSameRegion
+			}
+			var parent pb.Job
+			if err = a.sqlStore.Model(&pb.Job{}).Where(job.ParentJob).Find(&parent).Err; err != nil {
+				if err == errors.ErrNotExist {
+					return nil, count, errors.ErrParentNotExist
+				}
+				return nil, count, err
+			}
+			job.ParentJob = &parent
+			job.ParentJobName = job.ParentJob.Name
 		}
 
 		// set own locker on the job
@@ -178,15 +195,19 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		if err != nil {
 			return nil, count, err
 		}
-		a.lockerChain.AddLocker(job.Name, locker)
+		if err = a.lockerChain.AddLocker(job.Name, locker); err != nil {
+			return nil, count, err
+		}
+		job.SchedulerNodeName = a.config.Nodename
+
+		if err = a.sqlStore.Create(job).Err; err != nil {
+			return nil, count, err
+		}
 
 		if err = a.scheduler.AddJob(job); err != nil {
 			return nil, count, err
 		}
-		job.SchedulerNodeName = a.config.Nodename
-		if err = a.sqlStore.Create(job).Err; err != nil {
-			return nil, count, err
-		}
+
 		out := make([]interface{}, 1)
 		out[0] = job
 		return out, count, err
@@ -199,8 +220,21 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		if err = a.sqlStore.Model(&pb.Job{}).Where(&pb.Job{Name: job.Name, Region: job.Region}).Find(&oldJob).Err; err != nil {
 			return nil, count, err
 		}
+		if job.ParentJob != nil {
+			if job.ParentJob.Region != job.Region {
+				return nil, count, errors.ErrParentNotInSameRegion
+			}
+			var parent pb.Job
+			if err = a.sqlStore.Model(&pb.Job{}).Where(job.ParentJob).Find(&parent).Err; err != nil {
+				if err == errors.ErrNotExist {
+					return nil, count, errors.ErrParentNotExist
+				}
+				return nil, count, err
+			}
+			job.ParentJobName = parent.Name
+		}
 		oldJob.Schedule = job.Schedule
-		oldJob.ParentJob = job.ParentJob
+		oldJob.ParentJobName = job.ParentJobName
 		oldJob.Disable = job.Disable
 		oldJob.Shell = job.Shell
 		oldJob.Expression = job.Expression
@@ -213,6 +247,14 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		out[0] = oldJob
 		return out, count, err
 	case ops == pb.Ops_DELETE:
+		var subJobs []*pb.Job
+		if err = a.sqlStore.Model(&pb.Job{}).Where(&pb.Job{ParentJobName: job.Name}).Find(subJobs).Err; err != nil && err != errors.ErrNotExist {
+			return nil, count, err
+		}
+		if len(subJobs) != 0 {
+			return nil, count, errors.ErrHaveSubJob
+		}
+
 		a.scheduler.DeleteJob(job)
 		if err = a.sqlStore.Delete(job).Err; err != nil {
 			return nil, count, err
@@ -256,6 +298,7 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 					return nil, count, err
 				}
 				row.ParentJob = &pjob
+				row.ParentJobName = ""
 			}
 			out[i] = row
 		}

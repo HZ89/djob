@@ -19,11 +19,13 @@
 package djob
 
 import (
+	"math/rand"
 	"os/exec"
 	"time"
 
 	"github.com/armon/circbuf"
 	"github.com/mattn/go-shellwords"
+
 	"version.uuzu.com/zhuhuipeng/djob/log"
 	pb "version.uuzu.com/zhuhuipeng/djob/message"
 )
@@ -31,6 +33,7 @@ import (
 const (
 	maxBufSize = 1048576
 	maxRunTime = 1 * time.Hour
+	maxLayTime = 30
 )
 
 func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
@@ -38,6 +41,9 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 	cmd := buildCmd(job)
 	cmd.Stderr = buf
 	cmd.Stdout = buf
+
+	// Random sleep for a while to prevent excessive concurrency
+	time.Sleep(time.Duration(rand.Intn(maxLayTime)) * time.Second)
 
 	var success bool
 	ex.StartTime = time.Now().UnixNano()
@@ -55,8 +61,15 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 		done <- cmd.Wait()
 	}()
 
+	TimeLimit := maxRunTime
+
+	userDefinedTimeLimit := time.Duration(job.MaxRunTime) * time.Second
+	if userDefinedTimeLimit != 0 && userDefinedTimeLimit < TimeLimit {
+		TimeLimit = userDefinedTimeLimit
+	}
+
 	select {
-	case <-time.After(maxRunTime):
+	case <-time.After(TimeLimit):
 		log.Loger.Warnf("Proc: Job '%s' reach max run time(one hour), will be kill it", job.Name)
 		if err = cmd.Process.Kill(); err != nil {
 			log.Loger.WithError(err).Errorf("Proc: Job '%s' kill failed", job.Name)

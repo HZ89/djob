@@ -102,7 +102,7 @@ func (s *Scheduler) deleteEntryByName(name string) error {
 		delete(s.nameToIndex, name)
 		return nil
 	}
-	return errors.New("Con't find job")
+	return errors.New("con't find job")
 }
 
 /*
