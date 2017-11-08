@@ -29,7 +29,6 @@ import (
 
 	"github.com/Knetic/govaluate"
 	"github.com/Sirupsen/logrus"
-	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/memberlist"
 	"github.com/hashicorp/serf/serf"
 
@@ -272,30 +271,8 @@ func (a *Agent) Run() error {
 		log.Loger.Info("Agent: Load jobs from KV store")
 		a.loadJobs(a.config.Region)
 
-		// wait run job
-		go func() {
-			for {
-				job := <-a.runJobCh
-				log.Loger.WithFields(logrus.Fields{
-					"Name":     job.Name,
-					"Region":   job.Region,
-					"cmd":      job.Command,
-					"Schedule": job.Schedule,
-				}).Debug("Agent: Job ready to run")
-				ex, err := a.RunJob(job.Name, job.Region)
-				if err != nil {
-					log.Loger.WithFields(logrus.Fields{
-						"Name":   job.Name,
-						"Region": job.Region,
-					}).WithError(err).Error("Agent: Job run failed")
-				}
-				log.Loger.WithFields(logrus.Fields{
-					"Name":   ex.Name,
-					"Region": ex.Region,
-					"Group":  ex.Group,
-				}).Debug("Agent: Job has been send to agent")
-			}
-		}()
+		// run job
+		go a.runJob()
 
 		// start api server
 		a.apiServer, err = api.NewAPIServer(a.config.APIBindIP, a.config.APIBindPort, a.config.APITokens,
@@ -305,10 +282,94 @@ func (a *Agent) Run() error {
 			return err
 		}
 		a.apiServer.Run()
+
+		go a.takeOverJob()
 	}
 
 	go a.serfEventLoop()
 	return nil
+}
+
+func (a *Agent) takeOverJob() {
+	for {
+		stopCh := make(chan struct{})
+		watchCh, err := a.store.WatchLock(&pb.Job{Region: a.config.Region}, stopCh)
+		if err == errors.ErrNotExist {
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		if err != nil {
+			log.Loger.WithError(err).Fatal("Agent: try to watch lock path failed")
+		}
+		for {
+			jobName := <-watchCh
+
+			if !a.store.IsLocked(&pb.Job{Name: jobName, Region: a.config.Region}, store.OWN) {
+				res, _, err := a.operationMiddleLayer(&pb.Job{Name: jobName, Region: a.config.Region}, pb.Ops_READ, nil)
+				if err != nil {
+					log.Loger.WithFields(logrus.Fields{
+						"name":   jobName,
+						"region": a.config.Region,
+					}).WithError(err).Fatal("Agent: get job info failed")
+				}
+				job, ok := res[0].(*pb.Job)
+				if !ok {
+					log.Loger.WithFields(logrus.Fields{
+						"name":   jobName,
+						"region": a.config.Region}).Fatalf("Agent: want a Job buf got a %v", res)
+				}
+
+				locker, err := a.store.Lock(job, store.OWN, a.config.Nodename)
+				if err != nil && err != errors.ErrLockTimeout {
+					log.Loger.WithFields(logrus.Fields{
+						"name":   job.Name,
+						"region": job.Region,
+					}).WithError(err).Fatal("Agent: lock job failed")
+				}
+				if locker == nil {
+					continue
+				}
+				err = a.lockerChain.AddLocker(job.Name, locker)
+				if err != nil {
+					log.Loger.WithError(err).Fatal("Agent: add locker to locker-chain failed")
+				}
+
+				err = a.scheduler.AddJob(job)
+				if err != nil {
+					log.Loger.WithFields(logrus.Fields{
+						"name":      job.Name,
+						"region":    job.Region,
+						"scheduler": job.Schedule,
+					}).WithError(err).Fatal("Agent: add job to scheduler failed")
+				}
+
+			}
+		}
+	}
+}
+
+func (a *Agent) runJob() {
+	for {
+		job := <-a.runJobCh
+		log.Loger.WithFields(logrus.Fields{
+			"Name":     job.Name,
+			"Region":   job.Region,
+			"cmd":      job.Command,
+			"Schedule": job.Schedule,
+		}).Debug("Agent: Job ready to run")
+		ex, err := a.RunJob(job.Name, job.Region)
+		if err != nil {
+			log.Loger.WithFields(logrus.Fields{
+				"Name":   job.Name,
+				"Region": job.Region,
+			}).WithError(err).Error("Agent: Job run failed")
+		}
+		log.Loger.WithFields(logrus.Fields{
+			"Name":   ex.Name,
+			"Region": ex.Region,
+			"Group":  ex.Group,
+		}).Debug("Agent: Job has been send to agent")
+	}
 }
 
 func (a *Agent) loadJobs(region string) {
@@ -524,17 +585,4 @@ func (a *Agent) processFilteredNodes(expression string) ([]string, error) {
 		}
 	}
 	return nodeNames, nil
-}
-
-func (a *Agent) genrateResultPb(status int, message string) ([]byte, error) {
-	r := pb.QueryResult{
-		Status:  int32(status),
-		Node:    a.config.Nodename,
-		Message: message,
-	}
-	rpb, err := proto.Marshal(&r)
-	if err != nil {
-		return nil, err
-	}
-	return rpb, nil
 }

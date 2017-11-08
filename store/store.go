@@ -31,7 +31,6 @@ import (
 	"github.com/docker/libkv/store/consul"
 	"github.com/docker/libkv/store/etcd"
 	"github.com/docker/libkv/store/zookeeper"
-	"github.com/golang/protobuf/proto"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 
@@ -171,7 +170,7 @@ func (k *KVStore) buildLockKey(obj interface{}, lockType LockType) (key string, 
 		}).Debug("Store: build lock key failed")
 		return "", errors.ErrType
 	}
-	key = fmt.Sprintf("%s/%s/%s_locks/%s/%s",
+	key = fmt.Sprintf("%s/%s/%s_locks/%s###%s",
 		k.keyspace,
 		util.GenerateSlug(region.(string)),
 		util.GetType(obj),
@@ -180,12 +179,43 @@ func (k *KVStore) buildLockKey(obj interface{}, lockType LockType) (key string, 
 	return
 }
 
+func (k *KVStore) WatchLock(obj interface{}, stopCh chan struct{}) (chan string, error) {
+	stopWatchCh := make(chan struct{})
+	outCh := make(chan string, 7)
+	region := util.GetFieldValue(obj, "Region")
+	watchPath := fmt.Sprintf("%s/%s/%s_locks", k.keyspace, util.GenerateSlug(region.(string)), util.GetType(obj))
+
+	kpCh, err := k.client.WatchTree(watchPath, stopWatchCh)
+	if err == libstore.ErrKeyNotFound {
+		return nil, errors.ErrNotExist
+	}
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		defer close(outCh)
+		for {
+			select {
+			case kps := <-kpCh:
+				for _, kp := range kps {
+					v := strings.Split(kp.Key, "###")
+					outCh <- v[0]
+				}
+			case <-stopCh:
+				stopWatchCh <- struct{}{}
+				return
+			}
+		}
+	}()
+	return outCh, nil
+}
+
 func (k *KVStore) IsLocked(obj interface{}, lockType LockType) (r bool) {
 	v := k.WhoLocked(obj, lockType)
 	if v != "" {
-		r = true
+		return true
 	}
-	return
+	return false
 }
 
 func (k *KVStore) WhoLocked(obj interface{}, lockType LockType) (v string) {
@@ -257,33 +287,6 @@ func (k *KVStore) buildKey(obj interface{}) string {
 	default:
 		return ""
 	}
-}
-
-func (k *KVStore) Watch(obj interface{}, resCh chan interface{}) (stopCh chan struct{}, err error) {
-	v, ok := obj.(proto.Message)
-	if !ok {
-		return nil, errors.ErrArgs
-	}
-	stopCh = make(chan struct{})
-	stopWatchCh := make(chan struct{})
-	kpCh, err := k.client.Watch(k.buildKey(v), stopWatchCh)
-	if err != nil {
-		return nil, err
-	}
-	go func() {
-		select {
-		case kp := <-kpCh:
-			err = util.JsonToPb(kp.Value, v)
-			if err != nil {
-				return
-			}
-			resCh <- v
-		case <-stopCh:
-			stopWatchCh <- struct{}{}
-			return
-		}
-	}()
-	return
 }
 
 func (k *KVStore) untilUnlock(obj interface{}, timeout time.Duration) bool {
