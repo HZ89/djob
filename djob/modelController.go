@@ -132,15 +132,15 @@ func (a *Agent) handleExecutionOps(ex *pb.Execution, ops pb.Ops, search *pb.Sear
 				return nil, count, err
 			}
 			if search.Count {
-				err = a.sqlStore.Model(&pb.Execution{}).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(rows).PageCount(count).Err
+				err = a.sqlStore.Model(&pb.Execution{}).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(&rows).PageCount(count).Err
 			} else {
-				err = a.sqlStore.Model(&pb.Execution{}).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(rows).Err
+				err = a.sqlStore.Model(&pb.Execution{}).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(&rows).Err
 			}
 			if err != nil {
 				return nil, count, err
 			}
 		} else {
-			err = a.sqlStore.Model(&pb.Execution{}).Where(ex).Find(rows).Err
+			err = a.sqlStore.Model(&pb.Execution{}).Where(ex).Find(&rows).Err
 			if err != nil {
 				return nil, count, err
 			}
@@ -248,7 +248,7 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		return out, count, err
 	case ops == pb.Ops_DELETE:
 		var subJobs []*pb.Job
-		if err = a.sqlStore.Model(&pb.Job{}).Where(&pb.Job{ParentJobName: job.Name}).Find(subJobs).Err; err != nil && err != errors.ErrNotExist {
+		if err = a.sqlStore.Model(&pb.Job{}).Where(&pb.Job{ParentJobName: job.Name}).Find(&subJobs).Err; err != nil && err != errors.ErrNotExist {
 			return nil, count, err
 		}
 		if len(subJobs) != 0 {
@@ -275,15 +275,15 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 				return nil, count, err
 			}
 			if search.Count {
-				err = a.sqlStore.Model(&pb.Job{}).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(rows).PageCount(count).Err
+				err = a.sqlStore.Model(&pb.Job{}).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(&rows).PageCount(count).Err
 			} else {
-				err = a.sqlStore.Model(&pb.Job{}).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(rows).Err
+				err = a.sqlStore.Model(&pb.Job{}).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(&rows).Err
 			}
 			if err != nil {
 				return nil, count, err
 			}
 		} else {
-			err = a.sqlStore.Model(&pb.Job{}).Where(job).Find(rows).Err
+			err = a.sqlStore.Model(&pb.Job{}).Where(job).Find(&rows).Err
 			if err != nil {
 				return nil, count, err
 			}
