@@ -44,17 +44,18 @@ func (a *Agent) operationMiddleLayer(obj interface{}, ops pb.Ops, search *pb.Sea
 	}
 
 	if regionString == a.config.Region {
-		_, ok := obj.(*pb.Job)
-		if nameString == "" || a.lockerChain.HaveIt(nameString) || !ok {
+		job, ok := obj.(*pb.Job)
+		if nameString == "" || a.lockerChain.HaveIt(job, store.OWN) || !ok {
 			return a.localOps(obj, ops, search)
 		}
-		owner := a.store.WhoLocked(obj, store.OWN)
+		owner := a.store.WhoLocked(job, store.OWN)
 		if owner == "" {
 			var err error
 			owner, err = a.minimalLoadServer(a.config.Region)
 			if err != nil {
 				return nil, 0, err
 			}
+			job.SchedulerNodeName = owner
 		}
 		return a.remoteOps(obj, ops, search, owner)
 	}
@@ -191,13 +192,12 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		}
 
 		// set own locker on the job
-		locker, err := a.store.Lock(job, store.OWN, a.config.Nodename)
-		if err != nil {
-			return nil, count, err
+		if !a.lockerChain.HaveIt(job, store.OWN) {
+			if err = a.lockerChain.AddLocker(job.Name, store.OWN); err != nil {
+				return nil, count, err
+			}
 		}
-		if err = a.lockerChain.AddLocker(job.Name, locker); err != nil {
-			return nil, count, err
-		}
+
 		job.SchedulerNodeName = a.config.Nodename
 
 		if err = a.sqlStore.Create(job).Err; err != nil {

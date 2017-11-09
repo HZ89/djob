@@ -57,11 +57,9 @@ func (a *Agent) SendBackExecution(ex *pb.Execution) (err error) {
 		Region: ex.Region,
 	}
 
-	statusLocker, err := a.store.Lock(status, store.W, a.config.Nodename)
-	if err != nil {
+	if err = a.lockerChain.AddLocker(status, store.W); err != nil {
 		return err
 	}
-	defer statusLocker.Unlock()
 
 	out, _, err := a.operationMiddleLayer(status, pb.Ops_READ, nil)
 	if err != nil && err != errors.ErrNotExist {
@@ -100,6 +98,10 @@ func (a *Agent) SendBackExecution(ex *pb.Execution) (err error) {
 		}).Error("RPC: set JobStatus to kv store failed")
 		return
 	}
+	if err = a.lockerChain.ReleaseLocker(status, store.W); err != nil {
+		log.Loger.WithError(err).Warn("RPC: client releaseLocker failed")
+		return err
+	}
 
 	return nil
 }
@@ -135,5 +137,18 @@ func (a *Agent) GetJob(name, region string) (*pb.Job, error) {
 
 // forwarding ops to remote or perform it in local
 func (a *Agent) PerformOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int, error) {
+	log.Loger.Debugf("RPC: Server got a %v, ops: %s, search: %v", obj, ops, search)
+	if job, ok := obj.(*pb.Job); ok {
+		if job.Region == a.config.Region {
+			if job.SchedulerNodeName == a.config.Nodename {
+				if !a.store.IsLocked(job, store.OWN) {
+					if err := a.lockerChain.AddLocker(job, store.OWN); err != nil {
+						return nil, 0, err
+					}
+					log.Loger.WithField("Obj", obj).Debug("RPC: Server lock done")
+				}
+			}
+		}
+	}
 	return a.operationMiddleLayer(obj, ops, search)
 }

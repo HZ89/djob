@@ -252,6 +252,10 @@ func (a *Agent) Run() error {
 			log.Loger.WithError(err).Error("Agent: Connent Backend Failed")
 			return err
 		}
+
+		// init a lockerChain
+		a.lockerChain = store.NewLockerChain(a.config.Nodename, a.store)
+
 		// run rpc server
 		log.Loger.WithFields(logrus.Fields{
 			"BindIp":   a.config.RPCBindIP,
@@ -268,7 +272,7 @@ func (a *Agent) Run() error {
 		a.scheduler.Start()
 
 		// try to load job
-		log.Loger.Info("Agent: Load jobs from KV store")
+		log.Loger.Info("Agent: Load jobs")
 		a.loadJobs(a.config.Region)
 
 		// run job
@@ -282,8 +286,13 @@ func (a *Agent) Run() error {
 			return err
 		}
 		a.apiServer.Run()
+		log.Loger.WithFields(logrus.Fields{
+			"Ip":     a.config.APIBindIP,
+			"Port":   a.config.APIBindPort,
+			"Tokens": a.config.APITokens,
+		}).Debug("Agent: API Server has been started")
 
-		go a.takeOverJob()
+		//		go a.takeOverJob()
 	}
 
 	go a.serfEventLoop()
@@ -291,10 +300,11 @@ func (a *Agent) Run() error {
 }
 
 func (a *Agent) takeOverJob() {
+	stopCh := make(chan struct{})
 	for {
-		stopCh := make(chan struct{})
 		watchCh, err := a.store.WatchLock(&pb.Job{Region: a.config.Region}, stopCh)
 		if err == errors.ErrNotExist {
+			//			log.Loger.Debug("Agent: job lock path do not exist, sleep 5s retry")
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -319,19 +329,15 @@ func (a *Agent) takeOverJob() {
 						"region": a.config.Region}).Fatalf("Agent: want a Job buf got a %v", res)
 				}
 
-				locker, err := a.store.Lock(job, store.OWN, a.config.Nodename)
-				if err != nil && err != errors.ErrLockTimeout {
+				err = a.lockerChain.AddLocker(job, store.OWN)
+				if err == errors.ErrLockTimeout {
+					continue
+				}
+				if err != nil {
 					log.Loger.WithFields(logrus.Fields{
 						"name":   job.Name,
 						"region": job.Region,
 					}).WithError(err).Fatal("Agent: lock job failed")
-				}
-				if locker == nil {
-					continue
-				}
-				err = a.lockerChain.AddLocker(job.Name, locker)
-				if err != nil {
-					log.Loger.WithError(err).Fatal("Agent: add locker to locker-chain failed")
 				}
 
 				err = a.scheduler.AddJob(job)
@@ -482,12 +488,11 @@ func New(args []string, version string) *Agent {
 		log.Loger.WithError(err).Fatal("Agent:init failed")
 	}
 	return &Agent{
-		lockerChain: store.NewLockerChain(),
-		eventCh:     make(chan serf.Event, 64),
-		runJobCh:    make(chan *pb.Job),
-		memStore:    store.NewMemStore(),
-		config:      config,
-		version:     version,
+		eventCh:  make(chan serf.Event, 64),
+		runJobCh: make(chan *pb.Job),
+		memStore: store.NewMemStore(),
+		config:   config,
+		version:  version,
 	}
 
 }

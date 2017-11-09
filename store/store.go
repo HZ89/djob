@@ -53,6 +53,7 @@ const (
 	waitTimeOut       = 50 * time.Millisecond
 	defaultPageSize   = 10
 	separator         = "###"
+	lockTTL           = 1 * time.Minute
 )
 
 type LockType int
@@ -75,60 +76,112 @@ func (lt LockType) String() string {
 
 // TODO: use sync.Map replace map
 type LockerChain struct {
-	chain map[string]libstore.Locker
-	mutex *sync.Mutex
+	lockerOwner string
+	chain       sync.Map
+	lockStore   *KVStore
 }
 
-func NewLockerChain() *LockerChain {
-	return &LockerChain{
-		chain: make(map[string]libstore.Locker),
-		mutex: &sync.Mutex{},
+type objKey struct {
+	locker   libstore.Locker
+	renewCh  chan struct{}
+	bornTime time.Time
+}
+
+func NewLockerChain(owner string, store *KVStore) *LockerChain {
+	chain := &LockerChain{
+		chain:       sync.Map{},
+		lockerOwner: owner,
+		lockStore:   store,
+	}
+	go chain.lockRenew()
+	return chain
+}
+
+func (l *LockerChain) lockRenew() {
+	for {
+		now := time.Now()
+		l.chain.Range(func(_, value interface{}) bool {
+			t, ok := value.(*objKey)
+			if !ok {
+				return false
+			}
+			if now.Sub(t.bornTime) < lockTTL*0.8 {
+				t.renewCh <- struct{}{}
+			}
+			return true
+		})
 	}
 }
 
-func (l *LockerChain) HaveIt(name string) bool {
-	_, exist := l.chain[name]
+func (l *LockerChain) HaveIt(obj interface{}, lockType LockType) bool {
+	lockpath, _ := l.lockStore.buildLockKey(obj, lockType)
+	_, exist := l.chain.Load(lockpath)
 	return exist
 }
 
-func (l *LockerChain) GetLocker(name string) (libstore.Locker, error) {
-	if l.HaveIt(name) {
-		return l.chain[name], nil
-	}
-	return nil, errors.ErrNotExist
-}
+func (l *LockerChain) AddLocker(obj interface{}, lockType LockType) error {
 
-func (l *LockerChain) AddLocker(name string, locker libstore.Locker) error {
-	if l.HaveIt(name) {
+	if l.HaveIt(obj, lockType) {
 		return errors.ErrRepetition
 	}
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-	l.chain[name] = locker
+
+	renewCh := make(chan struct{})
+	lockOpt := &libstore.LockOptions{
+		Value:     []byte(l.lockerOwner),
+		TTL:       lockTTL,
+		RenewLock: renewCh,
+	}
+	lockpath, err := l.lockStore.buildLockKey(obj, lockType)
+	if err != nil {
+		return err
+	}
+	locker, err := l.lockStore.lock(obj, lockType, lockOpt)
+	if err != nil {
+		return err
+	}
+	objlock := &objKey{
+		renewCh:  renewCh,
+		locker:   locker,
+		bornTime: time.Now(),
+	}
+	l.chain.Store(lockpath, objlock)
 	return nil
 }
 
-func (l *LockerChain) ReleaseLocker(name string) error {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-	locker, exist := l.chain[name]
-	if exist {
-		if err := locker.Unlock(); err != nil {
-			return err
-		}
-		delete(l.chain, name)
-		return nil
+func (l *LockerChain) ReleaseLocker(obj interface{}, lockType LockType) error {
+
+	if !l.HaveIt(obj, lockType) {
+		return errors.ErrNotExist
 	}
-	return errors.ErrNotExist
+	lockpath, err := l.lockStore.buildLockKey(obj, lockType)
+	if err != nil {
+		return err
+	}
+	v, ok := l.chain.Load(lockpath)
+	if !ok {
+		return errors.ErrNotExist
+	}
+	t, ok := v.(*objKey)
+	if !ok {
+		log.Loger.Fatalf("Store: lockerChain got a unknown type: %v", v)
+	}
+	if err = t.locker.Unlock(); err != nil {
+		return err
+	}
+	l.chain.Delete(lockpath)
+	return nil
 }
 
 func (l *LockerChain) ReleaseAll() {
-	for name := range l.chain {
-		err := l.ReleaseLocker(name)
-		if err != nil {
-			log.Loger.Warn(err)
+	l.chain.Range(func(key, v interface{}) bool {
+		t, ok := v.(*objKey)
+		if !ok {
+			log.Loger.Fatalf("Store: lockerChain got a unknown type: %v", v)
 		}
-	}
+		t.locker.Unlock()
+		l.chain.Delete(key)
+		return true
+	})
 }
 
 type KVStore struct {
@@ -234,12 +287,9 @@ func (k *KVStore) WhoLocked(obj interface{}, lockType LockType) (v string) {
 	return
 }
 
-func (k *KVStore) Lock(obj interface{}, lockType LockType, v string) (locker libstore.Locker, err error) {
+func (k *KVStore) lock(obj interface{}, lockType LockType, lockOpt *libstore.LockOptions) (locker libstore.Locker, err error) {
 	var key string
-	var lockOpt = &libstore.LockOptions{}
-	if v != "" {
-		lockOpt.Value = []byte(v)
-	}
+
 	key, err = k.buildLockKey(obj, lockType)
 	if err != nil {
 		return

@@ -22,12 +22,14 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"strings"
 	"time"
 
 	google_protobuf "github.com/golang/protobuf/ptypes/empty"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"version.uuzu.com/zhuhuipeng/djob/log"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
@@ -39,9 +41,9 @@ import (
 var registry = make(map[string]reflect.Type)
 
 func init() {
-	registry["Job"] = reflect.TypeOf(&pb.Job{})
-	registry["Execution"] = reflect.TypeOf(&pb.Execution{})
-	registry["JobStatus"] = reflect.TypeOf(&pb.JobStatus{})
+	registry["message.Job"] = reflect.TypeOf(pb.Job{})
+	registry["message.Execution"] = reflect.TypeOf(pb.Execution{})
+	registry["message.JobStatus"] = reflect.TypeOf(pb.JobStatus{})
 }
 
 type Operator interface {
@@ -99,12 +101,14 @@ func (s *RpcServer) ExecDone(ctx context.Context, execution *pb.Execution) (*goo
 }
 
 func (s *RpcServer) DoOps(ctx context.Context, p *pb.Params) (*pb.Result, error) {
-	class := p.Obj.TypeUrl
+	class := strings.Split(p.Obj.TypeUrl, "/")[1]
+	log.Loger.WithField("type", class).Debug("RPC: Server got a class")
 	t, ok := registry[class]
 	if !ok {
 		return nil, errors.ErrType
 	}
 	instance := reflect.New(t).Interface()
+	log.Loger.WithField("instance_type", reflect.TypeOf(instance)).Debug("RPC: Server prepare use instance decode obj")
 	if err := ptypes.UnmarshalAny(p.Obj, instance.(proto.Message)); err != nil {
 		return nil, err
 	}
@@ -272,10 +276,12 @@ func (c *RpcClient) DoOps(obj interface{}, ops pb.Ops, search *pb.Search) (insta
 	if err != nil {
 		return nil, 0, err
 	}
+	log.Loger.WithField("Any Obj", pbObj).Debugf("RPC: client prepare DoOps rpc call, Obj: %v", pbObj)
 	r, err := c.client.DoOps(context.Background(), &pb.Params{Obj: pbObj, Ops: ops, Search: search})
 	if err != nil {
 		return nil, 0, err
 	}
+	log.Loger.Debug("RPC: RPC client call DoOps done")
 	count = int(r.MaxPageNum)
 	for _, o := range r.Objs {
 		t, ok := registry[o.TypeUrl]
