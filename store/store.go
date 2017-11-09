@@ -100,11 +100,17 @@ func NewLockerChain(owner string, store *KVStore) *LockerChain {
 func (l *LockerChain) lockRenew() {
 	for {
 		now := time.Now()
-		l.chain.Range(func(_, value interface{}) bool {
+		l.chain.Range(func(key, value interface{}) bool {
 			t, ok := value.(*objKey)
 			if !ok {
 				return false
 			}
+			// remove expired lock
+			if now.After(t.bornTime.Add(lockTTL)) {
+				l.chain.Delete(key)
+				return true
+			}
+			// if surplus ttl less than lockTTL * 0.8, renew it
 			if now.Sub(t.bornTime) < lockTTL*0.8 {
 				t.renewCh <- struct{}{}
 			}
