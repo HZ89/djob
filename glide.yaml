@@ -1,20 +1,19 @@
 package: version.uuzu.com/zhuhuipeng/djob
 import:
-- package: github.com/Knetic/govaluate
-  version: ~3.0.0
-- package: github.com/Sirupsen/logrus
-  version: ~1.0.3
-- package: github.com/armon/circbuf
-- package: github.com/docker/libkv
-  version: ~0.2.1
+- package: github.com/HZ89/libkv
   subpackages:
   - store
   - store/consul
   - store/etcd
   - store/zookeeper
+- package: github.com/Knetic/govaluate
+  version: ^3.0.0
+- package: github.com/Sirupsen/logrus
+  version: ^1.0.3
+- package: github.com/armon/circbuf
 - package: github.com/gin-contrib/gzip
 - package: github.com/gin-gonic/gin
-  version: ~1.2.0
+  version: ^1.2.0
 - package: github.com/golang/protobuf
   subpackages:
   - jsonpb
@@ -23,20 +22,20 @@ import:
   - ptypes/any
   - ptypes/empty
 - package: github.com/hashicorp/memberlist
-  version: ~0.1.0
+  version: ^0.1.0
 - package: github.com/hashicorp/serf
-  version: ~0.8.1
+  version: ^0.8.1
   subpackages:
   - serf
 - package: github.com/jinzhu/gorm
-  version: ~1.0.0
+  version: ^1.0.0
   subpackages:
   - dialects/mysql
 - package: github.com/juju/errors
 - package: github.com/lestrrat/go-file-rotatelogs
-  version: ~2.1.0
+  version: ^2.1.0
 - package: github.com/mattn/go-shellwords
-  version: ~1.0.3
+  version: ^1.0.3
 - package: github.com/mitchellh/cli
 - package: github.com/pingcap/goleveldb
   subpackages:
@@ -45,12 +44,12 @@ import:
   - leveldb/iterator
   - leveldb/memdb
   - leveldb/util
-- package: github.com/segmentio/ksuid
 - package: github.com/spf13/viper
-  version: ~1.0.0
+  version: ^1.0.0
 - package: golang.org/x/net
   subpackages:
   - context
 - package: google.golang.org/grpc
+  version: ^1.7.2
   subpackages:
   - credentials

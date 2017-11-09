@@ -1,5 +1,5 @@
-hash: 7b6abeedbe0844489ea6e1a4fdc06b40fc7d4634fa52ab3ffa35977d2461d080
-updated: 2017-11-02T18:18:16.086599708+08:00
+hash: 6aa741e310fcb42fee9db11fa6e5072617bd0f883d17dc7d77ffde3d9ce6cd39
+updated: 2017-11-08T16:53:18.69683426+08:00
 imports:
 - name: github.com/armon/circbuf
   version: bbbad097214e2918d8543d5201d12bfd7bca254d
@@ -10,7 +10,7 @@ imports:
 - name: github.com/bgentry/speakeasy
   version: 4aabc24848ce5fd31929f7d1e4ea74d3709c14cd
 - name: github.com/coreos/etcd
-  version: 3ac54be402ffe4e6df505814456d4931508aaf21
+  version: 47728b8caf91cb7b3e1aca2b7fa49cd5c7a94952
   subpackages:
   - client
   - pkg/pathutil
@@ -21,13 +21,6 @@ imports:
   version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
   subpackages:
   - semver
-- name: github.com/docker/libkv
-  version: aabc039ad04deb721e234f99cd1b4aa28ac71a40
-  subpackages:
-  - store
-  - store/consul
-  - store/etcd
-  - store/zookeeper
 - name: github.com/fsnotify/fsnotify
   version: 4da3e2cfbabc9f751898f250b49f2439785783a1
 - name: github.com/gin-contrib/gzip
@@ -42,7 +35,7 @@ imports:
 - name: github.com/go-sql-driver/mysql
   version: fade21009797158e7b79e04c340118a9220c6f9e
 - name: github.com/golang/protobuf
-  version: 1643683e1b54a9e88ad26d98f81400c8c9d9f4f9
+  version: 6a1fa9404c0aebf36c879bc50152edcc953910d2
   subpackages:
   - jsonpb
   - proto
@@ -55,7 +48,7 @@ imports:
 - name: github.com/golang/snappy
   version: 553a641470496b2327abcac10b36396bd98e45c9
 - name: github.com/hashicorp/consul
-  version: df5e3fb18aa7f0103c23e1be6391185b7735d611
+  version: b77c7a1c19a825e76eaa41a3a9e1225273781dd5
   subpackages:
   - api
 - name: github.com/hashicorp/errwrap
@@ -96,6 +89,13 @@ imports:
   subpackages:
   - coordinate
   - serf
+- name: github.com/HZ89/libkv
+  version: e8457a8751a7dad90db9b07dad55dfc4c32a7190
+  subpackages:
+  - store
+  - store/consul
+  - store/etcd
+  - store/zookeeper
 - name: github.com/jinzhu/gorm
   version: 5174cc5c242a728b435ea2be8a2f7f998e15429b
   subpackages:
@@ -113,11 +113,11 @@ imports:
 - name: github.com/magiconair/properties
   version: 49d762b9817ba1c2e9d0c69183c2b4a8b8f1d934
 - name: github.com/mattn/go-isatty
-  version: a5cdd64afdee435007ee3e9f6ed4684af949d568
+  version: 6ca4dbf54d38eea1a992b3c722a76a5d1c4cb25c
 - name: github.com/mattn/go-shellwords
   version: 02e3cf038dcea8290e44424da473dd12be796a8a
 - name: github.com/miekg/dns
-  version: a5852667e3c36e2e0b0a69ab43869e00e95aacdf
+  version: 813f928d53438922af6fe5636b4fc31aab85010c
   subpackages:
   - internal/socket
 - name: github.com/mitchellh/cli
@@ -146,7 +146,7 @@ imports:
 - name: github.com/pkg/errors
   version: f15c970de5b76fac0b59abb32d62c17cc7bed265
 - name: github.com/posener/complete
-  version: 88e59760adaddb8276c9b15511302890690e2dae
+  version: dc2bc5a81accba8782bebea28628224643a8286a
   subpackages:
   - cmd
   - cmd/install
@@ -157,8 +157,6 @@ imports:
   - zk
 - name: github.com/sean-/seed
   version: e2103e2c35297fb7e17febb81e49b312087a2372
-- name: github.com/segmentio/ksuid
-  version: 9cb615b023d376fe5590ade4f92e11a9482b69cb
 - name: github.com/Sirupsen/logrus
   version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
 - name: github.com/spf13/afero
@@ -170,7 +168,7 @@ imports:
 - name: github.com/spf13/jwalterweatherman
   version: 12bd96e66386c1960ab0f74ced1362f66f552f7b
 - name: github.com/spf13/pflag
-  version: 97afa5e7ca8a08a383cb259e06636b5e2cc7897f
+  version: e57e3eeb33f795204c1ca35f56c44f83227c6e66
 - name: github.com/spf13/viper
   version: 25b30aa063fc18e48662b86996252eabdcf2f0c7
 - name: github.com/ugorji/go
@@ -178,11 +176,11 @@ imports:
   subpackages:
   - codec
 - name: golang.org/x/crypto
-  version: bd6f299fb381e4c3393d1c4b1f0b94f5e77650c8
+  version: 687d4b818545e443c8ba223cbef20b1721afd4db
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: ea0da6f35caf3ff91581c800469e22eef75076f4
+  version: a337091b0525af65de94df2eb7e98bd9962dcbe2
   subpackages:
   - context
   - http2
@@ -192,7 +190,7 @@ imports:
   - lex/httplex
   - trace
 - name: golang.org/x/sys
-  version: 95c6576299259db960f6c5b9b69ea52422860fce
+  version: 75813c647272dd855bda156405bf844a5414f5bf
   subpackages:
   - unix
   - windows
@@ -204,18 +202,16 @@ imports:
   - unicode/bidi
   - unicode/norm
 - name: google.golang.org/genproto
-  version: 03951f3b52582ecab79e5a37a86b5a20c5f64df7
+  version: 11c7f9e547da6db876260ce49ea7536985904c9b
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
-  version: 08a45354194cd00490a5d926825670fb928b5f76
+  version: 5ffe3083946d5603a0578721101dc8165b1d5b5f
   subpackages:
   - balancer
-  - balancer/roundrobin
   - codes
   - connectivity
   - credentials
-  - encoding
   - grpclb/grpc_lb_v1/messages
   - grpclog
   - internal
@@ -224,8 +220,6 @@ imports:
   - naming
   - peer
   - resolver
-  - resolver/dns
-  - resolver/passthrough
   - stats
   - status
   - tap

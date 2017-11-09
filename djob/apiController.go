@@ -29,7 +29,7 @@ import (
 )
 
 func (a *Agent) ListRegions() (regions []string, err error) {
-	err = a.memStore.Get("regions_cache", regions)
+	err = a.memStore.Get("regions_cache", &regions)
 	if err != nil && err != errors.ErrNotExist {
 		return
 	}

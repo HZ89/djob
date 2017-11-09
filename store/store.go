@@ -25,12 +25,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/HZ89/libkv"
+	libstore "github.com/HZ89/libkv/store"
+	"github.com/HZ89/libkv/store/consul"
+	"github.com/HZ89/libkv/store/etcd"
+	"github.com/HZ89/libkv/store/zookeeper"
 	"github.com/Sirupsen/logrus"
-	"github.com/docker/libkv"
-	libstore "github.com/docker/libkv/store"
-	"github.com/docker/libkv/store/consul"
-	"github.com/docker/libkv/store/etcd"
-	"github.com/docker/libkv/store/zookeeper"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 
@@ -197,6 +197,10 @@ func (k *KVStore) WatchLock(obj interface{}, stopCh chan struct{}) (chan string,
 		for {
 			select {
 			case kps := <-kpCh:
+				if len(kps) == 0 {
+					continue
+				}
+				log.Loger.Debugf("Store: watch from %s got %v", watchPath, kps)
 				for _, kp := range kps {
 					v := strings.Split(kp.Key, "###")
 					outCh <- v[0]
@@ -421,17 +425,24 @@ func (m *MemStore) Get(key string, out interface{}) (err error) {
 	return errors.ErrNotExist
 }
 
-func (m *MemStore) getEntry(key Key) (e *entry, err error) {
-	var v []byte
+func (m *MemStore) getEntry(key Key) (*entry, error) {
+	var (
+		v   []byte
+		err error
+		e   entry
+	)
 	v, err = m.memBuf.Get(key)
-	if err != nil {
-		return
-	}
-	err = util.GetInterface(v, e)
 	if err != nil {
 		return nil, err
 	}
-	return
+	if len(v) == 0 {
+		return nil, errors.ErrNotExist
+	}
+	err = util.GetInterface(v, &e)
+	if err != nil {
+		return nil, err
+	}
+	return &e, nil
 }
 
 func (m *MemStore) handleOverdueKey() {
@@ -458,11 +469,22 @@ func (m *MemStore) releaseOverdueKey() {
 		key := iter.Key()
 		var e *entry
 		e, err = m.getEntry(key)
-		if err != nil {
-			log.Loger.Fatalf("Store: memBuf Seek get key filed: %v", err)
+		if err != nil && err != errors.ErrNotExist {
+			log.Loger.WithError(err).Fatalf("Store: memBuf Seek get key filed: key: %s, value: %v", string(key), e)
 		}
-		if m.isOverdue(e, now) {
-			m.memBuf.Delete(key)
+
+		if e != nil {
+			log.Loger.WithFields(logrus.Fields{
+				"key":       string(key),
+				"deadTime":  e.DeadTime.String(),
+				"isOverdue": m.isOverdue(e, now),
+			}).Debug("Store: seek a key")
+		}
+
+		if e != nil && m.isOverdue(e, now) {
+			if err = m.memBuf.Delete(key); err != nil {
+				log.Loger.WithField("key", string(key)).WithError(err).Fatal("Store: purge overdue key failed")
+			}
 		}
 	}
 }
@@ -471,7 +493,7 @@ func (m *MemStore) isOverdue(e *entry, now time.Time) bool {
 	if e.DeadTime.IsZero() {
 		return false
 	}
-	return e.DeadTime.After(now)
+	return e.DeadTime.Before(now)
 }
 
 func (m *MemStore) buildKey(name string, ttl time.Duration) (Key, error) {
