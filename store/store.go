@@ -49,11 +49,10 @@ func init() {
 const (
 	sqlMaxOpenConnect = 100
 	sqlMaxIdleConnect = 20
-	LockTimeOut       = 2 * time.Second
-	waitTimeOut       = 50 * time.Millisecond
+	LockTimeOut       = 60 * time.Second
 	defaultPageSize   = 10
 	separator         = "###"
-	lockTTL           = 1 * time.Minute
+	lockTTL           = 60
 )
 
 type LockType int
@@ -93,30 +92,38 @@ func NewLockerChain(owner string, store *KVStore) *LockerChain {
 		lockerOwner: owner,
 		lockStore:   store,
 	}
-	go chain.lockRenew()
 	return chain
 }
 
-func (l *LockerChain) lockRenew() {
-	for {
-		now := time.Now()
-		l.chain.Range(func(key, value interface{}) bool {
-			t, ok := value.(*objKey)
-			if !ok {
-				return false
-			}
-			// remove expired lock
-			if now.After(t.bornTime.Add(lockTTL)) {
-				l.chain.Delete(key)
+func (l *LockerChain) LockRenew() {
+	go func() {
+		log.Loger.Debug("Store-Lock: renew start")
+		for {
+			now := time.Now()
+			l.chain.Range(func(key, value interface{}) bool {
+
+				t, ok := value.(*objKey)
+				if !ok {
+					return false
+				}
+				// remove expired lock
+				// TODO: Need to throw out the key expired
+				if now.After(t.bornTime.Add(lockTTL * time.Second)) {
+					log.Loger.WithField("key", key).Warningf("Store-Lock: found a expired lock remove it")
+					l.chain.Delete(key)
+					return true
+				}
+				// if the remaining ttl less than lockTTL * 0.8, renew it
+				if now.Sub(t.bornTime) < lockTTL*0.8*time.Second {
+					log.Loger.WithField("key", key).Debug("Store-Lock: found a lock need renew")
+					t.renewCh <- struct{}{}
+				}
 				return true
-			}
-			// if surplus ttl less than lockTTL * 0.8, renew it
-			if now.Sub(t.bornTime) < lockTTL*0.8 {
-				t.renewCh <- struct{}{}
-			}
-			return true
-		})
-	}
+			})
+			time.Sleep(time.Second)
+		}
+		log.Loger.Debug("Store-Lock: renew stop")
+	}()
 }
 
 func (l *LockerChain) HaveIt(obj interface{}, lockType LockType) bool {
@@ -134,7 +141,7 @@ func (l *LockerChain) AddLocker(obj interface{}, lockType LockType) error {
 	renewCh := make(chan struct{})
 	lockOpt := &libstore.LockOptions{
 		Value:     []byte(l.lockerOwner),
-		TTL:       lockTTL,
+		TTL:       lockTTL * time.Second,
 		RenewLock: renewCh,
 	}
 	lockpath, err := l.lockStore.buildLockKey(obj, lockType)
@@ -219,6 +226,7 @@ func NewKVStore(backend string, servers []string, keyspace string) (*KVStore, er
 }
 
 func (k *KVStore) buildLockKey(obj interface{}, lockType LockType) (key string, err error) {
+
 	name := util.GetFieldValue(obj, "Name")
 	region := util.GetFieldValue(obj, "Region")
 	if name == nil || region == nil {
@@ -331,41 +339,17 @@ func (k *KVStore) lock(obj interface{}, lockType LockType, lockOpt *libstore.Loc
 }
 
 func (k *KVStore) buildKey(obj interface{}) string {
-	switch obj.(type) {
-	case pb.Job:
-		if obj.(pb.Job).Name == "" {
-			return fmt.Sprintf("%s/%s/Jobs/",
-				k.keyspace, util.GenerateSlug(obj.(pb.Job).Region))
-		}
-		return fmt.Sprintf("%s/%s/Jobs/%s",
-			k.keyspace, util.GenerateSlug(obj.(pb.Job).Region),
-			util.GenerateSlug(obj.(pb.Job).Name))
-	case pb.JobStatus:
-		return fmt.Sprintf("%s/%s/Status/%s",
-			k.keyspace, util.GenerateSlug(obj.(pb.JobStatus).Region),
-			util.GenerateSlug(obj.(pb.JobStatus).Name))
-	default:
-		return ""
-	}
-}
+	objRegion := util.GetFieldValue(obj, "Region")
+	objName := util.GetFieldValue(obj, "Name")
+	regionString := objRegion.(string)
+	nameString := objName.(string)
 
-func (k *KVStore) untilUnlock(obj interface{}, timeout time.Duration) bool {
-	var round int
-
-	for k.IsLocked(obj, RW) {
-		if round >= 5 {
-			return false
-		}
-		round += 1
-		time.Sleep(timeout)
-	}
-	return true
+	return fmt.Sprintf("%s/%s/%s/%s",
+		k.keyspace, util.GenerateSlug(regionString), util.GetType(obj),
+		util.GenerateSlug(nameString))
 }
 
 func (k *KVStore) DeleteJobStatus(status *pb.JobStatus) (out *pb.JobStatus, err error) {
-	if !k.untilUnlock(status, waitTimeOut) {
-		return nil, errors.ErrLockTimeout
-	}
 	out, err = k.GetJobStatus(status)
 	if err != nil {
 		return
@@ -378,39 +362,34 @@ func (k *KVStore) DeleteJobStatus(status *pb.JobStatus) (out *pb.JobStatus, err 
 
 // Get JobStatus from KV store
 // if the job do not exists, return nil
-// wait JobStatus lock 5 times
 func (k *KVStore) GetJobStatus(in *pb.JobStatus) (out *pb.JobStatus, err error) {
 
 	out = &pb.JobStatus{
 		Name:   in.Name,
 		Region: in.Region,
 	}
-	if !k.untilUnlock(in, waitTimeOut) {
-		return nil, errors.ErrLockTimeout
-	}
-
-	res, err := k.client.Get(k.buildKey(out))
+	key := k.buildKey(out)
+	res, err := k.client.Get(key)
 	if err != nil && err != libstore.ErrKeyNotFound {
 		return nil, err
 	}
 
 	// fill data to status
-	if res != nil {
-		if err = util.JsonToPb(res.Value, out); err != nil {
-			return nil, err
-		}
-		log.Loger.WithFields(logrus.Fields{
-			"Name":         out.Name,
-			"Region":       out.Region,
-			"SuccessCount": out.SuccessCount,
-			"ErrorCount":   out.ErrorCount,
-			"LastError":    out.LastError,
-			"OrginData":    string(res.Value),
-		}).Debug("Store: get jobstatus from kv store")
-		return
+	if res == nil {
+		return nil, errors.ErrNotExist
 	}
-
-	return nil, errors.ErrNotExist
+	if err = util.JsonToPb(res.Value, out); err != nil {
+		return nil, err
+	}
+	log.Loger.WithFields(logrus.Fields{
+		"Name":         out.Name,
+		"Region":       out.Region,
+		"SuccessCount": out.SuccessCount,
+		"ErrorCount":   out.ErrorCount,
+		"LastError":    out.LastError,
+		"OrginData":    string(res.Value),
+	}).Debug("Store: get jobstatus from kv store")
+	return out, nil
 }
 
 // set job status to kv store
@@ -678,16 +657,16 @@ func (s *SQLStore) Find(out interface{}) *SQLStore {
 func (s *SQLStore) Create(obj interface{}) *SQLStore {
 	n := s.clone()
 	out := reflect.New(util.IndirectType(reflect.TypeOf(obj))).Interface()
-	err := s.db.Where(obj).First(&out).Error
+	err := s.db.Where(obj).First(out).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
 		n.Err = err
 		return n
 	}
-	if &out != nil {
-		n.Err = errors.ErrRepetition
+	if err == gorm.ErrRecordNotFound {
+		n.Err = s.db.Create(obj).Error
 		return n
 	}
-	n.Err = s.db.Create(obj).Error
+	n.Err = errors.ErrRepetition
 	return n
 }
 
@@ -696,8 +675,8 @@ func (s *SQLStore) Modify(obj interface{}) *SQLStore {
 	old := reflect.New(util.IndirectType(reflect.TypeOf(obj))).Interface()
 	oldslice := reflect.SliceOf(util.IndirectType(reflect.TypeOf(obj)))
 	// should use primary key build where condition but just Job can be modify, so just copy Name and Region
-	util.CopyField(&old, obj, "Name", "Region")
-	err := s.db.Where(&old).Find(&oldslice).Error
+	util.CopyField(old, obj, "Name", "Region")
+	err := s.db.Where(old).Find(oldslice).Error
 	if err == gorm.ErrRecordNotFound {
 		n.Err = errors.ErrNotExist
 		return n
@@ -714,12 +693,12 @@ func (s *SQLStore) Modify(obj interface{}) *SQLStore {
 func (s *SQLStore) Delete(obj interface{}) *SQLStore {
 	n := s.clone()
 	out := reflect.New(util.IndirectType(reflect.TypeOf(obj))).Interface()
-	err := s.db.Where(obj).First(&out).Error
+	err := s.db.Where(obj).First(out).Error
 	if err != nil {
 		n.Err = err
 		return n
 	}
-	n.Err = s.db.Delete(&out).Error
+	n.Err = s.db.Delete(out).Error
 	if n.Err == nil {
 		obj = out
 	}

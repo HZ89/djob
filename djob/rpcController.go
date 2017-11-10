@@ -21,6 +21,7 @@ package djob
 import (
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -52,55 +53,61 @@ func (a *Agent) SendBackExecution(ex *pb.Execution) (err error) {
 		}).Error("RPC: Save Execution to backend failed")
 		return
 	}
+	log.Loger.Debug("RPC: Execution has been saved, start modfiy jobstatus")
 	status := &pb.JobStatus{
 		Name:   ex.Name,
 		Region: ex.Region,
 	}
+	var mutex = &sync.Mutex{}
+	{
+		mutex.Lock()
+		if err = a.lockerChain.AddLocker(status, store.RW); err != nil {
+			return err
+		}
+		defer a.lockerChain.ReleaseLocker(status, store.RW)
+		log.Loger.WithFields(logrus.Fields{
+			"name":   status.Name,
+			"region": status.Region,
+		}).Debug("RPC: succeed lock jobstatus")
 
-	if err = a.lockerChain.AddLocker(status, store.W); err != nil {
-		return err
-	}
-
-	out, _, err := a.operationMiddleLayer(status, pb.Ops_READ, nil)
-	if err != nil && err != errors.ErrNotExist {
-		return err
-	}
-
-	if len(out) != 0 {
-		es, ok := out[0].(*pb.JobStatus)
-		if !ok {
-			log.Loger.Fatal(fmt.Sprintf("RPC: SendBackExecution want a JobStatus, but %v", reflect.TypeOf(out[0])))
+		out, _, err := a.operationMiddleLayer(status, pb.Ops_READ, nil)
+		if err != nil && err != errors.ErrNotExist {
+			return err
 		}
 
-		status.LastError = es.LastError
-		status.LastSuccess = es.LastSuccess
-		status.SuccessCount = es.SuccessCount
-		status.ErrorCount = es.ErrorCount
-	}
+		if len(out) != 0 {
+			es, ok := out[0].(*pb.JobStatus)
+			if !ok {
+				log.Loger.Fatal(fmt.Sprintf("RPC: SendBackExecution want a JobStatus, but %v", reflect.TypeOf(out[0])))
+			}
 
-	status.LastHandleAgent = ex.RunNodeName
+			status.LastError = es.LastError
+			status.LastSuccess = es.LastSuccess
+			status.SuccessCount = es.SuccessCount
+			status.ErrorCount = es.ErrorCount
+		}
 
-	if ex.Succeed {
-		status.SuccessCount += 1
-		status.LastSuccess = time.Unix(0, ex.FinishTime).String()
-	} else {
-		status.ErrorCount += 1
-		status.LastError = time.Unix(0, ex.FinishTime).String()
-	}
+		status.LastHandleAgent = ex.RunNodeName
 
-	_, _, err = a.operationMiddleLayer(status, pb.Ops_MODIFY, nil)
-	if err != nil {
-		log.Loger.WithError(err).WithFields(logrus.Fields{
-			"JobName":     status.Name,
-			"Region":      status.Region,
-			"Group":       ex.Group,
-			"RunNodeName": ex.RunNodeName,
-		}).Error("RPC: set JobStatus to kv store failed")
-		return
-	}
-	if err = a.lockerChain.ReleaseLocker(status, store.W); err != nil {
-		log.Loger.WithError(err).Warn("RPC: client releaseLocker failed")
-		return err
+		if ex.Succeed {
+			status.SuccessCount += 1
+			status.LastSuccess = time.Unix(0, ex.FinishTime).String()
+		} else {
+			status.ErrorCount += 1
+			status.LastError = time.Unix(0, ex.FinishTime).String()
+		}
+
+		_, _, err = a.operationMiddleLayer(status, pb.Ops_MODIFY, nil)
+		if err != nil {
+			log.Loger.WithError(err).WithFields(logrus.Fields{
+				"JobName":     status.Name,
+				"Region":      status.Region,
+				"Group":       ex.Group,
+				"RunNodeName": ex.RunNodeName,
+			}).Error("RPC: set JobStatus to kv store failed")
+			return err
+		}
+		mutex.Unlock()
 	}
 
 	return nil

@@ -102,7 +102,9 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 	rpcClient := a.newRPCClient(ip, port)
 	defer rpcClient.Shutdown()
 
+	log.Loger.WithField("execution", ex).Debug("Proc: job done send back execution")
 	if err = rpcClient.ExecDone(ex); err != nil {
+		log.Loger.WithError(err).Debug("Proc: rpc call ExecDone failed")
 		return err
 	}
 

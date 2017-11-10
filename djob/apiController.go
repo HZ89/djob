@@ -61,6 +61,7 @@ func (a *Agent) AddJob(in *pb.Job) (out *pb.Job, err error) {
 	if err != nil {
 		return
 	}
+	log.Loger.WithField("obj", res).Debug("Agent: API AddJob got this")
 	if t, ok := res[0].(*pb.Job); ok {
 		out = t
 		return
@@ -98,6 +99,21 @@ func (a *Agent) DeleteJob(in *pb.Job) (out *pb.Job, err error) {
 }
 
 func (a *Agent) ListJob(name, region string) (jobs []*pb.Job, err error) {
+	if region == "" {
+		regions, err := a.ListRegions()
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range regions {
+			res, err := a.ListJob("", r)
+			if err != nil {
+				log.Loger.WithField("region", r).Error("Agent: list job in this region failed")
+				return nil, err
+			}
+			jobs = append(jobs, res...)
+		}
+		return jobs, nil
+	}
 	in := &pb.Job{Name: name, Region: region}
 	var res []interface{}
 	res, _, err = a.operationMiddleLayer(in, pb.Ops_READ, nil)

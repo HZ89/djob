@@ -281,10 +281,10 @@ func (c *RpcClient) DoOps(obj interface{}, ops pb.Ops, search *pb.Search) (insta
 	if err != nil {
 		return nil, 0, err
 	}
-	log.Loger.Debug("RPC: RPC client call DoOps done")
+	log.Loger.WithField("obj", r).Debug("RPC: RPC client call DoOps done, got this")
 	count = int(r.MaxPageNum)
 	for _, o := range r.Objs {
-		t, ok := registry[o.TypeUrl]
+		t, ok := registry[strings.Split(o.TypeUrl, "/")[1]]
 		if !ok {
 			return nil, 0, errors.ErrType
 		}

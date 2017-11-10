@@ -216,8 +216,10 @@ func (a *Agent) receiveRunJobQuery(query *serf.Query) {
 }
 
 func (a *Agent) sendGetRPCConfigQuery(nodeName string) (string, int, error) {
-	params := &serf.QueryParam{
-		FilterNodes: []string{nodeName},
+
+	params, err := a.createSerfQueryParam(fmt.Sprintf("server=='true'&&node=='%s'", nodeName))
+	if err != nil {
+		log.Loger.WithField("nodeName", nodeName).WithError(err).Warn("Agent: failure to prepare serf parameters")
 	}
 
 	qr, err := a.serf.Query(QueryRPCConfig, nil, params)

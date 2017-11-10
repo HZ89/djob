@@ -94,13 +94,13 @@ func (a *Agent) setupSerf() *serf.Serf {
 	serfConfig.MemberlistConfig.LogOutput = ioutil.Discard
 
 	log.Loger.Info("Agent: Djob agent starting")
+	log.Loger.Debugf("Agent: Djob agent serf tag is %v", serfConfig.Tags)
 
 	s, err := serf.Create(serfConfig)
 	if err != nil {
 		log.Loger.Fatal(err)
 		return nil
 	}
-	//a.memberCache = make(map[string]map[string]string)
 
 	return s
 }
@@ -207,6 +207,8 @@ func (a *Agent) Run() error {
 	// TODO: add prometheus support
 	// start prometheus client
 
+	go a.serfEventLoop()
+
 	if a.config.Server {
 		log.Loger.Info("Agent: Init server")
 
@@ -255,6 +257,7 @@ func (a *Agent) Run() error {
 
 		// init a lockerChain
 		a.lockerChain = store.NewLockerChain(a.config.Nodename, a.store)
+		a.lockerChain.LockRenew()
 
 		// run rpc server
 		log.Loger.WithFields(logrus.Fields{
@@ -295,7 +298,6 @@ func (a *Agent) Run() error {
 		//		go a.takeOverJob()
 	}
 
-	go a.serfEventLoop()
 	return nil
 }
 
@@ -363,18 +365,17 @@ func (a *Agent) runJob() {
 			"cmd":      job.Command,
 			"Schedule": job.Schedule,
 		}).Debug("Agent: Job ready to run")
-		ex, err := a.RunJob(job.Name, job.Region)
+		if job.Disable {
+			continue
+		}
+		_, err := a.RunJob(job.Name, job.Region)
 		if err != nil {
 			log.Loger.WithFields(logrus.Fields{
 				"Name":   job.Name,
 				"Region": job.Region,
 			}).WithError(err).Error("Agent: Job run failed")
+			continue
 		}
-		log.Loger.WithFields(logrus.Fields{
-			"Name":   ex.Name,
-			"Region": ex.Region,
-			"Group":  ex.Group,
-		}).Debug("Agent: Job has been send to agent")
 	}
 }
 
@@ -384,7 +385,7 @@ func (a *Agent) loadJobs(region string) {
 		log.Loger.WithError(err).Fatal("Agent: load job failed")
 	}
 	for _, i := range res {
-		if t, ok := i.(*pb.Job); !ok {
+		if t, ok := i.(*pb.Job); ok {
 			if !a.store.IsLocked(t, store.OWN) {
 				_, _, err = a.operationMiddleLayer(t, pb.Ops_ADD, nil)
 				if err != nil {
@@ -393,7 +394,7 @@ func (a *Agent) loadJobs(region string) {
 			}
 			continue
 		}
-		log.Loger.WithError(errors.ErrNotExpectation).Fatalf("Agent: want job but got %v", i)
+		log.Loger.WithError(errors.ErrNotExpectation).Fatalf("Agent: want *message.Job but got %v", reflect.TypeOf(i))
 	}
 }
 
@@ -555,6 +556,7 @@ func (a *Agent) createSerfQueryParam(expression string) (*serf.QueryParam, error
 		}
 		return &queryParam, nil
 	}
+	log.Loger.WithField("expression", expression).WithError(errors.ErrCanNotFoundNode).Debug("Agent: no nodes match")
 	return nil, errors.ErrCanNotFoundNode
 }
 

@@ -186,3 +186,12 @@ func (s *Scheduler) DeleteJob(job *pb.Job) {
 func (s *Scheduler) JobCount() int {
 	return len(s.entries)
 }
+
+func (s *Scheduler) JobExist(job *pb.Job) bool {
+	for _, e := range s.entries {
+		if e.Job.Name == job.Name && e.Job.Region == job.Region {
+			return true
+		}
+	}
+	return false
+}

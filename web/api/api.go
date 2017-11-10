@@ -321,6 +321,13 @@ func (a *APIServer) deleteJob(c *gin.Context) {
 }
 
 func (a *APIServer) jobCRUD(in *pb.Job, ops pb.Ops, c *gin.Context) {
+
+	if ops == pb.Ops_ADD || ops == pb.Ops_MODIFY {
+		// this fields are forbidden to change by user
+		in.SchedulerNodeName = ""
+		in.ParentJobName = ""
+	}
+
 	resp := pb.ApiJobResponse{}
 	var err error
 	var out *pb.Job

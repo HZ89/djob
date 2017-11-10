@@ -45,24 +45,33 @@ func (a *Agent) operationMiddleLayer(obj interface{}, ops pb.Ops, search *pb.Sea
 
 	if regionString == a.config.Region {
 		job, ok := obj.(*pb.Job)
-		if nameString == "" || a.lockerChain.HaveIt(job, store.OWN) || !ok {
+		if nameString == "" || a.lockerChain.HaveIt(obj, store.OWN) || !ok {
+			log.Loger.WithField("obj", obj).Debug("Agent: this obj localOps")
 			return a.localOps(obj, ops, search)
 		}
-		owner := a.store.WhoLocked(job, store.OWN)
-		if owner == "" {
-			var err error
-			owner, err = a.minimalLoadServer(a.config.Region)
-			if err != nil {
-				return nil, 0, err
+		var jobHandler string
+		if job.SchedulerNodeName != "" {
+			jobHandler = job.SchedulerNodeName
+		} else {
+			owner := a.store.WhoLocked(job, store.OWN)
+			if owner == "" {
+				var err error
+				owner, err = a.minimalLoadServer(a.config.Region)
+				if err != nil {
+					return nil, 0, err
+				}
+				job.SchedulerNodeName = owner
 			}
-			job.SchedulerNodeName = owner
+			jobHandler = owner
 		}
-		return a.remoteOps(obj, ops, search, owner)
+
+		return a.remoteOps(obj, ops, search, jobHandler)
 	}
 	nextHandler, err := a.randomPickServer(regionString)
 	if err != nil {
 		return nil, 0, err
 	}
+	log.Loger.WithField("obj", obj).Debug("Agent: this obj remoteOps")
 	return a.remoteOps(obj, ops, search, nextHandler)
 }
 
@@ -98,25 +107,28 @@ func (a *Agent) localOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]inte
 }
 
 func (a *Agent) handleJobStatusOps(status *pb.JobStatus, ops pb.Ops) (out []interface{}, count int, err error) {
+	log.Loger.WithFields(logrus.Fields{
+		"status": status,
+		"ops":    ops,
+	}).Debug("Agent: ops job status")
+	var res *pb.JobStatus
 	switch {
 	case ops == pb.Ops_MODIFY || ops == pb.Ops_ADD:
-		if out[0], err = a.store.SetJobStatus(status); err != nil {
-			return
-		}
-		return
+		res, err = a.store.SetJobStatus(status)
 	case ops == pb.Ops_READ:
-		out[0], err = a.store.GetJobStatus(status)
-		if err != nil {
-			return
-		}
-		return
+		res, err = a.store.GetJobStatus(status)
 	case ops == pb.Ops_DELETE:
-		out[0], err = a.store.DeleteJobStatus(status)
-		if err != nil {
-			return
-		}
+		res, err = a.store.DeleteJobStatus(status)
 	}
-	return nil, 0, errors.ErrUnknownOps
+	if err != nil {
+		log.Loger.WithFields(logrus.Fields{
+			"status": status,
+			"ops":    ops,
+		}).WithError(err).Debug("Agent: ops job status failed")
+		return
+	}
+	out = append(out, res)
+	return
 }
 
 func (a *Agent) handleExecutionOps(ex *pb.Execution, ops pb.Ops, search *pb.Search) ([]interface{}, int, error) {
@@ -167,12 +179,11 @@ func (a *Agent) handleExecutionOps(ex *pb.Execution, ops pb.Ops, search *pb.Sear
 func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]interface{}, int, error) {
 	var err error
 	var count int
-	// ignore user input
-	job.ParentJobName = ""
 
 	switch {
 	case ops == pb.Ops_ADD:
 		if err = util.VerifyJob(job); err != nil {
+			log.Loger.WithField("job", job).Debug("Agent: job is invalid")
 			return nil, count, err
 		}
 
@@ -187,25 +198,40 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 				}
 				return nil, count, err
 			}
+			log.Loger.WithFields(logrus.Fields{
+				"sub-job":    job,
+				"parent-job": parent,
+			}).Debug("Agent: parent found")
 			job.ParentJob = &parent
 			job.ParentJobName = job.ParentJob.Name
 		}
 
 		// set own locker on the job
 		if !a.lockerChain.HaveIt(job, store.OWN) {
-			if err = a.lockerChain.AddLocker(job.Name, store.OWN); err != nil {
+			if err = a.lockerChain.AddLocker(job, store.OWN); err != nil {
 				return nil, count, err
 			}
 		}
 
 		job.SchedulerNodeName = a.config.Nodename
 
-		if err = a.sqlStore.Create(job).Err; err != nil {
+		var oldJob pb.Job
+		if err = a.sqlStore.Model(&pb.Job{}).Where(&pb.Job{Name: job.Name, Region: job.Region}).Find(&oldJob).Err; err != nil && err != errors.ErrNotExist {
 			return nil, count, err
 		}
 
-		if err = a.scheduler.AddJob(job); err != nil {
-			return nil, count, err
+		if &oldJob == nil {
+			log.Loger.WithField("job", job).Debug("Agent: ready to save job to SQL")
+			if err = a.sqlStore.Create(job).Err; err != nil {
+				return nil, count, err
+			}
+		}
+
+		if !a.scheduler.JobExist(job) {
+			log.Loger.WithField("job", job).Debug("Agent: add job to scheduler")
+			if err = a.scheduler.AddJob(job); err != nil {
+				return nil, count, err
+			}
 		}
 
 		out := make([]interface{}, 1)
@@ -216,10 +242,6 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 			return nil, count, err
 		}
 
-		var oldJob pb.Job
-		if err = a.sqlStore.Model(&pb.Job{}).Where(&pb.Job{Name: job.Name, Region: job.Region}).Find(&oldJob).Err; err != nil {
-			return nil, count, err
-		}
 		if job.ParentJob != nil {
 			if job.ParentJob.Region != job.Region {
 				return nil, count, errors.ErrParentNotInSameRegion
@@ -233,18 +255,12 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 			}
 			job.ParentJobName = parent.Name
 		}
-		oldJob.Schedule = job.Schedule
-		oldJob.ParentJobName = job.ParentJobName
-		oldJob.Disable = job.Disable
-		oldJob.Shell = job.Shell
-		oldJob.Expression = job.Expression
-		oldJob.Command = job.Command
-		oldJob.Idempotent = job.Idempotent
-		if err = a.sqlStore.Model(&pb.Job{}).Modify(oldJob).Err; err != nil {
+
+		if err = a.sqlStore.Model(&pb.Job{}).Modify(job).Err; err != nil {
 			return nil, count, err
 		}
 		out := make([]interface{}, 1)
-		out[0] = oldJob
+		out[0] = job
 		return out, count, err
 	case ops == pb.Ops_DELETE:
 		var subJobs []*pb.Job
@@ -324,6 +340,10 @@ func (a *Agent) RunJob(name, region string) (*pb.Execution, error) {
 
 	res, _, err := a.operationMiddleLayer(in, pb.Ops_READ, nil)
 	if err != nil {
+		log.Loger.WithFields(logrus.Fields{
+			"name":   name,
+			"region": region,
+		}).WithError(err).Error("Agent: RunJob try to get job info failed")
 		return nil, err
 	}
 	var job *pb.Job
