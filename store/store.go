@@ -73,11 +73,11 @@ func (lt LockType) String() string {
 	return lockTypes[lt-1]
 }
 
-// TODO: use sync.Map replace map
 type LockerChain struct {
 	lockerOwner string
-	chain       sync.Map
+	chain       *sync.Map
 	lockStore   *KVStore
+	stopCh      chan struct{}
 }
 
 type objKey struct {
@@ -88,42 +88,56 @@ type objKey struct {
 
 func NewLockerChain(owner string, store *KVStore) *LockerChain {
 	chain := &LockerChain{
-		chain:       sync.Map{},
+		chain:       new(sync.Map),
 		lockerOwner: owner,
 		lockStore:   store,
+		stopCh:      make(chan struct{}),
 	}
+	chain.lockRenew()
 	return chain
 }
 
-func (l *LockerChain) LockRenew() {
-	go func() {
-		log.Loger.Debug("Store-Lock: renew start")
-		for {
-			now := time.Now()
-			l.chain.Range(func(key, value interface{}) bool {
+func (l *LockerChain) Stop() {
+	l.ReleaseAll()
+	l.stopCh <- struct{}{}
+}
 
-				t, ok := value.(*objKey)
-				if !ok {
-					return false
-				}
-				// remove expired lock
-				// TODO: Need to throw out the key expired
-				if now.After(t.bornTime.Add(lockTTL * time.Second)) {
-					log.Loger.WithField("key", key).Warningf("Store-Lock: found a expired lock remove it")
-					l.chain.Delete(key)
-					return true
-				}
-				// if the remaining ttl less than lockTTL * 0.8, renew it
-				if now.Sub(t.bornTime) < lockTTL*0.8*time.Second {
-					log.Loger.WithField("key", key).Debug("Store-Lock: found a lock need renew")
-					t.renewCh <- struct{}{}
-				}
-				return true
-			})
-			time.Sleep(time.Second)
+func (l *LockerChain) lockRenew() {
+	go func() {
+		for {
+			log.Loger.Debugf("Store-Lock: %v", l.chain)
+			select {
+			case <-time.After(lockTTL * 0.1 * time.Second):
+				log.Loger.Debug("Store-Lock: renew start")
+				l.renew()
+				log.Loger.Debug("Store-Lock: renew stop")
+			case <-l.stopCh:
+				return
+			}
 		}
-		log.Loger.Debug("Store-Lock: renew stop")
 	}()
+}
+
+func (l *LockerChain) renew() {
+	now := time.Now()
+	l.chain.Range(func(key, value interface{}) bool {
+		t, ok := value.(*objKey)
+		if !ok {
+			return false
+		}
+		// remove expired lock
+		// TODO: Need to throw out the key expired
+		if now.After(t.bornTime.Add(lockTTL * time.Second)) {
+			l.chain.Delete(key)
+			return true
+		}
+		// if the remaining ttl less than lockTTL * 0.8, renew it
+		if now.Sub(t.bornTime) < lockTTL*0.8*time.Second {
+			t.renewCh <- struct{}{}
+			t.bornTime = now
+		}
+		return true
+	})
 }
 
 func (l *LockerChain) HaveIt(obj interface{}, lockType LockType) bool {
@@ -158,14 +172,15 @@ func (l *LockerChain) AddLocker(obj interface{}, lockType LockType) error {
 		bornTime: time.Now(),
 	}
 	l.chain.Store(lockpath, objlock)
+	log.Loger.WithFields(logrus.Fields{
+		"key":   lockpath,
+		"value": objlock,
+	}).Debug("Store-Lock: store a lock into map")
 	return nil
 }
 
 func (l *LockerChain) ReleaseLocker(obj interface{}, lockType LockType) error {
 
-	if !l.HaveIt(obj, lockType) {
-		return errors.ErrNotExist
-	}
 	lockpath, err := l.lockStore.buildLockKey(obj, lockType)
 	if err != nil {
 		return err
@@ -176,12 +191,16 @@ func (l *LockerChain) ReleaseLocker(obj interface{}, lockType LockType) error {
 	}
 	t, ok := v.(*objKey)
 	if !ok {
-		log.Loger.Fatalf("Store: lockerChain got a unknown type: %v", v)
+		log.Loger.Fatalf("Store-Lock: lockerChain got a unknown type: %v", v)
 	}
 	if err = t.locker.Unlock(); err != nil {
 		return err
 	}
 	l.chain.Delete(lockpath)
+	log.Loger.WithFields(logrus.Fields{
+		"key":   lockpath,
+		"value": t,
+	}).Debug("Store-Lock: delete a lock from map")
 	return nil
 }
 
@@ -189,7 +208,7 @@ func (l *LockerChain) ReleaseAll() {
 	l.chain.Range(func(key, v interface{}) bool {
 		t, ok := v.(*objKey)
 		if !ok {
-			log.Loger.Fatalf("Store: lockerChain got a unknown type: %v", v)
+			log.Loger.Fatalf("Store-Lock: lockerChain got a unknown type: %v", v)
 		}
 		t.locker.Unlock()
 		l.chain.Delete(key)

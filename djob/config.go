@@ -181,6 +181,8 @@ func ReadConfig(version string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	tags["RPCADIP"] = rpcAdip
+	tags["RPCADPORT"] = fmt.Sprintf("%d", rpcAdport)
 
 	sqlPasswd := viper.GetString("sql_password")
 	unixSocket := viper.GetString("sql_unix")

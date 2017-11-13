@@ -94,7 +94,7 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 		return err
 	}
 
-	ip, port, err := a.sendGetRPCConfigQuery(serverNodeName)
+	ip, port, err := a.getRPCConfig(serverNodeName)
 	if err != nil {
 		return err
 	}

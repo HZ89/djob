@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"reflect"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -41,6 +42,10 @@ import (
 	"version.uuzu.com/zhuhuipeng/djob/util"
 	"version.uuzu.com/zhuhuipeng/djob/web/api"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 const (
 	gracefulTime = 5 * time.Second
@@ -155,16 +160,6 @@ func (a *Agent) serfEventLoop() {
 
 					go a.receiveRunJobQuery(query)
 
-				case QueryRPCConfig:
-					if a.config.Server {
-						log.Loger.WithFields(logrus.Fields{
-							"query":   query.Name,
-							"payload": string(query.Payload),
-							"at":      query.LTime,
-						}).Debug("Agent: Server receive a rpc config query")
-
-						go a.receiveGetRPCConfigQuery(query)
-					}
 				case QueryJobCount:
 					if a.config.Server {
 						log.Loger.WithFields(logrus.Fields{
@@ -257,7 +252,6 @@ func (a *Agent) Run() error {
 
 		// init a lockerChain
 		a.lockerChain = store.NewLockerChain(a.config.Nodename, a.store)
-		a.lockerChain.LockRenew()
 
 		// run rpc server
 		log.Loger.WithFields(logrus.Fields{
@@ -425,7 +419,7 @@ func (a *Agent) Stop(graceful bool) int {
 			go func() {
 				wg.Add(1)
 				a.scheduler.Stop()
-				a.lockerChain.ReleaseAll()
+				a.lockerChain.Stop()
 				wg.Done()
 			}()
 			// graceful shutdown rpc server
@@ -592,4 +586,25 @@ func (a *Agent) processFilteredNodes(expression string) ([]string, error) {
 		}
 	}
 	return nodeNames, nil
+}
+
+func (a *Agent) getRPCConfig(nodeName string) (string, int, error) {
+	for _, member := range a.serf.Members() {
+		if member.Name == nodeName {
+			if member.Status != serf.StatusAlive {
+				return "", 0, errors.ErrNodeDead
+			}
+			ip, iok := member.Tags["RPCADIP"]
+			port, pok := member.Tags["RPCADPORT"]
+			if !iok || !pok || ip == "" || port == "" {
+				return "", 0, errors.ErrNodeNoRPC
+			}
+			iport, err := strconv.Atoi(port)
+			if err != nil {
+				return "", 0, err
+			}
+			return ip, iport, nil
+		}
+	}
+	return "", 0, errors.ErrNotExist
 }

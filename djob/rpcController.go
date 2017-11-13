@@ -148,7 +148,7 @@ func (a *Agent) PerformOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]in
 	if job, ok := obj.(*pb.Job); ok {
 		if job.Region == a.config.Region {
 			if job.SchedulerNodeName == a.config.Nodename {
-				if !a.store.IsLocked(job, store.OWN) {
+				if !a.lockerChain.HaveIt(job, store.OWN) {
 					if err := a.lockerChain.AddLocker(job, store.OWN); err != nil {
 						return nil, 0, err
 					}

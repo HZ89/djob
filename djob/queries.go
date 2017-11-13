@@ -20,7 +20,6 @@ package djob
 
 import (
 	"fmt"
-	"math/rand"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/golang/protobuf/proto"
@@ -30,9 +29,8 @@ import (
 )
 
 const (
-	QueryRunJob    = "job:run"
-	QueryRPCConfig = "rpc:config"
-	QueryJobCount  = "job:count"
+	QueryRunJob   = "job:run"
+	QueryJobCount = "job:count"
 )
 
 func (a *Agent) sendJobCountQuery(region string) ([]*pb.JobCountResp, error) {
@@ -57,10 +55,10 @@ func (a *Agent) sendJobCountQuery(region string) ([]*pb.JobCountResp, error) {
 	ackCh := qr.AckCh()
 	respCh := qr.ResponseCh()
 	var payloads [][]byte
-	for {
-		if len(payloads) == len(params.FilterNodes) {
-			break
-		}
+	for !qr.Finished() {
+		//if len(payloads) == len(params.FilterNodes) {
+		//	break
+		//}
 		select {
 
 		case ack, ok := <-ackCh:
@@ -185,7 +183,7 @@ func (a *Agent) receiveRunJobQuery(query *serf.Query) {
 		"group":  ex.Group,
 	}).Info("Agent: Starting job")
 
-	ip, port, err := a.sendGetRPCConfigQuery(ex.SchedulerNodeName)
+	ip, port, err := a.getRPCConfig(ex.SchedulerNodeName)
 	if err != nil {
 		log.Loger.WithError(err).Fatal("Agent: get rpc config failed")
 	}
@@ -213,71 +211,4 @@ func (a *Agent) receiveRunJobQuery(query *serf.Query) {
 			"group":  ex.Group,
 		}).Info("Agent: Job done")
 	}()
-}
-
-func (a *Agent) sendGetRPCConfigQuery(nodeName string) (string, int, error) {
-
-	params, err := a.createSerfQueryParam(fmt.Sprintf("server=='true'&&node=='%s'", nodeName))
-	if err != nil {
-		log.Loger.WithField("nodeName", nodeName).WithError(err).Warn("Agent: failure to prepare serf parameters")
-	}
-
-	qr, err := a.serf.Query(QueryRPCConfig, nil, params)
-	if err != nil {
-		log.Loger.WithFields(logrus.Fields{
-			"query": QueryRPCConfig,
-			"error": err,
-		}).Fatal("Agent: Error sending serf query")
-	}
-
-	defer qr.Close()
-
-	ackCh := qr.AckCh()
-	respCh := qr.ResponseCh()
-	var payloads [][]byte
-	for {
-		if len(payloads) == len(params.FilterNodes) {
-			break
-		}
-		select {
-		case ack, ok := <-ackCh:
-			if ok {
-				log.Loger.WithFields(logrus.Fields{
-					"query": QueryRPCConfig,
-					"from":  ack,
-				}).Debug("Agent: Received ack")
-			}
-		case resp, ok := <-respCh:
-			if ok {
-				payloads = append(payloads, resp.Payload)
-				log.Loger.WithFields(logrus.Fields{
-					"query":   QueryRPCConfig,
-					"from":    resp.From,
-					"payload": string(resp.Payload),
-				}).Debug("Agent: Received response")
-			}
-		}
-	}
-	log.Loger.WithFields(logrus.Fields{
-		"query": QueryRPCConfig,
-	}).Debug("Agent: Received ack and response Done")
-
-	var payload pb.GetRPCConfigResp
-	if err := proto.Unmarshal(payloads[rand.Intn(len(payloads))], &payload); err != nil {
-		log.Loger.WithError(err).Error("Agent: Payload decode failed")
-		return "", 0, nil
-	}
-	return payload.Ip, int(payload.Port), nil
-}
-
-func (a *Agent) receiveGetRPCConfigQuery(query *serf.Query) {
-	resp := &pb.GetRPCConfigResp{
-		Ip:   a.config.RPCBindIP,
-		Port: int32(a.config.RPCBindPort),
-	}
-	respPb, _ := proto.Marshal(resp)
-	if err := query.Respond(respPb); err != nil {
-		log.Loger.WithError(err).Fatal("Agent: serf query Respond error")
-	}
-	return
 }

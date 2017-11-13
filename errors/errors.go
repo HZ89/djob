@@ -55,4 +55,6 @@ var (
 	ErrParentNotExist        = errors.New("parent job not exist")
 	ErrHaveSubJob            = errors.New("please delete sub-job first")
 	ErrCopyToUnaddressable   = errors.New("copy to value is unaddressable")
+	ErrNodeDead              = errors.New("found node is not alive")
+	ErrNodeNoRPC             = errors.New("found node have no completed rpc config")
 )

@@ -77,7 +77,7 @@ func (a *Agent) operationMiddleLayer(obj interface{}, ops pb.Ops, search *pb.Sea
 
 // forward ops to remote region by grpc
 func (a *Agent) remoteOps(obj interface{}, ops pb.Ops, search *pb.Search, nodeName string) ([]interface{}, int, error) {
-	ip, port, err := a.sendGetRPCConfigQuery(nodeName)
+	ip, port, err := a.getRPCConfig(nodeName)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -361,7 +361,7 @@ func (a *Agent) RunJob(name, region string) (*pb.Execution, error) {
 }
 
 func (a *Agent) remoteRunJob(job *pb.Job, remoteServer string) (*pb.Execution, error) {
-	rsIp, rsPort, err := a.sendGetRPCConfigQuery(remoteServer)
+	rsIp, rsPort, err := a.getRPCConfig(remoteServer)
 	if err != nil {
 		log.Loger.WithFields(logrus.Fields{
 			"Region":   job.Region,

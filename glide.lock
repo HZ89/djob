@@ -1,5 +1,5 @@
 hash: 6aa741e310fcb42fee9db11fa6e5072617bd0f883d17dc7d77ffde3d9ce6cd39
-updated: 2017-11-08T16:53:18.69683426+08:00
+updated: 2017-11-13T15:13:19.661484683+08:00
 imports:
 - name: github.com/armon/circbuf
   version: bbbad097214e2918d8543d5201d12bfd7bca254d
@@ -90,7 +90,7 @@ imports:
   - coordinate
   - serf
 - name: github.com/HZ89/libkv
-  version: e8457a8751a7dad90db9b07dad55dfc4c32a7190
+  version: f3ced62fd5c8c21da9900d6f6a84faa82c460789
   subpackages:
   - store
   - store/consul
