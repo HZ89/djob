@@ -71,7 +71,7 @@ type Agent struct {
 func (a *Agent) setupSerf() *serf.Serf {
 	encryptKey, err := a.config.EncryptKey()
 	if err != nil {
-		log.Loger.Fatal(err)
+		log.FmdLoger.Fatal(err)
 		return nil
 	}
 
@@ -98,12 +98,12 @@ func (a *Agent) setupSerf() *serf.Serf {
 	serfConfig.LogOutput = ioutil.Discard
 	serfConfig.MemberlistConfig.LogOutput = ioutil.Discard
 
-	log.Loger.Info("Agent: Djob agent starting")
-	log.Loger.Debugf("Agent: Djob agent serf tag is %v", serfConfig.Tags)
+	log.FmdLoger.Info("Agent: Djob agent starting")
+	log.FmdLoger.Debugf("Agent: Djob agent serf tag is %v", serfConfig.Tags)
 
 	s, err := serf.Create(serfConfig)
 	if err != nil {
-		log.Loger.Fatal(err)
+		log.FmdLoger.Fatal(err)
 		return nil
 	}
 
@@ -112,33 +112,33 @@ func (a *Agent) setupSerf() *serf.Serf {
 
 // serfJion let serf intence jion a serf clust
 func (a *Agent) serfJion(addrs []string, replay bool) (n int, err error) {
-	log.Loger.Infof("Agent: joining: %v replay: %v", addrs, replay)
+	log.FmdLoger.Infof("Agent: joining: %v replay: %v", addrs, replay)
 	ignoreOld := !replay
 	n, err = a.serf.Join(addrs, ignoreOld)
 	if n > 0 {
-		log.Loger.Infof("Agent: joined: %d nodes", n)
+		log.FmdLoger.Infof("Agent: joined: %d nodes", n)
 	}
 	if err != nil {
-		log.Loger.Warnf("Agent: error joining: %v", err)
+		log.FmdLoger.Warnf("Agent: error joining: %v", err)
 	}
 	return
 }
 
 func (a *Agent) serfEventLoop() {
 	serfShutdownCh := a.serf.ShutdownCh()
-	log.Loger.Info("Agent: Listen for event")
+	log.FmdLoger.Info("Agent: Listen for event")
 	for {
 
 		select {
 		// handle serf event
 		case e := <-a.eventCh:
-			log.Loger.WithFields(logrus.Fields{
+			log.FmdLoger.WithFields(logrus.Fields{
 				"event": e.String(),
 			}).Debug("Agent: Received event")
 
 			if memberevent, ok := e.(serf.MemberEvent); ok {
 				for _, member := range memberevent.Members {
-					log.Loger.WithFields(logrus.Fields{
+					log.FmdLoger.WithFields(logrus.Fields{
 						"node":    a.config.Nodename,
 						"members": member.Name,
 						"event":   e.EventType(),
@@ -152,7 +152,7 @@ func (a *Agent) serfEventLoop() {
 
 				switch qname := query.Name; qname {
 				case QueryRunJob:
-					log.Loger.WithFields(logrus.Fields{
+					log.FmdLoger.WithFields(logrus.Fields{
 						"query":   query.Name,
 						"payload": string(query.Payload),
 						"at":      query.LTime,
@@ -162,7 +162,7 @@ func (a *Agent) serfEventLoop() {
 
 				case QueryJobCount:
 					if a.config.Server {
-						log.Loger.WithFields(logrus.Fields{
+						log.FmdLoger.WithFields(logrus.Fields{
 							"query":   query.Name,
 							"payload": string(query.Payload),
 							"at":      query.LTime,
@@ -171,8 +171,8 @@ func (a *Agent) serfEventLoop() {
 						go a.receiveJobCountQuery(query)
 					}
 				default:
-					log.Loger.Warn("Agent: get a unknow message")
-					log.Loger.WithFields(logrus.Fields{
+					log.FmdLoger.Warn("Agent: get a unknow message")
+					log.FmdLoger.WithFields(logrus.Fields{
 						"query":   query.Name,
 						"payload": string(query.Payload),
 						"at":      query.LTime,
@@ -181,7 +181,7 @@ func (a *Agent) serfEventLoop() {
 			}
 
 		case <-serfShutdownCh:
-			log.Loger.Warn("Agent: Serf shutdown detected, quitting")
+			log.FmdLoger.Warn("Agent: Serf shutdown detected, quitting")
 			return
 		}
 	}
@@ -191,11 +191,11 @@ func (a *Agent) serfEventLoop() {
 func (a *Agent) Run() error {
 	var err error
 	if err != nil {
-		log.Loger.Fatalln(err)
+		log.FmdLoger.Fatalln(err)
 		return err
 	}
 	if a.serf = a.setupSerf(); a.serf == nil {
-		log.Loger.Fatalln("Start serf failed!")
+		log.FmdLoger.Fatalln("Start serf failed!")
 		return errors.ErrStartSerf
 	}
 	a.serfJion(a.config.SerfJoin, true)
@@ -205,17 +205,17 @@ func (a *Agent) Run() error {
 	go a.serfEventLoop()
 
 	if a.config.Server {
-		log.Loger.Info("Agent: Init server")
+		log.FmdLoger.Info("Agent: Init server")
 
-		log.Loger.WithFields(logrus.Fields{
+		log.FmdLoger.WithFields(logrus.Fields{
 			"dsn": a.config.DSN,
 		}).Debug("Agent: Connect to database")
 		sqlStroe, err := store.NewSQLStore("mysql", a.config.DSN)
 		if err != nil {
-			log.Loger.WithError(err).Fatal("Agent: Connect to database failed")
+			log.FmdLoger.WithError(err).Fatal("Agent: Connect to database failed")
 		}
 		if err = sqlStroe.Migrate(false, &pb.Execution{}, &pb.Job{}); err != nil {
-			log.Loger.WithError(err).Fatal("Agent: Migrate database table failed")
+			log.FmdLoger.WithError(err).Fatal("Agent: Migrate database table failed")
 		}
 		a.sqlStore = sqlStroe
 
@@ -234,19 +234,19 @@ func (a *Agent) Run() error {
 		}
 
 		// connect to kv store
-		log.Loger.WithFields(logrus.Fields{
+		log.FmdLoger.WithFields(logrus.Fields{
 			"backend":  a.config.JobStore,
 			"server":   a.config.JobStoreServers,
 			"keySpace": a.config.JobStoreKeyspace,
 		}).Debug("Agent: Connect to job store")
 		a.store, err = store.NewKVStore(a.config.JobStore, a.config.JobStoreServers, a.config.JobStoreKeyspace)
 		if err != nil {
-			log.Loger.WithFields(logrus.Fields{
+			log.FmdLoger.WithFields(logrus.Fields{
 				"backend":  a.config.JobStore,
 				"servers":  a.config.JobStoreServers,
 				"keyspace": a.config.JobStoreKeyspace,
 			}).Debug("Agent: Connect Backend Failed")
-			log.Loger.WithError(err).Error("Agent: Connent Backend Failed")
+			log.FmdLoger.WithError(err).Error("Agent: Connent Backend Failed")
 			return err
 		}
 
@@ -254,13 +254,13 @@ func (a *Agent) Run() error {
 		a.lockerChain = store.NewLockerChain(a.config.Nodename, a.store)
 
 		// run rpc server
-		log.Loger.WithFields(logrus.Fields{
+		log.FmdLoger.WithFields(logrus.Fields{
 			"BindIp":   a.config.RPCBindIP,
 			"BindPort": a.config.RPCBindPort,
 		}).Debug("Agent: Start RPC server")
 		a.rpcServer = rpc.NewRPCServer(a.config.RPCBindIP, a.config.RPCBindPort, a, &tls)
 		if err := a.rpcServer.Run(); err != nil {
-			log.Loger.WithError(err).Error("Agent: Start RPC Srever Failed")
+			log.FmdLoger.WithError(err).Error("Agent: Start RPC Srever Failed")
 			return err
 		}
 
@@ -269,7 +269,7 @@ func (a *Agent) Run() error {
 		a.scheduler.Start()
 
 		// try to load job
-		log.Loger.Info("Agent: Load jobs")
+		log.FmdLoger.Info("Agent: Load jobs")
 		a.loadJobs(a.config.Region)
 
 		// run job
@@ -279,11 +279,11 @@ func (a *Agent) Run() error {
 		a.apiServer, err = api.NewAPIServer(a.config.APIBindIP, a.config.APIBindPort, a.config.APITokens,
 			a.config.RPCTls, &keyPair, a)
 		if err != nil {
-			log.Loger.WithError(err).Error("Agent: New API Server Failed")
+			log.FmdLoger.WithError(err).Error("Agent: New API Server Failed")
 			return err
 		}
 		a.apiServer.Run()
-		log.Loger.WithFields(logrus.Fields{
+		log.FmdLoger.WithFields(logrus.Fields{
 			"Ip":     a.config.APIBindIP,
 			"Port":   a.config.APIBindPort,
 			"Tokens": a.config.APITokens,
@@ -300,12 +300,12 @@ func (a *Agent) takeOverJob() {
 	for {
 		watchCh, err := a.store.WatchLock(&pb.Job{Region: a.config.Region}, stopCh)
 		if err == errors.ErrNotExist {
-			//			log.Loger.Debug("Agent: job lock path do not exist, sleep 5s retry")
+			//			log.FmdLoger.Debug("Agent: job lock path do not exist, sleep 5s retry")
 			time.Sleep(5 * time.Second)
 			continue
 		}
 		if err != nil {
-			log.Loger.WithError(err).Fatal("Agent: try to watch lock path failed")
+			log.FmdLoger.WithError(err).Fatal("Agent: try to watch lock path failed")
 		}
 		for {
 			jobName := <-watchCh
@@ -313,14 +313,14 @@ func (a *Agent) takeOverJob() {
 			if !a.store.IsLocked(&pb.Job{Name: jobName, Region: a.config.Region}, store.OWN) {
 				res, _, err := a.operationMiddleLayer(&pb.Job{Name: jobName, Region: a.config.Region}, pb.Ops_READ, nil)
 				if err != nil {
-					log.Loger.WithFields(logrus.Fields{
+					log.FmdLoger.WithFields(logrus.Fields{
 						"name":   jobName,
 						"region": a.config.Region,
 					}).WithError(err).Fatal("Agent: get job info failed")
 				}
 				job, ok := res[0].(*pb.Job)
 				if !ok {
-					log.Loger.WithFields(logrus.Fields{
+					log.FmdLoger.WithFields(logrus.Fields{
 						"name":   jobName,
 						"region": a.config.Region}).Fatalf("Agent: want a Job buf got a %v", res)
 				}
@@ -330,7 +330,7 @@ func (a *Agent) takeOverJob() {
 					continue
 				}
 				if err != nil {
-					log.Loger.WithFields(logrus.Fields{
+					log.FmdLoger.WithFields(logrus.Fields{
 						"name":   job.Name,
 						"region": job.Region,
 					}).WithError(err).Fatal("Agent: lock job failed")
@@ -338,7 +338,7 @@ func (a *Agent) takeOverJob() {
 
 				err = a.scheduler.AddJob(job)
 				if err != nil {
-					log.Loger.WithFields(logrus.Fields{
+					log.FmdLoger.WithFields(logrus.Fields{
 						"name":      job.Name,
 						"region":    job.Region,
 						"scheduler": job.Schedule,
@@ -353,7 +353,7 @@ func (a *Agent) takeOverJob() {
 func (a *Agent) runJob() {
 	for {
 		job := <-a.runJobCh
-		log.Loger.WithFields(logrus.Fields{
+		log.FmdLoger.WithFields(logrus.Fields{
 			"Name":     job.Name,
 			"Region":   job.Region,
 			"cmd":      job.Command,
@@ -364,7 +364,7 @@ func (a *Agent) runJob() {
 		}
 		_, err := a.RunJob(job.Name, job.Region)
 		if err != nil {
-			log.Loger.WithFields(logrus.Fields{
+			log.FmdLoger.WithFields(logrus.Fields{
 				"Name":   job.Name,
 				"Region": job.Region,
 			}).WithError(err).Error("Agent: Job run failed")
@@ -376,26 +376,26 @@ func (a *Agent) runJob() {
 func (a *Agent) loadJobs(region string) {
 	res, _, err := a.operationMiddleLayer(&pb.Job{Region: region}, pb.Ops_READ, nil)
 	if err != nil {
-		log.Loger.WithError(err).Fatal("Agent: load job failed")
+		log.FmdLoger.WithError(err).Fatal("Agent: load job failed")
 	}
 	for _, i := range res {
 		if t, ok := i.(*pb.Job); ok {
 			if !a.store.IsLocked(t, store.OWN) {
 				_, _, err = a.operationMiddleLayer(t, pb.Ops_ADD, nil)
 				if err != nil {
-					log.Loger.WithError(err).Fatal("Agent: load job, add job failed")
+					log.FmdLoger.WithError(err).Fatal("Agent: load job, add job failed")
 				}
 			}
 			continue
 		}
-		log.Loger.WithError(errors.ErrNotExpectation).Fatalf("Agent: want *message.Job but got %v", reflect.TypeOf(i))
+		log.FmdLoger.WithError(errors.ErrNotExpectation).Fatalf("Agent: want *message.Job but got %v", reflect.TypeOf(i))
 	}
 }
 
 func (a *Agent) Reload(args []string) {
 	newConf, err := newConfig(args, a.version)
 	if err != nil {
-		log.Loger.Warn(err)
+		log.FmdLoger.Warn(err)
 		return
 	}
 	a.config = newConf
@@ -411,7 +411,7 @@ func (a *Agent) Stop(graceful bool) int {
 
 	gracefulCh := make(chan struct{})
 
-	log.Loger.Info("Agent: Gracefully shutting down agent...")
+	log.FmdLoger.Info("Agent: Gracefully shutting down agent...")
 	go func() {
 		var wg sync.WaitGroup
 		if a.config.Server {
@@ -432,7 +432,7 @@ func (a *Agent) Stop(graceful bool) int {
 			go func() {
 				wg.Add(1)
 				if err := a.apiServer.Stop(gracefulTime); err != nil {
-					log.Loger.Errorf("Agent:Graceful shutdown Api server failed: %s", err)
+					log.FmdLoger.Errorf("Agent:Graceful shutdown Api server failed: %s", err)
 				}
 				wg.Done()
 			}()
@@ -442,7 +442,7 @@ func (a *Agent) Stop(graceful bool) int {
 		go func() {
 			wg.Add(1)
 			if err := a.serf.Leave(); err != nil {
-				log.Loger.Errorf("Agent: Graceful shutdown down serf failed: %s", err)
+				log.FmdLoger.Errorf("Agent: Graceful shutdown down serf failed: %s", err)
 			}
 			a.serf.Shutdown()
 			wg.Done()
@@ -472,7 +472,7 @@ func (a *Agent) newRPCClient(ip string, port int) *rpc.RpcClient {
 	}
 	client, err := rpc.NewRpcClient(ip, port, tls)
 	if err != nil {
-		log.Loger.WithError(err).Fatal("Agent: start RPC Client failed")
+		log.FmdLoger.WithError(err).Fatal("Agent: start RPC Client failed")
 	}
 	return client
 }
@@ -480,7 +480,7 @@ func (a *Agent) newRPCClient(ip string, port int) *rpc.RpcClient {
 func New(args []string, version string) *Agent {
 	config, err := newConfig(args, version)
 	if err != nil {
-		log.Loger.WithError(err).Fatal("Agent:init failed")
+		log.FmdLoger.WithError(err).Fatal("Agent:init failed")
 	}
 	return &Agent{
 		eventCh:  make(chan serf.Event, 64),
@@ -516,7 +516,7 @@ func (a *Agent) minimalLoadServer(region string) (string, error) {
 		return "", err
 	case res := <-resCh:
 		if res == nil || len(res) == 0 {
-			log.Loger.WithFields(logrus.Fields{
+			log.FmdLoger.WithFields(logrus.Fields{
 				"node":     a.config.Nodename,
 				"function": "minimalLoadServer",
 			}).Fatal("Agent: []*pb.JobCountResp is nil")
@@ -550,7 +550,7 @@ func (a *Agent) createSerfQueryParam(expression string) (*serf.QueryParam, error
 		}
 		return &queryParam, nil
 	}
-	log.Loger.WithField("expression", expression).WithError(errors.ErrCanNotFoundNode).Debug("Agent: no nodes match")
+	log.FmdLoger.WithField("expression", expression).WithError(errors.ErrCanNotFoundNode).Debug("Agent: no nodes match")
 	return nil, errors.ErrCanNotFoundNode
 }
 

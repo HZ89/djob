@@ -33,7 +33,7 @@ import (
 const (
 	maxBufSize = 1048576
 	maxRunTime = 1 * time.Hour
-	maxLayTime = 30
+	maxLayTime = 300
 )
 
 func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
@@ -43,7 +43,7 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 	cmd.Stdout = buf
 
 	// Random sleep for a while to prevent excessive concurrency
-	time.Sleep(time.Duration(rand.Intn(maxLayTime)) * time.Second)
+	time.Sleep(time.Duration(rand.Intn(maxLayTime)) * time.Millisecond)
 
 	var success bool
 	ex.StartTime = time.Now().UnixNano()
@@ -53,7 +53,7 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 	}
 
 	if buf.TotalWritten() > buf.Size() {
-		log.Loger.Warnf("Proc: Job '%s' generated %d bytes of output, truncated to %d", job.Name, buf.TotalWritten(), buf.Size())
+		log.FmdLoger.Warnf("Proc: Job '%s' generated %d bytes of output, truncated to %d", job.Name, buf.TotalWritten(), buf.Size())
 	}
 
 	done := make(chan error, 1)
@@ -70,14 +70,14 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 
 	select {
 	case <-time.After(TimeLimit):
-		log.Loger.Warnf("Proc: Job '%s' reach max run time(one hour), will be kill it", job.Name)
+		log.FmdLoger.Warnf("Proc: Job '%s' reach max run time(one hour), will be kill it", job.Name)
 		if err = cmd.Process.Kill(); err != nil {
-			log.Loger.WithError(err).Errorf("Proc: Job '%s' kill failed", job.Name)
+			log.FmdLoger.WithError(err).Errorf("Proc: Job '%s' kill failed", job.Name)
 		}
-		log.Loger.Warnf("Proc: Job '%s' reach max run time(one hour), has been killed", job.Name)
+		log.FmdLoger.Warnf("Proc: Job '%s' reach max run time(one hour), has been killed", job.Name)
 	case err = <-done:
 		if err != nil {
-			log.Loger.WithError(err).Errorf("Proc: Job '%s' cmd exec error output", job.Name)
+			log.FmdLoger.WithError(err).Errorf("Proc: Job '%s' cmd exec error output", job.Name)
 			success = false
 		} else {
 			success = true
@@ -102,9 +102,9 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 	rpcClient := a.newRPCClient(ip, port)
 	defer rpcClient.Shutdown()
 
-	log.Loger.WithField("execution", ex).Debug("Proc: job done send back execution")
+	log.FmdLoger.WithField("execution", ex).Debug("Proc: job done send back execution")
 	if err = rpcClient.ExecDone(ex); err != nil {
-		log.Loger.WithError(err).Debug("Proc: rpc call ExecDone failed")
+		log.FmdLoger.WithError(err).Debug("Proc: rpc call ExecDone failed")
 		return err
 	}
 

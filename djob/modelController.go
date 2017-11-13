@@ -46,7 +46,7 @@ func (a *Agent) operationMiddleLayer(obj interface{}, ops pb.Ops, search *pb.Sea
 	if regionString == a.config.Region {
 		job, ok := obj.(*pb.Job)
 		if nameString == "" || a.lockerChain.HaveIt(obj, store.OWN) || !ok {
-			log.Loger.WithField("obj", obj).Debug("Agent: this obj localOps")
+			log.FmdLoger.WithField("obj", obj).Debug("Agent: this obj localOps")
 			return a.localOps(obj, ops, search)
 		}
 		var jobHandler string
@@ -71,7 +71,7 @@ func (a *Agent) operationMiddleLayer(obj interface{}, ops pb.Ops, search *pb.Sea
 	if err != nil {
 		return nil, 0, err
 	}
-	log.Loger.WithField("obj", obj).Debug("Agent: this obj remoteOps")
+	log.FmdLoger.WithField("obj", obj).Debug("Agent: this obj remoteOps")
 	return a.remoteOps(obj, ops, search, nextHandler)
 }
 
@@ -81,7 +81,7 @@ func (a *Agent) remoteOps(obj interface{}, ops pb.Ops, search *pb.Search, nodeNa
 	if err != nil {
 		return nil, 0, err
 	}
-	log.Loger.WithFields(logrus.Fields{
+	log.FmdLoger.WithFields(logrus.Fields{
 		"local nodeName":  a.config.Nodename,
 		"remote nodeName": nodeName,
 		"remote Ip":       ip,
@@ -107,7 +107,7 @@ func (a *Agent) localOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]inte
 }
 
 func (a *Agent) handleJobStatusOps(status *pb.JobStatus, ops pb.Ops) (out []interface{}, count int, err error) {
-	log.Loger.WithFields(logrus.Fields{
+	log.FmdLoger.WithFields(logrus.Fields{
 		"status": status,
 		"ops":    ops,
 	}).Debug("Agent: ops job status")
@@ -121,7 +121,7 @@ func (a *Agent) handleJobStatusOps(status *pb.JobStatus, ops pb.Ops) (out []inte
 		res, err = a.store.DeleteJobStatus(status)
 	}
 	if err != nil {
-		log.Loger.WithFields(logrus.Fields{
+		log.FmdLoger.WithFields(logrus.Fields{
 			"status": status,
 			"ops":    ops,
 		}).WithError(err).Debug("Agent: ops job status failed")
@@ -183,7 +183,7 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 	switch {
 	case ops == pb.Ops_ADD:
 		if err = util.VerifyJob(job); err != nil {
-			log.Loger.WithField("job", job).Debug("Agent: job is invalid")
+			log.FmdLoger.WithField("job", job).Debug("Agent: job is invalid")
 			return nil, count, err
 		}
 
@@ -198,7 +198,7 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 				}
 				return nil, count, err
 			}
-			log.Loger.WithFields(logrus.Fields{
+			log.FmdLoger.WithFields(logrus.Fields{
 				"sub-job":    job,
 				"parent-job": parent,
 			}).Debug("Agent: parent found")
@@ -221,14 +221,14 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		}
 
 		if &oldJob == nil {
-			log.Loger.WithField("job", job).Debug("Agent: ready to save job to SQL")
+			log.FmdLoger.WithField("job", job).Debug("Agent: ready to save job to SQL")
 			if err = a.sqlStore.Create(job).Err; err != nil {
 				return nil, count, err
 			}
 		}
 
 		if !a.scheduler.JobExist(job) {
-			log.Loger.WithField("job", job).Debug("Agent: add job to scheduler")
+			log.FmdLoger.WithField("job", job).Debug("Agent: add job to scheduler")
 			if err = a.scheduler.AddJob(job); err != nil {
 				return nil, count, err
 			}
@@ -330,7 +330,7 @@ func (a *Agent) RunJob(name, region string) (*pb.Execution, error) {
 	if region != a.config.Region {
 		remoteServer, err := a.randomPickServer(region)
 		if err != nil {
-			log.Loger.WithFields(logrus.Fields{
+			log.FmdLoger.WithFields(logrus.Fields{
 				"Region": region,
 			}).WithError(err).Error("Agent: can not find server from the region")
 			return nil, err
@@ -340,7 +340,7 @@ func (a *Agent) RunJob(name, region string) (*pb.Execution, error) {
 
 	res, _, err := a.operationMiddleLayer(in, pb.Ops_READ, nil)
 	if err != nil {
-		log.Loger.WithFields(logrus.Fields{
+		log.FmdLoger.WithFields(logrus.Fields{
 			"name":   name,
 			"region": region,
 		}).WithError(err).Error("Agent: RunJob try to get job info failed")
@@ -363,7 +363,7 @@ func (a *Agent) RunJob(name, region string) (*pb.Execution, error) {
 func (a *Agent) remoteRunJob(job *pb.Job, remoteServer string) (*pb.Execution, error) {
 	rsIp, rsPort, err := a.getRPCConfig(remoteServer)
 	if err != nil {
-		log.Loger.WithFields(logrus.Fields{
+		log.FmdLoger.WithFields(logrus.Fields{
 			"Region":   job.Region,
 			"nodeName": remoteServer,
 		}).WithError(err).Error("Agent: RunJob get rpc config filed")
@@ -380,7 +380,7 @@ func (a *Agent) localRunJob(job *pb.Job) (*pb.Execution, error) {
 		SchedulerNodeName: a.config.Nodename,
 		Group:             time.Now().UnixNano(),
 	}
-	log.Loger.WithFields(logrus.Fields{
+	log.FmdLoger.WithFields(logrus.Fields{
 		"name":   ex.Name,
 		"region": ex.Region,
 		"group":  ex.Group,

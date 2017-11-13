@@ -262,7 +262,7 @@ func VerifyJob(job *pb.Job) error {
 		if job.ParentJobName == "" {
 			return fmt.Errorf("%s: %s", errors.ErrScheduleParse.Error(), err)
 		}
-		log.Loger.WithFields(logrus.Fields{
+		log.FmdLoger.WithFields(logrus.Fields{
 			"Name":          job.Name,
 			"Region":        job.Region,
 			"Schedule":      job.Schedule,

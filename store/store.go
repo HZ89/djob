@@ -104,13 +104,11 @@ func (l *LockerChain) Stop() {
 
 func (l *LockerChain) lockRenew() {
 	go func() {
+		log.FmdLoger.Debug("Store-Lock: start lockRenew goroutine")
 		for {
-			log.Loger.Debugf("Store-Lock: %v", l.chain)
 			select {
 			case <-time.After(lockTTL * 0.1 * time.Second):
-				log.Loger.Debug("Store-Lock: renew start")
 				l.renew()
-				log.Loger.Debug("Store-Lock: renew stop")
 			case <-l.stopCh:
 				return
 			}
@@ -172,7 +170,7 @@ func (l *LockerChain) AddLocker(obj interface{}, lockType LockType) error {
 		bornTime: time.Now(),
 	}
 	l.chain.Store(lockpath, objlock)
-	log.Loger.WithFields(logrus.Fields{
+	log.FmdLoger.WithFields(logrus.Fields{
 		"key":   lockpath,
 		"value": objlock,
 	}).Debug("Store-Lock: store a lock into map")
@@ -191,13 +189,13 @@ func (l *LockerChain) ReleaseLocker(obj interface{}, lockType LockType) error {
 	}
 	t, ok := v.(*objKey)
 	if !ok {
-		log.Loger.Fatalf("Store-Lock: lockerChain got a unknown type: %v", v)
+		log.FmdLoger.Fatalf("Store-Lock: lockerChain got a unknown type: %v", v)
 	}
 	if err = t.locker.Unlock(); err != nil {
 		return err
 	}
 	l.chain.Delete(lockpath)
-	log.Loger.WithFields(logrus.Fields{
+	log.FmdLoger.WithFields(logrus.Fields{
 		"key":   lockpath,
 		"value": t,
 	}).Debug("Store-Lock: delete a lock from map")
@@ -208,7 +206,7 @@ func (l *LockerChain) ReleaseAll() {
 	l.chain.Range(func(key, v interface{}) bool {
 		t, ok := v.(*objKey)
 		if !ok {
-			log.Loger.Fatalf("Store-Lock: lockerChain got a unknown type: %v", v)
+			log.FmdLoger.Fatalf("Store-Lock: lockerChain got a unknown type: %v", v)
 		}
 		t.locker.Unlock()
 		l.chain.Delete(key)
@@ -227,7 +225,7 @@ func NewKVStore(backend string, servers []string, keyspace string) (*KVStore, er
 	if err != nil {
 		return nil, err
 	}
-	log.Loger.WithFields(logrus.Fields{
+	log.FmdLoger.WithFields(logrus.Fields{
 		"backend":  backend,
 		"servers":  servers,
 		"keyspace": keyspace,
@@ -249,7 +247,7 @@ func (k *KVStore) buildLockKey(obj interface{}, lockType LockType) (key string, 
 	name := util.GetFieldValue(obj, "Name")
 	region := util.GetFieldValue(obj, "Region")
 	if name == nil || region == nil {
-		log.Loger.WithFields(logrus.Fields{
+		log.FmdLoger.WithFields(logrus.Fields{
 			"ObjType":         util.GetType(obj),
 			"NameFieldType":   util.GetFieldType(obj, "Name"),
 			"RegionFieldType": util.GetFieldType(obj, "Region"),
@@ -286,7 +284,7 @@ func (k *KVStore) WatchLock(obj interface{}, stopCh chan struct{}) (chan string,
 				if len(kps) == 0 {
 					continue
 				}
-				log.Loger.Debugf("Store: watch from %s got %v", watchPath, kps)
+				log.FmdLoger.Debugf("Store: watch from %s got %v", watchPath, kps)
 				for _, kp := range kps {
 					v := strings.Split(kp.Key, "###")
 					outCh <- v[0]
@@ -312,7 +310,7 @@ func (k *KVStore) WhoLocked(obj interface{}, lockType LockType) (v string) {
 	key, _ := k.buildLockKey(obj, lockType)
 	locker, err := k.client.Get(key)
 	if err != nil && err != libstore.ErrKeyNotFound {
-		log.Loger.WithField("key", key).WithError(err).Fatal("Store: get key failed")
+		log.FmdLoger.WithField("key", key).WithError(err).Fatal("Store: get key failed")
 	}
 	if locker != nil {
 		v = string(locker.Value)
@@ -329,7 +327,7 @@ func (k *KVStore) lock(obj interface{}, lockType LockType, lockOpt *libstore.Loc
 	}
 	locker, err = k.client.NewLock(key, lockOpt)
 	if err != nil {
-		log.Loger.WithField("key", key).WithError(err).Fatal("Store: New lock failed")
+		log.FmdLoger.WithField("key", key).WithError(err).Fatal("Store: New lock failed")
 	}
 
 	errCh := make(chan error)
@@ -400,7 +398,7 @@ func (k *KVStore) GetJobStatus(in *pb.JobStatus) (out *pb.JobStatus, err error) 
 	if err = util.JsonToPb(res.Value, out); err != nil {
 		return nil, err
 	}
-	log.Loger.WithFields(logrus.Fields{
+	log.FmdLoger.WithFields(logrus.Fields{
 		"Name":         out.Name,
 		"Region":       out.Region,
 		"SuccessCount": out.SuccessCount,
@@ -419,7 +417,7 @@ func (k *KVStore) SetJobStatus(status *pb.JobStatus) (*pb.JobStatus, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Loger.WithFields(logrus.Fields{
+	log.FmdLoger.WithFields(logrus.Fields{
 		"Name":         status.Name,
 		"Region":       status.Region,
 		"SuccessCount": status.SuccessCount,
@@ -516,7 +514,7 @@ func (m *MemStore) releaseOverdueKey() {
 	now := time.Now()
 	iter, err := m.memBuf.Seek(nil)
 	if err != nil {
-		log.Loger.Fatalf("Store: memBuf Seek failed: %v", err)
+		log.FmdLoger.Fatalf("Store: memBuf Seek failed: %v", err)
 	}
 	defer iter.Close()
 	for ; iter.Valid(); iter.Next() {
@@ -524,11 +522,11 @@ func (m *MemStore) releaseOverdueKey() {
 		var e *entry
 		e, err = m.getEntry(key)
 		if err != nil && err != errors.ErrNotExist {
-			log.Loger.WithError(err).Fatalf("Store: memBuf Seek get key filed: key: %s, value: %v", string(key), e)
+			log.FmdLoger.WithError(err).Fatalf("Store: memBuf Seek get key filed: key: %s, value: %v", string(key), e)
 		}
 
 		if e != nil {
-			log.Loger.WithFields(logrus.Fields{
+			log.FmdLoger.WithFields(logrus.Fields{
 				"key":       string(key),
 				"deadTime":  e.DeadTime.String(),
 				"isOverdue": m.isOverdue(e, now),
@@ -537,7 +535,7 @@ func (m *MemStore) releaseOverdueKey() {
 
 		if e != nil && m.isOverdue(e, now) {
 			if err = m.memBuf.Delete(key); err != nil {
-				log.Loger.WithField("key", string(key)).WithError(err).Fatal("Store: purge overdue key failed")
+				log.FmdLoger.WithField("key", string(key)).WithError(err).Fatal("Store: purge overdue key failed")
 			}
 		}
 	}

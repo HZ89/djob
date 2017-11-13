@@ -36,7 +36,7 @@ import (
 
 // SendBackExecution handle job exec return
 func (a *Agent) SendBackExecution(ex *pb.Execution) (err error) {
-	log.Loger.WithFields(logrus.Fields{
+	log.FmdLoger.WithFields(logrus.Fields{
 		"JobName":     ex.Name,
 		"Region":      ex.Region,
 		"Group":       ex.Group,
@@ -45,7 +45,7 @@ func (a *Agent) SendBackExecution(ex *pb.Execution) (err error) {
 
 	_, _, err = a.operationMiddleLayer(ex, pb.Ops_ADD, nil)
 	if err != nil {
-		log.Loger.WithError(err).WithFields(logrus.Fields{
+		log.FmdLoger.WithError(err).WithFields(logrus.Fields{
 			"JobName":     ex.Name,
 			"Region":      ex.Region,
 			"Group":       ex.Group,
@@ -53,7 +53,7 @@ func (a *Agent) SendBackExecution(ex *pb.Execution) (err error) {
 		}).Error("RPC: Save Execution to backend failed")
 		return
 	}
-	log.Loger.Debug("RPC: Execution has been saved, start modfiy jobstatus")
+	log.FmdLoger.Debug("RPC: Execution has been saved, start modfiy jobstatus")
 	status := &pb.JobStatus{
 		Name:   ex.Name,
 		Region: ex.Region,
@@ -65,7 +65,7 @@ func (a *Agent) SendBackExecution(ex *pb.Execution) (err error) {
 			return err
 		}
 		defer a.lockerChain.ReleaseLocker(status, store.RW)
-		log.Loger.WithFields(logrus.Fields{
+		log.FmdLoger.WithFields(logrus.Fields{
 			"name":   status.Name,
 			"region": status.Region,
 		}).Debug("RPC: succeed lock jobstatus")
@@ -78,7 +78,7 @@ func (a *Agent) SendBackExecution(ex *pb.Execution) (err error) {
 		if len(out) != 0 {
 			es, ok := out[0].(*pb.JobStatus)
 			if !ok {
-				log.Loger.Fatal(fmt.Sprintf("RPC: SendBackExecution want a JobStatus, but %v", reflect.TypeOf(out[0])))
+				log.FmdLoger.Fatal(fmt.Sprintf("RPC: SendBackExecution want a JobStatus, but %v", reflect.TypeOf(out[0])))
 			}
 
 			status.LastError = es.LastError
@@ -99,7 +99,7 @@ func (a *Agent) SendBackExecution(ex *pb.Execution) (err error) {
 
 		_, _, err = a.operationMiddleLayer(status, pb.Ops_MODIFY, nil)
 		if err != nil {
-			log.Loger.WithError(err).WithFields(logrus.Fields{
+			log.FmdLoger.WithError(err).WithFields(logrus.Fields{
 				"JobName":     status.Name,
 				"Region":      status.Region,
 				"Group":       ex.Group,
@@ -120,14 +120,14 @@ func (a *Agent) GetJob(name, region string) (*pb.Job, error) {
 		return nil, err
 	}
 	if len(out) == 0 {
-		log.Loger.WithFields(logrus.Fields{
+		log.FmdLoger.WithFields(logrus.Fields{
 			"Name":   name,
 			"Region": region,
 		}).Warn("RPC: GetJob the return nothing")
 		return nil, errors.ErrNotExist
 	}
 	if len(out) != 1 {
-		log.Loger.WithFields(logrus.Fields{
+		log.FmdLoger.WithFields(logrus.Fields{
 			"Name":   name,
 			"Region": region,
 		}).Warn("RPC: GetJob return job object is not unique")
@@ -135,7 +135,7 @@ func (a *Agent) GetJob(name, region string) (*pb.Job, error) {
 	if t, ok := out[0].(*pb.Job); ok {
 		return t, nil
 	}
-	log.Loger.WithFields(logrus.Fields{
+	log.FmdLoger.WithFields(logrus.Fields{
 		"Name":   name,
 		"Region": region,
 	}).Fatalf("RPC: GetJob want a %v, but get %v", reflect.TypeOf(&pb.Job{}), reflect.TypeOf(out[0]))
@@ -144,7 +144,7 @@ func (a *Agent) GetJob(name, region string) (*pb.Job, error) {
 
 // forwarding ops to remote or perform it in local
 func (a *Agent) PerformOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int, error) {
-	log.Loger.Debugf("RPC: Server got a %v, ops: %s, search: %v", obj, ops, search)
+	log.FmdLoger.Debugf("RPC: Server got a %v, ops: %s, search: %v", obj, ops, search)
 	if job, ok := obj.(*pb.Job); ok {
 		if job.Region == a.config.Region {
 			if job.SchedulerNodeName == a.config.Nodename {
@@ -152,7 +152,7 @@ func (a *Agent) PerformOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]in
 					if err := a.lockerChain.AddLocker(job, store.OWN); err != nil {
 						return nil, 0, err
 					}
-					log.Loger.WithField("Obj", obj).Debug("RPC: Server lock done")
+					log.FmdLoger.WithField("Obj", obj).Debug("RPC: Server lock done")
 				}
 			}
 		}

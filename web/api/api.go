@@ -124,7 +124,7 @@ func NewAPIServer(ip string, port int,
 	return &APIServer{
 		bindIP:    ip,
 		bindPort:  port,
-		loger:     log.Loger,
+		loger:     log.FmdLoger,
 		tokenList: n,
 		tls:       tls,
 		keyPair:   pair,
@@ -133,6 +133,13 @@ func NewAPIServer(ip string, port int,
 }
 
 func (a *APIServer) prepareGin() *gin.Engine {
+
+	if a.loger.Logger.Level.String() == "debug" {
+		gin.SetMode(gin.DebugMode)
+	} else {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	r := gin.New()
 	r.Use(a.logMiddleware())
 	r.Use(a.tokenAuthMiddleware())
@@ -238,7 +245,7 @@ func (a *APIServer) search(obj interface{}, search *pb.Search, c *gin.Context) {
 				resp.Data = append(resp.Data, t)
 			} else {
 				a.respondWithError(http.StatusInternalServerError, &pb.ApiJobResponse{Succeed: false, Message: errors.ErrNotExpectation.Error()}, c)
-				log.Loger.WithError(errors.ErrNotExpectation).Fatal("API: Search result error")
+				log.FmdLoger.WithError(errors.ErrNotExpectation).Fatal("API: Search result error")
 				return
 			}
 		}
@@ -252,7 +259,7 @@ func (a *APIServer) search(obj interface{}, search *pb.Search, c *gin.Context) {
 				resp.Data = append(resp.Data, t)
 			} else {
 				a.respondWithError(http.StatusInternalServerError, &pb.ApiJobResponse{Succeed: false, Message: errors.ErrNotExpectation.Error()}, c)
-				log.Loger.WithError(errors.ErrNotExpectation).Fatal("API: Search result error")
+				log.FmdLoger.WithError(errors.ErrNotExpectation).Fatal("API: Search result error")
 				return
 			}
 		}

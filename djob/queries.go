@@ -45,7 +45,7 @@ func (a *Agent) sendJobCountQuery(region string) ([]*pb.JobCountResp, error) {
 	}
 	qr, err := a.serf.Query(QueryJobCount, nil, params)
 	if err != nil {
-		log.Loger.WithFields(logrus.Fields{
+		log.FmdLoger.WithFields(logrus.Fields{
 			"query": QueryJobCount,
 			"error": err,
 		}).Fatal("Agent: Error sending serf query")
@@ -63,14 +63,14 @@ func (a *Agent) sendJobCountQuery(region string) ([]*pb.JobCountResp, error) {
 
 		case ack, ok := <-ackCh:
 			if ok {
-				log.Loger.WithFields(logrus.Fields{
+				log.FmdLoger.WithFields(logrus.Fields{
 					"query": QueryJobCount,
 					"from":  ack,
 				}).Debug("Agent: Received ack")
 			}
 		case resp, ok := <-respCh:
 			if ok {
-				log.Loger.WithFields(logrus.Fields{
+				log.FmdLoger.WithFields(logrus.Fields{
 					"query": QueryJobCount,
 					"resp":  string(resp.Payload),
 				}).Debug("Agent: Received resp")
@@ -94,13 +94,13 @@ func (a *Agent) receiveJobCountQuery(query *serf.Query) {
 		Count: int64(a.scheduler.JobCount()),
 	}
 	respPb, _ := proto.Marshal(&resp)
-	log.Loger.WithFields(logrus.Fields{
+	log.FmdLoger.WithFields(logrus.Fields{
 		"name":   resp.Name,
 		"count":  resp.Count,
 		"respPb": string(respPb),
 	}).Debug("Agent: respone of job:count")
 	if err := query.Respond(respPb); err != nil {
-		log.Loger.WithError(err).Fatal("Agent: serf quert Responed failed")
+		log.FmdLoger.WithError(err).Fatal("Agent: serf quert Responed failed")
 	}
 	return
 }
@@ -109,7 +109,7 @@ func (a *Agent) sendRunJobQuery(ex *pb.Execution, job *pb.Job) {
 
 	exPb, err := proto.Marshal(ex)
 	if err != nil {
-		log.Loger.WithError(err).Fatal("Agent: Encode failed")
+		log.FmdLoger.WithError(err).Fatal("Agent: Encode failed")
 	}
 
 	var params *serf.QueryParam
@@ -123,14 +123,14 @@ func (a *Agent) sendRunJobQuery(ex *pb.Execution, job *pb.Job) {
 	}
 
 	if err != nil {
-		log.Loger.WithFields(logrus.Fields{
+		log.FmdLoger.WithFields(logrus.Fields{
 			"Query": QueryRunJob,
 			"stage": "prepare",
 		}).WithError(err).Error("Agent: Create serf query param failed")
 		return
 	}
 
-	log.Loger.WithFields(logrus.Fields{
+	log.FmdLoger.WithFields(logrus.Fields{
 		"query_name": QueryRunJob,
 		"job_name":   job.Name,
 		"job_region": job.Region,
@@ -139,7 +139,7 @@ func (a *Agent) sendRunJobQuery(ex *pb.Execution, job *pb.Job) {
 
 	qr, err := a.serf.Query(QueryRunJob, exPb, params)
 	if err != nil {
-		log.Loger.WithField("query", QueryRunJob).WithError(err).Fatal("Agent: Sending query error")
+		log.FmdLoger.WithField("query", QueryRunJob).WithError(err).Fatal("Agent: Sending query error")
 	}
 	defer qr.Close()
 
@@ -149,7 +149,7 @@ func (a *Agent) sendRunJobQuery(ex *pb.Execution, job *pb.Job) {
 		select {
 		case ack, ok := <-ackCh:
 			if ok {
-				log.Loger.WithFields(logrus.Fields{
+				log.FmdLoger.WithFields(logrus.Fields{
 					"query": QueryRunJob,
 					"from":  ack,
 				}).Debug("Agent: Received ack")
@@ -157,7 +157,7 @@ func (a *Agent) sendRunJobQuery(ex *pb.Execution, job *pb.Job) {
 
 		case resp, ok := <-respCh:
 			if ok {
-				log.Loger.WithFields(logrus.Fields{
+				log.FmdLoger.WithFields(logrus.Fields{
 					"query":   QueryRunJob,
 					"payload": string(resp.Payload),
 				}).Debug("Agent: Received response")
@@ -165,7 +165,7 @@ func (a *Agent) sendRunJobQuery(ex *pb.Execution, job *pb.Job) {
 
 		}
 	}
-	log.Loger.WithFields(logrus.Fields{
+	log.FmdLoger.WithFields(logrus.Fields{
 		"query": QueryRunJob,
 	}).Debug("Agent: Done receiving acks and responses")
 
@@ -174,10 +174,10 @@ func (a *Agent) sendRunJobQuery(ex *pb.Execution, job *pb.Job) {
 func (a *Agent) receiveRunJobQuery(query *serf.Query) {
 	var ex pb.Execution
 	if err := proto.Unmarshal(query.Payload, &ex); err != nil {
-		log.Loger.WithError(err).Fatal("Agent: Error decode query payload")
+		log.FmdLoger.WithError(err).Fatal("Agent: Error decode query payload")
 	}
 
-	log.Loger.WithFields(logrus.Fields{
+	log.FmdLoger.WithFields(logrus.Fields{
 		"job":    ex.Name,
 		"region": ex.Region,
 		"group":  ex.Group,
@@ -185,7 +185,7 @@ func (a *Agent) receiveRunJobQuery(query *serf.Query) {
 
 	ip, port, err := a.getRPCConfig(ex.SchedulerNodeName)
 	if err != nil {
-		log.Loger.WithError(err).Fatal("Agent: get rpc config failed")
+		log.FmdLoger.WithError(err).Fatal("Agent: get rpc config failed")
 	}
 
 	rpcc := a.newRPCClient(ip, port)
@@ -193,7 +193,7 @@ func (a *Agent) receiveRunJobQuery(query *serf.Query) {
 
 	job, err := rpcc.GetJob(ex.Name, ex.Region)
 	if err != nil {
-		log.Loger.WithError(err).Fatal("Agent: rpc call GetJob Failed")
+		log.FmdLoger.WithError(err).Fatal("Agent: rpc call GetJob Failed")
 	}
 	logrus.WithFields(logrus.Fields{
 		"job":    job.Name,
@@ -203,9 +203,9 @@ func (a *Agent) receiveRunJobQuery(query *serf.Query) {
 
 	go func() {
 		if err = a.execJob(job, &ex); err != nil {
-			log.Loger.WithError(err).Error("Proc: Exec job Failed")
+			log.FmdLoger.WithError(err).Error("Proc: Exec job Failed")
 		}
-		log.Loger.WithFields(logrus.Fields{
+		log.FmdLoger.WithFields(logrus.Fields{
 			"job":    ex.Name,
 			"region": ex.Region,
 			"group":  ex.Group,

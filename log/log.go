@@ -27,19 +27,19 @@ import (
 	//	"github.com/rifflock/lfshook"
 )
 
-var Loger = logrus.NewEntry(logrus.New())
+var FmdLoger = logrus.NewEntry(logrus.New())
 
 func InitLogger(logLevel string, node string, file string) {
 	formattedLogger := logrus.New()
 	if file != "" {
 		fd, err := os.Open(file)
 		if err != nil && err != os.ErrNotExist {
-			Loger.WithError(err).Fatal("Open log file failed")
+			FmdLoger.WithError(err).Fatal("Open log file failed")
 		}
 		if fd == nil {
 			fd, err = os.Create(file)
 			if err != nil {
-				Loger.WithError(err).Fatal("Create log file failed")
+				FmdLoger.WithError(err).Fatal("Create log file failed")
 			}
 		}
 		fd.Close()
@@ -49,7 +49,7 @@ func InitLogger(logLevel string, node string, file string) {
 			rotatelogs.WithRotationTime(time.Duration(86400)*time.Second),
 		)
 		if err != nil {
-			Loger.WithError(err).Fatal("Create rotate log failed")
+			FmdLoger.WithError(err).Fatal("Create rotate log failed")
 		}
 		formattedLogger.Out = writer
 	}
@@ -63,5 +63,5 @@ func InitLogger(logLevel string, node string, file string) {
 	}
 
 	formattedLogger.Level = level
-	Loger = logrus.NewEntry(formattedLogger).WithField("node", node)
+	FmdLoger = logrus.NewEntry(formattedLogger).WithField("node", node)
 }

@@ -34,7 +34,7 @@ func (a *Agent) ListRegions() (regions []string, err error) {
 		return
 	}
 	if len(regions) != 0 {
-		log.Loger.Debug("Agent: regions hit cache")
+		log.FmdLoger.Debug("Agent: regions hit cache")
 		return
 	}
 
@@ -61,12 +61,12 @@ func (a *Agent) AddJob(in *pb.Job) (out *pb.Job, err error) {
 	if err != nil {
 		return
 	}
-	log.Loger.WithField("obj", res).Debug("Agent: API AddJob got this")
+	log.FmdLoger.WithField("obj", res).Debug("Agent: API AddJob got this")
 	if t, ok := res[0].(*pb.Job); ok {
 		out = t
 		return
 	}
-	log.Loger.Fatalf("Agent: API AddJob get type %v is not exception", res)
+	log.FmdLoger.Fatalf("Agent: API AddJob get type %v is not exception", res)
 	return nil, errors.ErrNotExpectation
 }
 
@@ -80,7 +80,7 @@ func (a *Agent) ModifyJob(in *pb.Job) (out *pb.Job, err error) {
 		out = t
 		return
 	}
-	log.Loger.Fatalf("Agent: API AddJob get type %v is not exception", res)
+	log.FmdLoger.Fatalf("Agent: API AddJob get type %v is not exception", res)
 	return nil, errors.ErrNotExpectation
 }
 
@@ -94,7 +94,7 @@ func (a *Agent) DeleteJob(in *pb.Job) (out *pb.Job, err error) {
 		out = t
 		return
 	}
-	log.Loger.Fatalf("Agent: API AddJob get type %v is not exception", res)
+	log.FmdLoger.Fatalf("Agent: API AddJob get type %v is not exception", res)
 	return nil, errors.ErrNotExpectation
 }
 
@@ -107,7 +107,7 @@ func (a *Agent) ListJob(name, region string) (jobs []*pb.Job, err error) {
 		for _, r := range regions {
 			res, err := a.ListJob("", r)
 			if err != nil {
-				log.Loger.WithField("region", r).Error("Agent: list job in this region failed")
+				log.FmdLoger.WithField("region", r).Error("Agent: list job in this region failed")
 				return nil, err
 			}
 			jobs = append(jobs, res...)
@@ -125,7 +125,7 @@ func (a *Agent) ListJob(name, region string) (jobs []*pb.Job, err error) {
 			jobs = append(jobs, t)
 			continue
 		}
-		log.Loger.Fatalf("Agent: API AddJob get type %v is not exception", res)
+		log.FmdLoger.Fatalf("Agent: API AddJob get type %v is not exception", res)
 	}
 	return
 }
@@ -141,7 +141,7 @@ func (a *Agent) GetStatus(name, region string) (out *pb.JobStatus, err error) {
 		out = t
 		return
 	}
-	log.Loger.Fatalf("Agent: API AddJob get type %v is not exception", res)
+	log.FmdLoger.Fatalf("Agent: API AddJob get type %v is not exception", res)
 	return nil, errors.ErrNotExpectation
 }
 
@@ -157,7 +157,7 @@ func (a *Agent) ListExecutions(name, region string, group int64) (out []*pb.Exec
 			out = append(out, t)
 			continue
 		}
-		log.Loger.Fatalf("Agent: API AddJob get type %v is not exception", res)
+		log.FmdLoger.Fatalf("Agent: API AddJob get type %v is not exception", res)
 	}
 	return
 }
