@@ -80,7 +80,7 @@ func NewRPCServer(bindIp string, port int, operator Operator, tlsopt *TlsOpt) *R
 func (s *RpcServer) ProxyJobRun(ctx context.Context, in *pb.Job) (*pb.Execution, error) {
 	exec, err := s.operator.RunJob(in.Name, in.Region)
 	if err != nil {
-		return nil, err
+		return nil, errors.GenGRPCErr(err)
 	}
 	return exec, nil
 }
@@ -88,14 +88,14 @@ func (s *RpcServer) ProxyJobRun(ctx context.Context, in *pb.Job) (*pb.Execution,
 func (s *RpcServer) GetJob(ctx context.Context, job *pb.Job) (*pb.Job, error) {
 	job, err := s.operator.GetJob(job.Name, job.Region)
 	if err != nil {
-		return nil, err
+		return nil, errors.GenGRPCErr(err)
 	}
 	return job, nil
 }
 
 func (s *RpcServer) ExecDone(ctx context.Context, execution *pb.Execution) (*google_protobuf.Empty, error) {
 	if err := s.operator.SendBackExecution(execution); err != nil {
-		return nil, err
+		return nil, errors.GenGRPCErr(err)
 	}
 	return &google_protobuf.Empty{}, nil
 }
@@ -105,22 +105,22 @@ func (s *RpcServer) DoOps(ctx context.Context, p *pb.Params) (*pb.Result, error)
 	log.FmdLoger.WithField("type", class).Debug("RPC: Server got a class")
 	t, ok := registry[class]
 	if !ok {
-		return nil, errors.ErrType
+		return nil, errors.ErrType.GenGRPCErr()
 	}
 	instance := reflect.New(t).Interface()
 	log.FmdLoger.WithField("instance_type", reflect.TypeOf(instance)).Debug("RPC: Server prepare use instance decode obj")
 	if err := ptypes.UnmarshalAny(p.Obj, instance.(proto.Message)); err != nil {
-		return nil, err
+		return nil, errors.GenGRPCErr(err)
 	}
 	r, count, err := s.operator.PerformOps(instance, p.Ops, p.Search)
 	if err != nil {
-		return nil, err
+		return nil, errors.GenGRPCErr(err)
 	}
 	var rs []*any.Any
 	for _, i := range r {
 		b, err := ptypes.MarshalAny(i.(proto.Message))
 		if err != nil {
-			return nil, err
+			return nil, errors.GenGRPCErr(err)
 		}
 		rs = append(rs, b)
 	}
@@ -248,6 +248,10 @@ func (c *RpcClient) Shutdown() error {
 func (c *RpcClient) ProxyJobRun(name, region string) (*pb.Execution, error) {
 	exec, err := c.client.ProxyJobRun(context.Background(), &pb.Job{Name: name, Region: region})
 	if err != nil {
+		if terr, ok := errors.NewFromGRPCErr(err); ok {
+			return nil, terr
+		}
+		log.FmdLoger.WithError(err).Error("RPC-Client: got err but not a GRPC error")
 		return nil, err
 	}
 	return exec, nil
@@ -257,6 +261,10 @@ func (c *RpcClient) GetJob(name, region string) (*pb.Job, error) {
 	p := pb.Job{Name: name, Region: region}
 	job, err := c.client.GetJob(context.Background(), &p)
 	if err != nil {
+		if terr, ok := errors.NewFromGRPCErr(err); ok {
+			return nil, terr
+		}
+		log.FmdLoger.WithError(err).Error("RPC-Client: got err but not a GRPC error")
 		return nil, err
 	}
 
@@ -266,6 +274,10 @@ func (c *RpcClient) GetJob(name, region string) (*pb.Job, error) {
 func (c *RpcClient) ExecDone(execution *pb.Execution) error {
 	_, err := c.client.ExecDone(context.Background(), execution)
 	if err != nil {
+		if terr, ok := errors.NewFromGRPCErr(err); ok {
+			return terr
+		}
+		log.FmdLoger.WithError(err).Error("RPC-Client: got err but not a GRPC error")
 		return err
 	}
 	return nil
@@ -279,6 +291,10 @@ func (c *RpcClient) DoOps(obj interface{}, ops pb.Ops, search *pb.Search) (insta
 	log.FmdLoger.WithField("Any Obj", pbObj).Debugf("RPC: client prepare DoOps rpc call, Obj: %v", pbObj)
 	r, err := c.client.DoOps(context.Background(), &pb.Params{Obj: pbObj, Ops: ops, Search: search})
 	if err != nil {
+		if terr, ok := errors.NewFromGRPCErr(err); ok {
+			return nil, 0, terr
+		}
+		log.FmdLoger.WithError(err).Error("RPC-Client: got err but not a GRPC error")
 		return nil, 0, err
 	}
 	log.FmdLoger.WithField("obj", r).Debug("RPC: RPC client call DoOps done, got this")

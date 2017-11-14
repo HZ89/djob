@@ -383,7 +383,13 @@ func (a *Agent) loadJobs(region string) {
 			if !a.store.IsLocked(t, store.OWN) {
 				_, _, err = a.operationMiddleLayer(t, pb.Ops_ADD, nil)
 				if err != nil {
-					log.FmdLoger.WithError(err).Fatal("Agent: load job, add job failed")
+					if terr, ok := err.(*errors.Error); ok {
+						if terr.NotEqual(errors.ErrRepetition) {
+							log.FmdLoger.WithError(err).Fatal("Agent: load job, add job failed")
+						}
+					} else {
+						log.FmdLoger.WithError(err).Fatal("Agent: load job, add job failed")
+					}
 				}
 			}
 			continue

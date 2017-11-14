@@ -241,8 +241,8 @@ func handleAdvertise(oaddr string, daddr string) (string, int, error) {
 	if oaddr == "" {
 		oaddr = daddr
 	}
-	addr, _ := net.ResolveTCPAddr("tcp", oaddr)
-	if !net.IPv6zero.Equal(addr.IP) {
+	addr, err := net.ResolveTCPAddr("tcp", oaddr)
+	if err != nil {
 		var privateIp net.IP
 		var publicIp net.IP
 		ifaces, err := net.Interfaces()

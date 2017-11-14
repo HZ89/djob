@@ -41,10 +41,8 @@ import (
 	"version.uuzu.com/zhuhuipeng/djob/scheduler"
 )
 
-/**
- * Copy field from a struct to another.
- * if have fieldNames just copy this field, if not copy all same name field
- */
+// Copy field from a struct to another.
+// if have fieldNames just copy this field, if not copy all same name field
 func CopyField(toValue, fromValue interface{}, fieldNames ...string) (err error) {
 	var (
 		isSlice      bool
@@ -66,8 +64,8 @@ func CopyField(toValue, fromValue interface{}, fieldNames ...string) (err error)
 		return
 	}
 
-	// Just set it if possible to assign
-	if from.Type().AssignableTo(to.Type()) {
+	// Just set it if possible to assign and no fieldNames
+	if len(fieldNames) == 0 && from.Type().AssignableTo(to.Type()) {
 		to.Set(from)
 		return
 	}
@@ -254,6 +252,10 @@ func RegexpMatch(regEx, url string) bool {
 }
 
 func VerifyJob(job *pb.Job) error {
+
+	if job.Name == "" || job.Region == "" {
+		return errors.ErrArgs
+	}
 	if job.Name == job.ParentJobName {
 		return errors.ErrSameJob
 	}

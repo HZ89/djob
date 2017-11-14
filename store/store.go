@@ -673,8 +673,10 @@ func (s *SQLStore) Find(out interface{}) *SQLStore {
 
 func (s *SQLStore) Create(obj interface{}) *SQLStore {
 	n := s.clone()
-	out := reflect.New(util.IndirectType(reflect.TypeOf(obj))).Interface()
-	err := s.db.Where(obj).First(out).Error
+	old := reflect.New(util.IndirectType(reflect.TypeOf(obj))).Interface()
+	// should use primary key build where condition but just Job can be modify, so just copy Name and Region
+	util.CopyField(old, obj, "Name", "Region")
+	err := s.db.Where(old).First(old).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
 		n.Err = err
 		return n
@@ -690,10 +692,10 @@ func (s *SQLStore) Create(obj interface{}) *SQLStore {
 func (s *SQLStore) Modify(obj interface{}) *SQLStore {
 	n := s.clone()
 	old := reflect.New(util.IndirectType(reflect.TypeOf(obj))).Interface()
-	oldslice := reflect.SliceOf(util.IndirectType(reflect.TypeOf(obj)))
+	//oldslice := reflect.SliceOf(util.IndirectType(reflect.TypeOf(obj)))
 	// should use primary key build where condition but just Job can be modify, so just copy Name and Region
 	util.CopyField(old, obj, "Name", "Region")
-	err := s.db.Where(old).Find(oldslice).Error
+	err := s.db.Where(old).Find(old).Error
 	if err == gorm.ErrRecordNotFound {
 		n.Err = errors.ErrNotExist
 		return n
@@ -703,7 +705,7 @@ func (s *SQLStore) Modify(obj interface{}) *SQLStore {
 		return n
 	}
 
-	n.Err = s.db.Model(&old).Updates(obj).Error
+	n.Err = s.db.Model(obj).Updates(obj).Error
 	return n
 }
 

@@ -215,6 +215,13 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 
 		job.SchedulerNodeName = a.config.Nodename
 
+		if !a.scheduler.JobExist(job) {
+			log.FmdLoger.WithField("job", job).Debug("Agent: add job to scheduler")
+			if err = a.scheduler.AddJob(job); err != nil {
+				return nil, count, err
+			}
+		}
+
 		var oldJob pb.Job
 		if err = a.sqlStore.Model(&pb.Job{}).Where(&pb.Job{Name: job.Name, Region: job.Region}).Find(&oldJob).Err; err != nil && err != errors.ErrNotExist {
 			return nil, count, err
@@ -225,13 +232,8 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 			if err = a.sqlStore.Create(job).Err; err != nil {
 				return nil, count, err
 			}
-		}
-
-		if !a.scheduler.JobExist(job) {
-			log.FmdLoger.WithField("job", job).Debug("Agent: add job to scheduler")
-			if err = a.scheduler.AddJob(job); err != nil {
-				return nil, count, err
-			}
+		} else {
+			return nil, count, errors.ErrRepetition
 		}
 
 		out := make([]interface{}, 1)

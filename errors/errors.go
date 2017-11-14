@@ -19,42 +19,102 @@
 package errors
 
 import (
-	"errors"
+	"fmt"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var (
-	ErrNotExist              = errors.New("object not exist")
-	ErrTimeOut               = errors.New("time out")
-	ErrUnknown               = errors.New("unknown error")
-	ErrUnknownType           = errors.New("unknown object type")
-	ErrCannotSetNilValue     = errors.New("condition not match")
-	ErrEntryTooLarge         = errors.New("entry is too large")
-	ErrTxnTooLarge           = errors.New("transaction is too large")
-	ErrCanNotFoundNode       = errors.New("could not found any node can use")
-	ErrSameJob               = errors.New("this job set himself as his parent")
-	ErrNoCmd                 = errors.New("a job must have a Command")
-	ErrNoReg                 = errors.New("must specify a region")
-	ErrNoExp                 = errors.New("a job must have a Expression")
-	ErrScheduleParse         = errors.New("can't parse job schedule")
-	ErrType                  = errors.New("type error")
-	ErrArgs                  = errors.New("name or Region must have one")
-	ErrLockTimeout           = errors.New("locking timeout")
-	ErrStartSerf             = errors.New("start serf failed")
-	ErrMissKeyFile           = errors.New("have no key file or cert file path")
-	ErrMissCaFile            = errors.New("have no ca file path")
-	ErrUnknownOps            = errors.New("unknown ops")
-	ErrRepetition            = errors.New("already have same object")
-	ErrLinkNum               = errors.New("count of links must equal to conditions plus one")
-	ErrConditionFormat       = errors.New("error format of conditions")
-	ErrNotSupportSymbol      = errors.New("logic symbol not support")
-	ErrMissApiToken          = errors.New("must have Api tokens")
-	ErrRepetionToken         = errors.New("api token must be unique")
-	ErrNotExpectation        = errors.New("type does not match expectations")
-	ErrIllegalCharacter      = errors.New("'###' is not allow used in key")
-	ErrParentNotInSameRegion = errors.New("parent job must be in same region")
-	ErrParentNotExist        = errors.New("parent job not exist")
-	ErrHaveSubJob            = errors.New("please delete sub-job first")
-	ErrCopyToUnaddressable   = errors.New("copy to value is unaddressable")
-	ErrNodeDead              = errors.New("found node is not alive")
-	ErrNodeNoRPC             = errors.New("found node have no completed rpc config")
+	ErrNil                   = New(95200, "everything is fine")
+	ErrNotExist              = New(95201, "object not exist")
+	ErrTimeOut               = New(95202, "time out")
+	ErrUnknown               = New(95203, "unknown error")
+	ErrUnknownType           = New(95204, "unknown object type")
+	ErrCannotSetNilValue     = New(95205, "condition not match")
+	ErrEntryTooLarge         = New(95206, "entry is too large")
+	ErrTxnTooLarge           = New(95207, "transaction is too large")
+	ErrCanNotFoundNode       = New(95208, "could not found any node can use")
+	ErrSameJob               = New(95209, "this job set himself as his parent")
+	ErrNoCmd                 = New(95210, "a job must have a Command")
+	ErrNoReg                 = New(95211, "must specify a region")
+	ErrNoExp                 = New(95212, "a job must have a Expression")
+	ErrScheduleParse         = New(95213, "can't parse job schedule")
+	ErrType                  = New(95214, "type error")
+	ErrArgs                  = New(95215, "must have name and region")
+	ErrLockTimeout           = New(95216, "locking timeout")
+	ErrStartSerf             = New(95217, "start serf failed")
+	ErrMissKeyFile           = New(95218, "have no key file or cert file path")
+	ErrMissCaFile            = New(95219, "have no ca file path")
+	ErrUnknownOps            = New(95220, "unknown ops")
+	ErrRepetition            = New(95221, "already have same object")
+	ErrLinkNum               = New(95222, "count of links must equal to conditions plus one")
+	ErrConditionFormat       = New(95223, "error format of conditions")
+	ErrNotSupportSymbol      = New(95224, "logic symbol not support")
+	ErrMissApiToken          = New(95225, "must have Api tokens")
+	ErrRepetionToken         = New(95226, "api token must be unique")
+	ErrNotExpectation        = New(95227, "type does not match expectations")
+	ErrIllegalCharacter      = New(95228, "'###' is not allow used in key")
+	ErrParentNotInSameRegion = New(95229, "parent job must be in same region")
+	ErrParentNotExist        = New(95230, "parent job not exist")
+	ErrHaveSubJob            = New(95231, "please delete sub-job first")
+	ErrCopyToUnaddressable   = New(95232, "copy to value is unaddressable")
+	ErrNodeDead              = New(95233, "found node is not alive")
+	ErrNodeNoRPC             = New(95234, "found node have no completed rpc config")
 )
+
+type Error struct {
+	code    int
+	message string
+}
+
+func New(code int, text string) *Error {
+	return &Error{
+		code:    code,
+		message: text,
+	}
+}
+
+func NewFromGRPCErr(err error) (*Error, bool) {
+	if err == nil {
+		return ErrNil, true
+	}
+	s, ok := status.FromError(err)
+	if !ok {
+		return nil, false
+	}
+	if s.Code() > 95200 {
+		return &Error{code: int(s.Code()), message: s.Message()}, true
+	}
+	return nil, false
+}
+
+func (e *Error) Error() string {
+	return fmt.Sprintf("ErrCode=%d, ErrMessage=%s", e.code, e.message)
+}
+
+func (e *Error) GenGRPCErr() error {
+	return status.Errorf(codes.Code(e.code), e.message)
+}
+
+func (e *Error) Equal(err error) bool {
+	if err == nil {
+		return false
+	}
+	if te, ok := err.(*Error); ok {
+		return te.code == e.code
+	}
+	return false
+}
+
+func (e *Error) NotEqual(err error) bool {
+	return !e.Equal(err)
+}
+
+func GenGRPCErr(err error) error {
+	if terr, ok := err.(*Error); ok {
+		return terr.GenGRPCErr()
+	} else {
+		return New(100000, err.Error()).GenGRPCErr()
+	}
+}
