@@ -145,17 +145,5 @@ func (a *Agent) GetJob(name, region string) (*pb.Job, error) {
 // forwarding ops to remote or perform it in local
 func (a *Agent) PerformOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int, error) {
 	log.FmdLoger.Debugf("RPC: Server got a %v, ops: %s, search: %v", obj, ops, search)
-	if job, ok := obj.(*pb.Job); ok {
-		if job.Region == a.config.Region {
-			if job.SchedulerNodeName == a.config.Nodename {
-				if !a.lockerChain.HaveIt(job, store.OWN) {
-					if err := a.lockerChain.AddLocker(job, store.OWN); err != nil {
-						return nil, 0, err
-					}
-					log.FmdLoger.WithField("Obj", obj).Debug("RPC: Server lock done")
-				}
-			}
-		}
-	}
 	return a.operationMiddleLayer(obj, ops, search)
 }

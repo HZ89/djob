@@ -51,12 +51,18 @@ func (a *Agent) operationMiddleLayer(obj interface{}, ops pb.Ops, search *pb.Sea
 		}
 		var jobHandler string
 		if job.SchedulerNodeName != "" {
+			// found me, do this ops
+			if job.SchedulerNodeName == a.config.Nodename {
+				return a.localOps(obj, ops, search)
+			}
 			jobHandler = job.SchedulerNodeName
 		} else {
+			// find who handler this job
 			owner := a.store.WhoLocked(job, store.OWN)
 			if owner == "" {
 				var err error
-				owner, err = a.minimalLoadServer(a.config.Region)
+				// no one perform this, random send to some one
+				owner, err = a.randomPickServer(a.config.Region)
 				if err != nil {
 					return nil, 0, err
 				}
@@ -206,14 +212,21 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 			job.ParentJobName = job.ParentJob.Name
 		}
 
-		// set own locker on the job
-		if !a.lockerChain.HaveIt(job, store.OWN) {
-			if err = a.lockerChain.AddLocker(job, store.OWN); err != nil {
-				return nil, count, err
-			}
+		job.SchedulerNodeName = a.config.Nodename
+
+		var oldJob pb.Job
+		if err = a.sqlStore.Model(&pb.Job{}).Where(&pb.Job{Name: job.Name, Region: job.Region}).Find(&oldJob).Err; err != nil && err != errors.ErrNotExist {
+			return nil, count, err
 		}
 
-		job.SchedulerNodeName = a.config.Nodename
+		if oldJob.Name == "" && oldJob.Region == "" {
+			log.FmdLoger.WithField("job", job).Debug("Agent: ready to save job to SQL")
+			if err = a.sqlStore.Create(job).Err; err != nil {
+				return nil, count, err
+			}
+		} else {
+			return nil, count, errors.ErrRepetition
+		}
 
 		if !a.scheduler.JobExist(job) {
 			log.FmdLoger.WithField("job", job).Debug("Agent: add job to scheduler")
@@ -222,18 +235,11 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 			}
 		}
 
-		var oldJob pb.Job
-		if err = a.sqlStore.Model(&pb.Job{}).Where(&pb.Job{Name: job.Name, Region: job.Region}).Find(&oldJob).Err; err != nil && err != errors.ErrNotExist {
-			return nil, count, err
-		}
-
-		if &oldJob == nil {
-			log.FmdLoger.WithField("job", job).Debug("Agent: ready to save job to SQL")
-			if err = a.sqlStore.Create(job).Err; err != nil {
+		// set own locker on the job
+		if !a.lockerChain.HaveIt(job, store.OWN) {
+			if err = a.lockerChain.AddLocker(job, store.OWN); err != nil {
 				return nil, count, err
 			}
-		} else {
-			return nil, count, errors.ErrRepetition
 		}
 
 		out := make([]interface{}, 1)
@@ -261,6 +267,7 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		if err = a.sqlStore.Model(&pb.Job{}).Modify(job).Err; err != nil {
 			return nil, count, err
 		}
+		a.scheduler.AddJob(job)
 		out := make([]interface{}, 1)
 		out[0] = job
 		return out, count, err
@@ -280,6 +287,7 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		if _, err = a.store.DeleteJobStatus(&pb.JobStatus{Name: job.Name, Region: job.Region}); err != nil {
 			return nil, count, err
 		}
+		a.lockerChain.ReleaseLocker(job, store.OWN)
 		out := make([]interface{}, 1)
 		out[0] = job
 		return out, count, err

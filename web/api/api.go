@@ -69,6 +69,8 @@ func (j pbjson) Render(w http.ResponseWriter) error {
 	if err := marshaler.Marshal(&buf, j.data.(proto.Message)); err != nil {
 		return err
 	}
+	header := w.Header()
+	header["Content-Type"] = jsonContentType
 	w.Write(buf.Bytes())
 	return nil
 }

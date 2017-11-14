@@ -360,6 +360,13 @@ func (a *Agent) runJob() {
 			"Schedule": job.Schedule,
 		}).Debug("Agent: Job ready to run")
 		if job.Disable {
+			log.FmdLoger.WithFields(logrus.Fields{
+				"Name":     job.Name,
+				"Region":   job.Region,
+				"cmd":      job.Command,
+				"Schedule": job.Schedule,
+				"disable":  job.Disable,
+			}).Debug("Agent: Job is in disable status")
 			continue
 		}
 		_, err := a.RunJob(job.Name, job.Region)
