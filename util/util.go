@@ -29,16 +29,15 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/HZ89/djob/errors"
+	"github.com/HZ89/djob/log"
+	pb "github.com/HZ89/djob/message"
+	"github.com/HZ89/djob/scheduler"
 	"github.com/Knetic/govaluate"
 	"github.com/Sirupsen/logrus"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/mattn/go-shellwords"
-
-	"version.uuzu.com/zhuhuipeng/djob/errors"
-	"version.uuzu.com/zhuhuipeng/djob/log"
-	pb "version.uuzu.com/zhuhuipeng/djob/message"
-	"version.uuzu.com/zhuhuipeng/djob/scheduler"
 )
 
 // Copy field from a struct to another.

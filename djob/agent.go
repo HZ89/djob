@@ -33,14 +33,14 @@ import (
 	"github.com/hashicorp/memberlist"
 	"github.com/hashicorp/serf/serf"
 
-	"version.uuzu.com/zhuhuipeng/djob/errors"
-	"version.uuzu.com/zhuhuipeng/djob/log"
-	pb "version.uuzu.com/zhuhuipeng/djob/message"
-	"version.uuzu.com/zhuhuipeng/djob/rpc"
-	"version.uuzu.com/zhuhuipeng/djob/scheduler"
-	"version.uuzu.com/zhuhuipeng/djob/store"
-	"version.uuzu.com/zhuhuipeng/djob/util"
-	"version.uuzu.com/zhuhuipeng/djob/web/api"
+	"github.com/HZ89/djob/errors"
+	"github.com/HZ89/djob/log"
+	pb "github.com/HZ89/djob/message"
+	"github.com/HZ89/djob/rpc"
+	"github.com/HZ89/djob/scheduler"
+	"github.com/HZ89/djob/store"
+	"github.com/HZ89/djob/util"
+	"github.com/HZ89/djob/web/api"
 )
 
 func init() {

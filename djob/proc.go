@@ -23,11 +23,10 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/HZ89/djob/log"
+	pb "github.com/HZ89/djob/message"
 	"github.com/armon/circbuf"
 	"github.com/mattn/go-shellwords"
-
-	"version.uuzu.com/zhuhuipeng/djob/log"
-	pb "version.uuzu.com/zhuhuipeng/djob/message"
 )
 
 const (

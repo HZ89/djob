@@ -23,7 +23,7 @@ import (
 	"sort"
 	"time"
 
-	pb "version.uuzu.com/zhuhuipeng/djob/message"
+	pb "github.com/HZ89/djob/message"
 )
 
 type analyzer interface {

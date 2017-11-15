@@ -31,9 +31,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang/protobuf/proto"
 
-	"version.uuzu.com/zhuhuipeng/djob/errors"
-	"version.uuzu.com/zhuhuipeng/djob/log"
-	pb "version.uuzu.com/zhuhuipeng/djob/message"
+	"github.com/HZ89/djob/errors"
+	"github.com/HZ89/djob/log"
+	pb "github.com/HZ89/djob/message"
 )
 
 type ApiController interface {

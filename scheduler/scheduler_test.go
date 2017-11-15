@@ -22,20 +22,18 @@ import (
 	"reflect"
 	"testing"
 
-	pb "version.uuzu.com/zhuhuipeng/djob/message"
+	pb "github.com/HZ89/djob/message"
 )
 
 func Test_newEntery(t *testing.T) {
 	type args struct {
 		job *pb.Job
 	}
-	tests := []struct {
+	var tests []struct {
 		name    string
 		args    args
 		want    *entry
 		wantErr bool
-	}{
-	// TODO: Add test cases.
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -126,13 +124,11 @@ func TestScheduler_AddJob(t *testing.T) {
 	type args struct {
 		job *pb.Job
 	}
-	tests := []struct {
+	var tests []struct {
 		name    string
 		fields  fields
 		args    args
 		wantErr bool
-	}{
-	// TODO: Add test cases.
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -165,12 +161,10 @@ func TestScheduler_DeleteJob(t *testing.T) {
 	type args struct {
 		job *pb.Job
 	}
-	tests := []struct {
+	var tests []struct {
 		name   string
 		fields fields
 		args   args
-	}{
-	// TODO: Add test cases.
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

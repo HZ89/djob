@@ -25,7 +25,7 @@ import (
 	"github.com/pingcap/goleveldb/leveldb/memdb"
 	"github.com/pingcap/goleveldb/leveldb/util"
 
-	derrors "version.uuzu.com/zhuhuipeng/djob/errors"
+	derrors "github.com/HZ89/djob/errors"
 )
 
 // Those limits is enforced to make sure the transaction can be well handled by TiKV.

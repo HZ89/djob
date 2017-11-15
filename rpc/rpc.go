@@ -25,17 +25,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/HZ89/djob/log"
 	google_protobuf "github.com/golang/protobuf/ptypes/empty"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"version.uuzu.com/zhuhuipeng/djob/log"
 
+	"github.com/HZ89/djob/errors"
+	pb "github.com/HZ89/djob/message"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/any"
-	"version.uuzu.com/zhuhuipeng/djob/errors"
-	pb "version.uuzu.com/zhuhuipeng/djob/message"
 )
 
 var registry = make(map[string]reflect.Type)

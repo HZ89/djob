@@ -21,11 +21,11 @@ package djob
 import (
 	"fmt"
 
+	"github.com/HZ89/djob/log"
+	pb "github.com/HZ89/djob/message"
 	"github.com/Sirupsen/logrus"
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/serf/serf"
-	"version.uuzu.com/zhuhuipeng/djob/log"
-	pb "version.uuzu.com/zhuhuipeng/djob/message"
 )
 
 const (

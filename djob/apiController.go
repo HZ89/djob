@@ -21,12 +21,12 @@ package djob
 import (
 	"time"
 
+	"github.com/HZ89/djob/util"
 	"github.com/hashicorp/serf/serf"
-	"version.uuzu.com/zhuhuipeng/djob/util"
 
-	"version.uuzu.com/zhuhuipeng/djob/errors"
-	"version.uuzu.com/zhuhuipeng/djob/log"
-	pb "version.uuzu.com/zhuhuipeng/djob/message"
+	"github.com/HZ89/djob/errors"
+	"github.com/HZ89/djob/log"
+	pb "github.com/HZ89/djob/message"
 )
 
 func (a *Agent) ListRegions() (regions []string, err error) {

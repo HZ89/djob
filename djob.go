@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/HZ89/djob/cmd"
 	"github.com/mitchellh/cli"
-	"version.uuzu.com/zhuhuipeng/djob/cmd"
 )
 
 const VERSION = "0.1.0"

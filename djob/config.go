@@ -27,8 +27,8 @@ import (
 
 	"github.com/spf13/viper"
 
-	"version.uuzu.com/zhuhuipeng/djob/errors"
-	"version.uuzu.com/zhuhuipeng/djob/log"
+	"github.com/HZ89/djob/errors"
+	"github.com/HZ89/djob/log"
 )
 
 // agent config

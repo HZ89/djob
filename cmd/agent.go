@@ -24,8 +24,8 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/HZ89/djob/djob"
 	"github.com/mitchellh/cli"
-	"version.uuzu.com/zhuhuipeng/djob/djob"
 )
 
 type AgentCmd struct {

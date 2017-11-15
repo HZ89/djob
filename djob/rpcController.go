@@ -26,10 +26,10 @@ import (
 
 	"github.com/Sirupsen/logrus"
 
-	"version.uuzu.com/zhuhuipeng/djob/errors"
-	"version.uuzu.com/zhuhuipeng/djob/log"
-	pb "version.uuzu.com/zhuhuipeng/djob/message"
-	"version.uuzu.com/zhuhuipeng/djob/store"
+	"github.com/HZ89/djob/errors"
+	"github.com/HZ89/djob/log"
+	pb "github.com/HZ89/djob/message"
+	"github.com/HZ89/djob/store"
 )
 
 // implementation of Operator interface

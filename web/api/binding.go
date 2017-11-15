@@ -28,8 +28,8 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 
-	"version.uuzu.com/zhuhuipeng/djob/errors"
-	"version.uuzu.com/zhuhuipeng/djob/util"
+	"github.com/HZ89/djob/errors"
+	"github.com/HZ89/djob/util"
 )
 
 type jsonpbBinding struct{}
