@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/serf/serf"
+	"version.uuzu.com/zhuhuipeng/djob/util"
 
 	"version.uuzu.com/zhuhuipeng/djob/errors"
 	"version.uuzu.com/zhuhuipeng/djob/log"
@@ -98,25 +99,33 @@ func (a *Agent) DeleteJob(in *pb.Job) (out *pb.Job, err error) {
 	return nil, errors.ErrNotExpectation
 }
 
-func (a *Agent) ListJob(name, region string) (jobs []*pb.Job, err error) {
-	if region == "" {
+// TODO: use concurrency instead of recursion
+func (a *Agent) ListJob(in *pb.Job, search *pb.Search) (jobs []*pb.Job, count int32, err error) {
+	if in.Region == "" {
+		// reading data across regions does not support paging
+		search = nil
 		regions, err := a.ListRegions()
 		if err != nil {
-			return nil, err
+			return nil, 0, err
+		}
+		tj := new(pb.Job)
+		if err := util.CopyField(tj, in); err != nil {
+			return nil, 0, err
 		}
 		for _, r := range regions {
-			res, err := a.ListJob("", r)
+			tj.Region = r
+			res, _, err := a.ListJob(tj, search)
 			if err != nil {
 				log.FmdLoger.WithField("region", r).Error("Agent: list job in this region failed")
-				return nil, err
+				return nil, 0, err
 			}
 			jobs = append(jobs, res...)
 		}
-		return jobs, nil
+		return jobs, 0, nil
 	}
-	in := &pb.Job{Name: name, Region: region}
+
 	var res []interface{}
-	res, _, err = a.operationMiddleLayer(in, pb.Ops_READ, nil)
+	res, count, err = a.operationMiddleLayer(in, pb.Ops_READ, search)
 	if err != nil {
 		return
 	}
@@ -162,7 +171,7 @@ func (a *Agent) ListExecutions(name, region string, group int64) (out []*pb.Exec
 	return
 }
 
-func (a *Agent) Search(in interface{}, search *pb.Search) (out []interface{}, count int, err error) {
+func (a *Agent) Search(in interface{}, search *pb.Search) (out []interface{}, count int32, err error) {
 	out, count, err = a.operationMiddleLayer(in, pb.Ops_READ, search)
 	return
 }

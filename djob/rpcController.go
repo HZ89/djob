@@ -143,7 +143,7 @@ func (a *Agent) GetJob(name, region string) (*pb.Job, error) {
 }
 
 // forwarding ops to remote or perform it in local
-func (a *Agent) PerformOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int, error) {
+func (a *Agent) PerformOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int32, error) {
 	log.FmdLoger.Debugf("RPC: Server got a %v, ops: %s, search: %v", obj, ops, search)
 	return a.operationMiddleLayer(obj, ops, search)
 }

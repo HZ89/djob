@@ -60,9 +60,9 @@ message Result {
 }
 
 message Job {
-    // @inject_tag: form:"Name" gorm:"type:varchar(64);not null;primary_key"
+    // @inject_tag: gorm:"type:varchar(64);not null;primary_key"
     string Name = 1; // Job name. Must be unique in one region
-    // @inject_tag: form:"Region" gorm:"type:varchar(64);not null;primary_key"
+    // @inject_tag: gorm:"type:varchar(64);not null;primary_key"
     string Region = 2; // Job run in this region normally.
     // @inject_tag: gorm:"type:varchar(64)"
     string Schedule = 3;
@@ -89,9 +89,7 @@ message Job {
 }
 
 message JobStatus {
-    // @inject_tag: form:"Name"
     string Name = 1;
-    // @inject_tag: form:"Region"
     string Region = 2;
     int64 SuccessCount = 3; // Number of successful executions of this job
     int64 ErrorCount = 4; // Number of errors of this job

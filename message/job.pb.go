@@ -160,10 +160,10 @@ func (m *Result) GetObjs() []*google_protobuf1.Any {
 }
 
 type Job struct {
-	// @inject_tag: form:"Name" gorm:"type:varchar(64);not null;primary_key"
-	Name string `protobuf:"bytes,1,opt,name=Name" json:"Name,omitempty" form:"Name" gorm:"type:varchar(64);not null;primary_key"`
-	// @inject_tag: form:"Region" gorm:"type:varchar(64);not null;primary_key"
-	Region string `protobuf:"bytes,2,opt,name=Region" json:"Region,omitempty" form:"Region" gorm:"type:varchar(64);not null;primary_key"`
+	// @inject_tag: gorm:"type:varchar(64);not null;primary_key"
+	Name string `protobuf:"bytes,1,opt,name=Name" json:"Name,omitempty" gorm:"type:varchar(64);not null;primary_key"`
+	// @inject_tag: gorm:"type:varchar(64);not null;primary_key"
+	Region string `protobuf:"bytes,2,opt,name=Region" json:"Region,omitempty" gorm:"type:varchar(64);not null;primary_key"`
 	// @inject_tag: gorm:"type:varchar(64)"
 	Schedule string `protobuf:"bytes,3,opt,name=Schedule" json:"Schedule,omitempty" gorm:"type:varchar(64)"`
 	// @inject_tag: gorm:"type:tinyint(4)"
@@ -285,10 +285,8 @@ func (m *Job) GetMaxRunTime() int32 {
 }
 
 type JobStatus struct {
-	// @inject_tag: form:"Name"
-	Name string `protobuf:"bytes,1,opt,name=Name" json:"Name,omitempty" form:"Name"`
-	// @inject_tag: form:"Region"
-	Region          string `protobuf:"bytes,2,opt,name=Region" json:"Region,omitempty" form:"Region"`
+	Name            string `protobuf:"bytes,1,opt,name=Name" json:"Name,omitempty"`
+	Region          string `protobuf:"bytes,2,opt,name=Region" json:"Region,omitempty"`
 	SuccessCount    int64  `protobuf:"varint,3,opt,name=SuccessCount" json:"SuccessCount,omitempty"`
 	ErrorCount      int64  `protobuf:"varint,4,opt,name=ErrorCount" json:"ErrorCount,omitempty"`
 	LastHandleAgent string `protobuf:"bytes,5,opt,name=LastHandleAgent" json:"LastHandleAgent,omitempty"`

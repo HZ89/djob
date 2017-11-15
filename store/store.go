@@ -20,6 +20,7 @@ package store
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strings"
 	"sync"
@@ -579,6 +580,7 @@ type SQLStore struct {
 	sqlCondition *sqlCondition
 	pageSize     int
 	pageNum      int
+	count        int64
 	Err          error
 }
 
@@ -642,18 +644,27 @@ func (s *SQLStore) PageNum(i int) *SQLStore {
 	if i == 0 {
 		i = 1
 	}
-	offSet := i * n.pageSize
+	offSet := (i - 1) * n.pageSize
 	limit := n.pageSize
 	n.db = s.db.Limit(limit).Offset(offSet)
 	return n
 }
 
-func (s *SQLStore) PageCount(out int) *SQLStore {
+func (s *SQLStore) PageCount(out interface{}) *SQLStore {
 	if s.Err != nil {
 		return s
 	}
 	n := s.clone()
-	n.Err = s.db.Count(out).Error
+
+	rf := math.Ceil(float64(n.count) / float64(n.pageSize))
+	typ := util.IndirectType(reflect.TypeOf(out))
+	val := util.Indirect(reflect.ValueOf(out))
+	kind := typ.Kind()
+	if int(kind) > 1 && int(kind) < 6 {
+		val.SetInt(int64(rf))
+		return n
+	}
+	n.Err = errors.ErrType
 	return n
 }
 
@@ -662,7 +673,7 @@ func (s *SQLStore) Find(out interface{}) *SQLStore {
 		return s
 	}
 	n := s.clone()
-	e := s.db.Find(out).Error
+	e := s.db.Find(out).Count(&n.count).Error
 	if e == gorm.ErrRecordNotFound {
 		n.Err = errors.ErrNotExist
 	} else {
@@ -725,7 +736,7 @@ func (s *SQLStore) Delete(obj interface{}) *SQLStore {
 }
 
 func (s *SQLStore) clone() *SQLStore {
-	store := SQLStore{db: s.db, sqlCondition: s.sqlCondition, pageSize: s.pageSize, pageNum: s.pageNum, Err: s.Err}
+	store := SQLStore{db: s.db, sqlCondition: s.sqlCondition, pageSize: s.pageSize, pageNum: s.pageNum, Err: s.Err, count: s.count}
 	return &store
 }
 

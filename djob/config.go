@@ -34,6 +34,7 @@ import (
 // agent config
 type Config struct {
 	Server            bool              // start as server or just agent
+	LoadJobPolicy     loadJobPolicy     // the policy for loading jobs from the database at server startup
 	Region            string            // agent region
 	Nodename          string            //serf node name
 	Tags              map[string]string // agent tags used to filter agent
@@ -79,6 +80,37 @@ const (
 	DefaultDBName       = "djob"
 )
 
+type loadJobPolicy int
+
+const (
+	LOADNOTHING = 1 + iota // load nothing
+	LOADOWN                // load all the jobs belong to this server
+	LOADALL                // load all unassigned jobs
+)
+
+var policyValueName = map[int]string{
+	1: "nothing",
+	2: "own",
+	3: "all",
+}
+
+var policyNameValue = map[string]int{
+	"nothing": 1,
+	"own":     2,
+	"all":     3,
+}
+
+func (p loadJobPolicy) String() string {
+	return policyValueName[int(p)]
+}
+
+func stringToLoadJobPolicy(k string) (loadJobPolicy, bool) {
+	if v, ok := policyNameValue[k]; ok {
+		return loadJobPolicy(v), true
+	}
+	return 0, false
+}
+
 func newConfig(args []string, version string) (*Config, error) {
 
 	cmdFlags := flag.NewFlagSet("agent", flag.ContinueOnError)
@@ -99,6 +131,7 @@ func newConfig(args []string, version string) (*Config, error) {
 	viper.SetDefault("rpc_tls", false)
 	viper.SetDefault("region", DefaultRegion)
 	viper.SetDefault("server", false)
+	viper.SetDefault("load_job_policy", fmt.Sprintf("%s", LOADOWN))
 	viper.SetDefault("serf_snapshot_dir", DefaultSnapshotPath)
 	viper.SetDefault("pid", cmdFlags.Lookup("pid").Value.String())
 	viper.SetDefault("logfile", cmdFlags.Lookup("logfile").Value.String())
@@ -126,8 +159,15 @@ func ReadConfig(version string) (*Config, error) {
 	}
 
 	tokens := make(map[string]string)
+	var policyType loadJobPolicy
 
 	if server {
+		var ok bool
+		loadpolicy := viper.GetString("load_job_policy")
+		policyType, ok = stringToLoadJobPolicy(loadpolicy)
+		if !ok {
+			policyType = LOADOWN
+		}
 		tags["server"] = "true"
 		tokens = viper.GetStringMapString("tokens")
 		if len(tokens) == 0 {
@@ -202,6 +242,7 @@ func ReadConfig(version string) (*Config, error) {
 
 	return &Config{
 		Server:            server,
+		LoadJobPolicy:     policyType,
 		Region:            tags["region"],
 		Tags:              tags,
 		SerfBindIP:        SerfBindIP,

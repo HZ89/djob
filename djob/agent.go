@@ -269,8 +269,10 @@ func (a *Agent) Run() error {
 		a.scheduler.Start()
 
 		// try to load job
-		log.FmdLoger.Info("Agent: Load jobs")
-		a.loadJobs(a.config.Region)
+		if a.config.LoadJobPolicy != LOADNOTHING {
+			log.FmdLoger.Info("Agent: Load jobs")
+			a.loadJobs(a.config.Region)
+		}
 
 		// run job
 		go a.runJob()
@@ -387,17 +389,24 @@ func (a *Agent) loadJobs(region string) {
 	}
 	for _, i := range res {
 		if t, ok := i.(*pb.Job); ok {
-			if !a.store.IsLocked(t, store.OWN) {
-				_, _, err = a.operationMiddleLayer(t, pb.Ops_ADD, nil)
-				if err != nil {
-					if terr, ok := err.(*errors.Error); ok {
-						if terr.NotEqual(errors.ErrRepetition) {
-							log.FmdLoger.WithError(err).Fatal("Agent: load job, add job failed")
-						}
-					} else {
-						log.FmdLoger.WithError(err).Fatal("Agent: load job, add job failed")
-					}
+			load := true
+			if a.store.IsLocked(t, store.OWN) {
+				load = false
+			}
+			if a.config.LoadJobPolicy == LOADOWN && t.SchedulerNodeName != a.config.Nodename {
+				load = false
+			}
+			if load {
+				if err := a.lockerChain.AddLocker(t, store.OWN); err != nil {
+					log.FmdLoger.WithError(err).Fatal("Agent: load job failed")
 				}
+				if err := a.scheduler.AddJob(t); err != nil {
+					log.FmdLoger.WithError(err).Fatal("Agent: load job failed")
+				}
+				log.FmdLoger.WithFields(logrus.Fields{
+					"name":   t.Name,
+					"region": t.Region,
+				}).Debug("Agent: load a job successfully")
 			}
 			continue
 		}

@@ -47,3 +47,47 @@ message ApiStringResponse {
     int32 MaxPageNum = 3;
     repeated string Data = 4;
 }
+
+message Pageing {
+    // @inject_tag: form:"pagenum"
+    int32 PageNum = 1;
+    // @inject_tag: form:"pagesize"
+    int32 PageSize = 2;
+    // @inject_tag: form:"maxpage"
+    bool OutMaxPage = 3;
+}
+
+message SearchCondition {
+    // @inject_tag: form:"conditions"
+    repeated string Conditions = 1;
+    // @inject_tag: form:"links"
+    repeated string Links = 2;
+}
+
+message ApiJobQueryString {
+    // @inject_tag: form:"job"
+    Job Job = 1;
+    // @inject_tag: form:"pageing"
+    Pageing Pageing = 2;
+}
+
+message ApiJobStatusQueryString {
+    // @inject_tag: form:"status"
+    JobStatus status = 1;
+    // @inject_tag: form:"pageing"
+    Pageing Pageing = 2;
+}
+
+message ApiExecutionQueryString {
+    // @inject_tag: form:"execution"
+    Execution Execution = 1;
+    // @inject_tag: form:"pageing"
+    Pageing Pageing = 2;
+}
+
+message ApiSearchQueryString {
+    // @inject_tag: form:"q"
+    SearchCondition SearchCondition = 1;
+    // @inject_tag: form:"pageing"
+    Pageing Pageing = 2;
+}

@@ -49,7 +49,7 @@ func init() {
 type Operator interface {
 	GetJob(name, region string) (*pb.Job, error)
 	SendBackExecution(execution *pb.Execution) error
-	PerformOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int, error)
+	PerformOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int32, error)
 	RunJob(name, region string) (*pb.Execution, error)
 }
 
@@ -127,7 +127,7 @@ func (s *RpcServer) DoOps(ctx context.Context, p *pb.Params) (*pb.Result, error)
 	return &pb.Result{
 		Succeed:    true,
 		Objs:       rs,
-		MaxPageNum: int32(count),
+		MaxPageNum: count,
 	}, nil
 
 }
@@ -283,7 +283,7 @@ func (c *RpcClient) ExecDone(execution *pb.Execution) error {
 	return nil
 }
 
-func (c *RpcClient) DoOps(obj interface{}, ops pb.Ops, search *pb.Search) (instances []interface{}, count int, err error) {
+func (c *RpcClient) DoOps(obj interface{}, ops pb.Ops, search *pb.Search) (instances []interface{}, count int32, err error) {
 	pbObj, err := ptypes.MarshalAny(obj.(proto.Message))
 	if err != nil {
 		return nil, 0, err
@@ -298,7 +298,7 @@ func (c *RpcClient) DoOps(obj interface{}, ops pb.Ops, search *pb.Search) (insta
 		return nil, 0, err
 	}
 	log.FmdLoger.WithField("obj", r).Debug("RPC: RPC client call DoOps done, got this")
-	count = int(r.MaxPageNum)
+	count = r.MaxPageNum
 	for _, o := range r.Objs {
 		t, ok := registry[strings.Split(o.TypeUrl, "/")[1]]
 		if !ok {

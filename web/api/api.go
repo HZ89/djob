@@ -19,10 +19,8 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -31,7 +29,6 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 
 	"version.uuzu.com/zhuhuipeng/djob/errors"
@@ -44,58 +41,16 @@ type ApiController interface {
 	AddJob(*pb.Job) (*pb.Job, error)
 	ModifyJob(*pb.Job) (*pb.Job, error)
 	DeleteJob(*pb.Job) (*pb.Job, error)
-	ListJob(name, region string) ([]*pb.Job, error)
+	ListJob(in *pb.Job, search *pb.Search) ([]*pb.Job, int32, error)
 	RunJob(name, region string) (*pb.Execution, error)
 	GetStatus(name, region string) (*pb.JobStatus, error)
 	ListExecutions(name, region string, group int64) ([]*pb.Execution, error)
-	Search(interface{}, *pb.Search) ([]interface{}, int, error)
+	Search(interface{}, *pb.Search) ([]interface{}, int32, error)
 }
 
 type KayPair struct {
 	Key  string
 	Cert string
-}
-
-var jsonContentType = []string{"application/json; charset=utf-8"}
-
-//jsonString implement output a protobuf obj as a json string and json content type
-type pbjson struct {
-	data interface{}
-}
-
-func (j pbjson) Render(w http.ResponseWriter) error {
-	var buf bytes.Buffer
-	marshaler := &jsonpb.Marshaler{EmitDefaults: true}
-	if err := marshaler.Marshal(&buf, j.data.(proto.Message)); err != nil {
-		return err
-	}
-	header := w.Header()
-	header["Content-Type"] = jsonContentType
-	w.Write(buf.Bytes())
-	return nil
-}
-
-func (j pbjson) WriteContentType(w http.ResponseWriter) {
-	header := w.Header()
-	if val := header["Content-Type"]; len(val) == 0 {
-		header["Content-Type"] = jsonContentType
-	}
-}
-
-type jsonpbBinding struct{}
-
-func (jsonpbBinding) Name() string {
-	return "jsonpb"
-}
-
-func (jsonpbBinding) Bind(req *http.Request, obj interface{}) error {
-	jsondec := json.NewDecoder(req.Body)
-	unmarshaler := &jsonpb.Unmarshaler{AllowUnknownFields: false}
-	if err := unmarshaler.UnmarshalNext(jsondec, obj.(proto.Message)); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 type APIServer struct {
@@ -156,20 +111,15 @@ func (a *APIServer) prepareGin() *gin.Engine {
 	jobAPI := web.Group("/job")
 	jobAPI.POST("/", a.addJob)
 	jobAPI.PUT("/", a.modifyJob)
-	jobAPI.GET("/", a.listAllJobs)
-	jobAPI.GET("/:region", a.listJobsBelongToRegion)
-	jobAPI.GET("/:region/:name", a.listTheJob)
-	jobAPI.DELETE("/:region/:name", a.deleteJob)
-	jobAPI.GET("/:region/:name/run", a.runJob)
-	jobAPI.GET("/:region/:name/status", a.getJobStatus)
-	jobAPI.POST("/search", a.jobSearch)
+	jobAPI.GET("/", a.listJobs)
+	jobAPI.DELETE("/", a.deleteJob)
+	jobAPI.GET("/run", a.runJob)
+	jobAPI.GET("/status", a.getJobStatus)
+	jobAPI.GET("/search", a.jobSearch)
 
 	executionAPI := web.Group("/execution")
-	executionAPI.GET("/", a.listAllExecutions)
-	executionAPI.GET("/:region", a.listExecutionsBelongToRgeion)
-	executionAPI.GET("/:region/:name", a.listExecutionsBelongToJob)
-	executionAPI.GET("/:region/:name/:group", a.listExecutionInGroup)
-	executionAPI.POST("/search", a.executionSearch)
+	executionAPI.GET("/", a.listExecutionInGroup)
+	executionAPI.GET("/search", a.executionSearch)
 
 	return r
 }
@@ -212,27 +162,20 @@ func (a *APIServer) listExecutions(name, region string, group int64, c *gin.Cont
 }
 
 func (a *APIServer) jobSearch(c *gin.Context) {
-	var search pb.Search
-	err := c.MustBindWith(&search, jsonpbBinding{})
-	if err != nil {
-		a.respondWithError(http.StatusInternalServerError, &pb.ApiStringResponse{Succeed: false, Message: err.Error()}, c)
-		return
-	}
-	a.search(&pb.Job{}, &search, c)
+	a.search(&pb.Job{}, c)
 }
 
 func (a *APIServer) executionSearch(c *gin.Context) {
+	a.search(&pb.Execution{}, c)
+}
+
+func (a *APIServer) search(obj interface{}, c *gin.Context) {
 	var search pb.Search
-	err := c.MustBindWith(&search, jsonpbBinding{})
-	if err != nil {
+	if err := c.Bind(&search); err != nil {
 		a.respondWithError(http.StatusInternalServerError, &pb.ApiStringResponse{Succeed: false, Message: err.Error()}, c)
 		return
 	}
-	a.search(&pb.Execution{}, &search, c)
-}
-
-func (a *APIServer) search(obj interface{}, search *pb.Search, c *gin.Context) {
-	outs, count, err := a.mc.Search(obj, search)
+	outs, count, err := a.mc.Search(obj, &search)
 
 	if err != nil {
 		a.respondWithError(http.StatusInternalServerError, &pb.ApiStringResponse{Succeed: false, Message: err.Error()}, c)
@@ -295,7 +238,7 @@ func (a *APIServer) addJob(c *gin.Context) {
 		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: err.Error()}, c)
 		return
 	}
-	a.jobCRUD(&job, pb.Ops_ADD, c)
+	a.jobCRUD(&job, pb.Ops_ADD, nil, c)
 }
 
 func (a *APIServer) modifyJob(c *gin.Context) {
@@ -305,44 +248,44 @@ func (a *APIServer) modifyJob(c *gin.Context) {
 		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: err.Error()}, c)
 		return
 	}
-	a.jobCRUD(&job, pb.Ops_MODIFY, c)
+	a.jobCRUD(&job, pb.Ops_MODIFY, nil, c)
 }
 
-func (a *APIServer) listAllJobs(c *gin.Context) {
-	a.jobCRUD(&pb.Job{}, pb.Ops_READ, c)
-}
-
-func (a *APIServer) listJobsBelongToRegion(c *gin.Context) {
-	region := c.Params.ByName("region")
-	a.jobCRUD(&pb.Job{Region: region}, pb.Ops_READ, c)
-}
-
-func (a *APIServer) listTheJob(c *gin.Context) {
-	name := c.Params.ByName("name")
-	region := c.Params.ByName("region")
-	a.jobCRUD(&pb.Job{Name: name, Region: region}, pb.Ops_READ, c)
+func (a *APIServer) listJobs(c *gin.Context) {
+	var jqs pb.ApiJobQueryString
+	if err := c.MustBindWith(&jqs, jsonpbBinding{}); err != nil {
+		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: err.Error()}, c)
+		return
+	}
+	s := &pb.Search{
+		Count:    jqs.Pageing.OutMaxPage,
+		PageSize: jqs.Pageing.PageSize,
+		PageNum:  jqs.Pageing.PageNum,
+	}
+	a.jobCRUD(jqs.Job, pb.Ops_READ, s, c)
 }
 
 func (a *APIServer) deleteJob(c *gin.Context) {
 	name := c.Params.ByName("name")
 	region := c.Params.ByName("region")
-	a.jobCRUD(&pb.Job{Name: name, Region: region}, pb.Ops_DELETE, c)
+	a.jobCRUD(&pb.Job{Name: name, Region: region}, pb.Ops_DELETE, nil, c)
 }
 
-func (a *APIServer) jobCRUD(in *pb.Job, ops pb.Ops, c *gin.Context) {
+func (a *APIServer) jobCRUD(in *pb.Job, ops pb.Ops, search *pb.Search, c *gin.Context) {
 
 	if ops == pb.Ops_ADD || ops == pb.Ops_MODIFY {
 		// this fields are forbidden to change by user
 		in.SchedulerNodeName = ""
 		in.ParentJobName = ""
 	}
+	var count int32
 
 	resp := pb.ApiJobResponse{}
 	var err error
 	var out *pb.Job
 	switch ops {
 	case pb.Ops_READ:
-		resp.Data, err = a.mc.ListJob(in.Name, in.Region)
+		resp.Data, count, err = a.mc.ListJob(in, search)
 	case pb.Ops_ADD:
 		out, err = a.mc.AddJob(in)
 	case pb.Ops_MODIFY:
@@ -363,6 +306,7 @@ func (a *APIServer) jobCRUD(in *pb.Job, ops pb.Ops, c *gin.Context) {
 	}
 	resp.Succeed = true
 	resp.Message = "Succeed"
+	resp.MaxPageNum = count
 	c.Render(http.StatusOK, pbjson{data: &resp})
 }
 

@@ -31,7 +31,7 @@ import (
 )
 
 // separate local ops and remote ops
-func (a *Agent) operationMiddleLayer(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int, error) {
+func (a *Agent) operationMiddleLayer(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int32, error) {
 	objRegion := util.GetFieldValue(obj, "Region")
 	objName := util.GetFieldValue(obj, "Name")
 	regionString, okr := objRegion.(string)
@@ -82,7 +82,7 @@ func (a *Agent) operationMiddleLayer(obj interface{}, ops pb.Ops, search *pb.Sea
 }
 
 // forward ops to remote region by grpc
-func (a *Agent) remoteOps(obj interface{}, ops pb.Ops, search *pb.Search, nodeName string) ([]interface{}, int, error) {
+func (a *Agent) remoteOps(obj interface{}, ops pb.Ops, search *pb.Search, nodeName string) ([]interface{}, int32, error) {
 	ip, port, err := a.getRPCConfig(nodeName)
 	if err != nil {
 		return nil, 0, err
@@ -100,7 +100,7 @@ func (a *Agent) remoteOps(obj interface{}, ops pb.Ops, search *pb.Search, nodeNa
 }
 
 // switch obj to each class
-func (a *Agent) localOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int, error) {
+func (a *Agent) localOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int32, error) {
 	switch t := obj.(type) {
 	case *pb.Job:
 		return a.handleJobOps(t, ops, search)
@@ -112,7 +112,7 @@ func (a *Agent) localOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]inte
 	return nil, 0, errors.ErrUnknownType
 }
 
-func (a *Agent) handleJobStatusOps(status *pb.JobStatus, ops pb.Ops) (out []interface{}, count int, err error) {
+func (a *Agent) handleJobStatusOps(status *pb.JobStatus, ops pb.Ops) (out []interface{}, count int32, err error) {
 	log.FmdLoger.WithFields(logrus.Fields{
 		"status": status,
 		"ops":    ops,
@@ -137,23 +137,33 @@ func (a *Agent) handleJobStatusOps(status *pb.JobStatus, ops pb.Ops) (out []inte
 	return
 }
 
-func (a *Agent) handleExecutionOps(ex *pb.Execution, ops pb.Ops, search *pb.Search) ([]interface{}, int, error) {
-	var count int
+func (a *Agent) handleExecutionOps(ex *pb.Execution, ops pb.Ops, search *pb.Search) ([]interface{}, int32, error) {
+	var count int32
 	var err error
 	switch ops {
 	case pb.Ops_READ:
 		var rows []*pb.Execution
 
 		if search != nil {
+			sqlExec := a.sqlStore.Model(&pb.Execution{})
 			var condition *store.SearchCondition
-			condition, err = store.NewSearchCondition(search.Conditions, search.Links)
-			if err != nil {
-				return nil, count, err
-			}
-			if search.Count {
-				err = a.sqlStore.Model(&pb.Execution{}).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(&rows).PageCount(count).Err
+			// if have conditions use it else use execution obj as search conditions
+			if len(search.Conditions) != 0 {
+				condition, err = store.NewSearchCondition(search.Conditions, search.Links)
+				if err != nil {
+					return nil, count, err
+				}
+				sqlExec.Where(condition)
 			} else {
-				err = a.sqlStore.Model(&pb.Execution{}).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(&rows).Err
+				sqlExec.Where(ex)
+			}
+
+			sqlExec = sqlExec.PageSize(int(search.PageSize)).PageNum(int(search.PageNum))
+
+			if search.Count {
+				err = sqlExec.Find(&rows).PageCount(&count).Err
+			} else {
+				err = sqlExec.Find(&rows).Err
 			}
 			if err != nil {
 				return nil, count, err
@@ -182,9 +192,9 @@ func (a *Agent) handleExecutionOps(ex *pb.Execution, ops pb.Ops, search *pb.Sear
 	return nil, 0, errors.ErrUnknownOps
 }
 
-func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]interface{}, int, error) {
+func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]interface{}, int32, error) {
 	var err error
-	var count int
+	var count int32
 
 	switch {
 	case ops == pb.Ops_ADD:
@@ -228,16 +238,19 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 			return nil, count, errors.ErrRepetition
 		}
 
-		if !a.scheduler.JobExist(job) {
-			log.FmdLoger.WithField("job", job).Debug("Agent: add job to scheduler")
-			if err = a.scheduler.AddJob(job); err != nil {
+		// set own locker on the job
+		if !a.lockerChain.HaveIt(job, store.OWN) {
+			if err = a.lockerChain.AddLocker(job, store.OWN); err != nil {
+				a.sqlStore.Delete(job)
 				return nil, count, err
 			}
 		}
 
-		// set own locker on the job
-		if !a.lockerChain.HaveIt(job, store.OWN) {
-			if err = a.lockerChain.AddLocker(job, store.OWN); err != nil {
+		if !a.scheduler.JobExist(job) {
+			log.FmdLoger.WithField("job", job).Debug("Agent: add job to scheduler")
+			if err = a.scheduler.AddJob(job); err != nil {
+				a.sqlStore.Delete(job)
+				a.lockerChain.ReleaseLocker(job, store.OWN)
 				return nil, count, err
 			}
 		}
@@ -295,15 +308,25 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		var rows []*pb.Job
 
 		if search != nil {
+			sqlExec := a.sqlStore.Model(&pb.Job{})
 			var condition *store.SearchCondition
-			condition, err = store.NewSearchCondition(search.Conditions, search.Links)
-			if err != nil {
-				return nil, count, err
-			}
-			if search.Count {
-				err = a.sqlStore.Model(&pb.Job{}).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(&rows).PageCount(count).Err
+			// if have conditions use it else use job obj as search conditions
+			if len(search.Conditions) != 0 {
+				condition, err = store.NewSearchCondition(search.Conditions, search.Links)
+				if err != nil {
+					return nil, count, err
+				}
+				sqlExec.Where(condition)
 			} else {
-				err = a.sqlStore.Model(&pb.Job{}).Where(condition).PageSize(int(search.PageSize)).PageNum(int(search.PageNum)).Find(&rows).Err
+				sqlExec.Where(job)
+			}
+
+			sqlExec = sqlExec.PageSize(int(search.PageSize)).PageNum(int(search.PageNum))
+
+			if search.Count {
+				err = sqlExec.Find(&rows).PageCount(&count).Err
+			} else {
+				err = sqlExec.Find(&rows).Err
 			}
 			if err != nil {
 				return nil, count, err

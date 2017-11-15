@@ -61,6 +61,7 @@ var (
 	ErrCopyToUnaddressable   = New(95232, "copy to value is unaddressable")
 	ErrNodeDead              = New(95233, "found node is not alive")
 	ErrNodeNoRPC             = New(95234, "found node have no completed rpc config")
+	ErrBlankTimeFormat       = New(95235, "Blank time format")
 )
 
 type Error struct {
