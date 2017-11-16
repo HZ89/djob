@@ -112,10 +112,10 @@ func (a *APIServer) prepareGin() *gin.Engine {
 	jobAPI.POST("/", a.addJob)
 	jobAPI.PUT("/", a.modifyJob)
 	jobAPI.GET("/", a.listJobs)
-	jobAPI.DELETE("/", a.deleteJob)
-	jobAPI.GET("/run", a.runJob)
-	jobAPI.GET("/status", a.getJobStatus)
 	jobAPI.GET("/search", a.jobSearch)
+	jobAPI.GET("/status/:region/:name", a.getJobStatus)
+	jobAPI.GET("/run/:region/:name", a.runJob)
+	jobAPI.DELETE("/:region/:name", a.deleteJob)
 
 	executionAPI := web.Group("/execution")
 	executionAPI.GET("/", a.listExecutionInGroup)
