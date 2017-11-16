@@ -42,6 +42,8 @@ func (j jsonpbBinding) Bind(req *http.Request, obj interface{}) error {
 	switch req.Method {
 	case "POST":
 		return j.postBind(req, obj)
+	case "PUT":
+		return j.postBind(req, obj)
 	case "GET":
 		return j.getBind(req, obj)
 	}
