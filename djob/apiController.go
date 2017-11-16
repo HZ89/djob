@@ -191,6 +191,7 @@ func (a *Agent) ListExecutions(in *pb.Execution, search *pb.Search) (out []*pb.E
 	return
 }
 
+// TODO: use concurrency instead of recursion
 func (a *Agent) Search(in interface{}, search *pb.Search) (out []interface{}, count int32, err error) {
 	switch t := in.(type) {
 	case *pb.Job:
