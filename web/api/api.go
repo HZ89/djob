@@ -23,7 +23,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -44,7 +43,7 @@ type ApiController interface {
 	ListJob(in *pb.Job, search *pb.Search) ([]*pb.Job, int32, error)
 	RunJob(name, region string) (*pb.Execution, error)
 	GetStatus(name, region string) (*pb.JobStatus, error)
-	ListExecutions(name, region string, group int64) ([]*pb.Execution, error)
+	ListExecutions(in *pb.Execution, search *pb.Search) ([]*pb.Execution, int32, error)
 	Search(interface{}, *pb.Search) ([]interface{}, int32, error)
 }
 
@@ -118,46 +117,29 @@ func (a *APIServer) prepareGin() *gin.Engine {
 	jobAPI.DELETE("/:region/:name", a.deleteJob)
 
 	executionAPI := web.Group("/execution")
-	executionAPI.GET("/", a.listExecutionInGroup)
+	executionAPI.GET("/", a.listExecutions)
 	executionAPI.GET("/search", a.executionSearch)
 
 	return r
 }
 
-func (a *APIServer) listAllExecutions(c *gin.Context) {
-	a.listExecutions("", "", 0, c)
-}
-
-func (a *APIServer) listExecutionsBelongToRgeion(c *gin.Context) {
-	region := c.Params.ByName("region")
-	a.listExecutions("", region, 0, c)
-}
-
-func (a *APIServer) listExecutionsBelongToJob(c *gin.Context) {
-	region := c.Params.ByName("region")
-	name := c.Params.ByName("name")
-	a.listExecutions(name, region, 0, c)
-}
-
-func (a *APIServer) listExecutionInGroup(c *gin.Context) {
-	region := c.Params.ByName("region")
-	name := c.Params.ByName("name")
-	groupStr := c.Params.ByName("group")
-	group, err := strconv.ParseInt(groupStr, 10, 64)
-	if err != nil {
-		a.respondWithError(http.StatusUnprocessableEntity, &pb.ApiStringResponse{Succeed: false, Message: err.Error()}, c)
+func (a *APIServer) listExecutions(c *gin.Context) {
+	var eqs pb.ApiExecutionQueryString
+	if err := c.MustBindWith(&eqs, jsonpbBinding{}); err != nil {
+		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: err.Error()}, c)
 		return
 	}
-	a.listExecutions(name, region, group, c)
-}
-
-func (a *APIServer) listExecutions(name, region string, group int64, c *gin.Context) {
-	outs, err := a.mc.ListExecutions(name, region, group)
+	s := &pb.Search{
+		Count:    eqs.Pageing.OutMaxPage,
+		PageSize: eqs.Pageing.PageSize,
+		PageNum:  eqs.Pageing.PageNum,
+	}
+	outs, count, err := a.mc.ListExecutions(eqs.Execution, s)
 	if err != nil {
 		a.respondWithError(http.StatusInternalServerError, &pb.ApiStringResponse{Succeed: false, Message: err.Error()}, c)
 		return
 	}
-	resp := &pb.ApiExecutionResponse{Succeed: true, Message: "Succeed", Data: outs}
+	resp := &pb.ApiExecutionResponse{Succeed: true, Message: "Succeed", Data: outs, MaxPageNum: count}
 	c.Render(http.StatusOK, pbjson{data: &resp})
 }
 
@@ -170,12 +152,19 @@ func (a *APIServer) executionSearch(c *gin.Context) {
 }
 
 func (a *APIServer) search(obj interface{}, c *gin.Context) {
-	var search pb.Search
-	if err := c.Bind(&search); err != nil {
+	var searchQuery pb.ApiSearchQueryString
+	if err := c.Bind(&searchQuery); err != nil {
 		a.respondWithError(http.StatusInternalServerError, &pb.ApiStringResponse{Succeed: false, Message: err.Error()}, c)
 		return
 	}
-	outs, count, err := a.mc.Search(obj, &search)
+	search := &pb.Search{
+		Conditions: searchQuery.SearchCondition.Conditions,
+		Links:      searchQuery.SearchCondition.Links,
+		Count:      searchQuery.Pageing.OutMaxPage,
+		PageNum:    searchQuery.Pageing.PageNum,
+		PageSize:   searchQuery.Pageing.PageSize,
+	}
+	outs, count, err := a.mc.Search(obj, search)
 
 	if err != nil {
 		a.respondWithError(http.StatusInternalServerError, &pb.ApiStringResponse{Succeed: false, Message: err.Error()}, c)
@@ -197,6 +186,7 @@ func (a *APIServer) search(obj interface{}, c *gin.Context) {
 		resp.MaxPageNum = int32(count)
 		resp.Succeed = true
 		c.Render(http.StatusOK, pbjson{data: &resp})
+		return
 	case *pb.Execution:
 		resp := &pb.ApiExecutionResponse{}
 		for _, out := range outs {
@@ -211,6 +201,7 @@ func (a *APIServer) search(obj interface{}, c *gin.Context) {
 		resp.MaxPageNum = int32(count)
 		resp.Succeed = true
 		c.Render(http.StatusOK, pbjson{data: &resp})
+		return
 	default:
 		a.respondWithError(http.StatusInternalServerError, &pb.ApiStringResponse{Succeed: false, Message: errors.ErrType.Error()}, c)
 		return

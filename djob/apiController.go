@@ -102,8 +102,7 @@ func (a *Agent) DeleteJob(in *pb.Job) (out *pb.Job, err error) {
 // TODO: use concurrency instead of recursion
 func (a *Agent) ListJob(in *pb.Job, search *pb.Search) (jobs []*pb.Job, count int32, err error) {
 	if in.Region == "" {
-		// reading data across regions does not support paging
-		search = nil
+
 		regions, err := a.ListRegions()
 		if err != nil {
 			return nil, 0, err
@@ -114,7 +113,8 @@ func (a *Agent) ListJob(in *pb.Job, search *pb.Search) (jobs []*pb.Job, count in
 		}
 		for _, r := range regions {
 			tj.Region = r
-			res, _, err := a.ListJob(tj, search)
+			// reading data across regions does not support paging
+			res, _, err := a.ListJob(tj, nil)
 			if err != nil {
 				log.FmdLoger.WithField("region", r).Error("Agent: list job in this region failed")
 				return nil, 0, err
@@ -154,10 +154,30 @@ func (a *Agent) GetStatus(name, region string) (out *pb.JobStatus, err error) {
 	return nil, errors.ErrNotExpectation
 }
 
-func (a *Agent) ListExecutions(name, region string, group int64) (out []*pb.Execution, err error) {
-	in := &pb.Execution{Name: name, Region: region, Group: group}
+func (a *Agent) ListExecutions(in *pb.Execution, search *pb.Search) (out []*pb.Execution, count int32, err error) {
+	if in.Region == "" {
+		regions, err := a.ListRegions()
+		if err != nil {
+			return nil, 0, err
+		}
+		te := new(pb.Execution)
+		if err := util.CopyField(te, in); err != nil {
+			return nil, 0, err
+		}
+		for _, r := range regions {
+			te.Region = r
+			// reading data across regions does not support paging
+			res, _, err := a.ListExecutions(te, nil)
+			if err != nil {
+				log.FmdLoger.WithField("region", r).Error("Agent: list job in this region failed")
+				return nil, 0, err
+			}
+			out = append(out, res...)
+		}
+		return out, 0, nil
+	}
 	var res []interface{}
-	res, _, err = a.operationMiddleLayer(in, pb.Ops_READ, nil)
+	res, _, err = a.operationMiddleLayer(in, pb.Ops_READ, search)
 	if err != nil {
 		return
 	}
