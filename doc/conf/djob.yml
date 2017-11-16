@@ -1,0 +1,31 @@
+server: true
+load_job_policy: 'nothing'
+node: 'server1'
+region: 'test'
+log_level: 'debug'
+sql_host: '10.6.27.137'
+sql_port: 4000
+sql_user: 'djob_user'
+sql_dbname: 'djob'
+sql_password: 'djob_user'
+rpc_tls: true
+rpc_key_file: './192.168.42.236-key.pem'
+rpc_cert_file: './192.168.42.236.pem'
+rpc_ca_file: './ca.pem'
+job_store: 'etcd'
+job_store_servers:
+  - '127.0.0.1:2379'
+job_store_keyspeace: 'djob'
+join:
+  - '192.168.42.236'
+serf_bind_addr: '192.168.42.236'
+http_api_addr: '192.168.42.236'
+rpc_bind_addr: '192.168.42.236'
+tokens:
+  defualt: 'VSTaJodQaxNdWC/ePjmY8Q=='
+  test: '1sFVN7/zISAQWmYGTvQX0w=='
+encrypt_key: '1sFVN7/zISAQWmYGTvQX0w=='
+tags:
+  zone: 'ns1'
+  role: 'web'
+  scrip_version: '1.0'
