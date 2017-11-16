@@ -158,7 +158,9 @@ func (a *Agent) handleExecutionOps(ex *pb.Execution, ops pb.Ops, search *pb.Sear
 				sqlExec = sqlExec.Where(ex)
 			}
 
-			sqlExec = sqlExec.PageSize(int(search.PageSize)).PageNum(int(search.PageNum))
+			if search.PageNum != 0 || search.PageSize != 0 {
+				sqlExec = sqlExec.PageSize(int(search.PageSize)).PageNum(int(search.PageNum))
+			}
 
 			if search.Count {
 				err = sqlExec.Find(&rows).PageCount(&count).Err
@@ -321,7 +323,9 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 				sqlExec = sqlExec.Where(job)
 			}
 
-			sqlExec = sqlExec.PageSize(int(search.PageSize)).PageNum(int(search.PageNum))
+			if search.PageNum != 0 || search.PageSize != 0 {
+				sqlExec = sqlExec.PageSize(int(search.PageSize)).PageNum(int(search.PageNum))
+			}
 
 			if search.Count {
 				err = sqlExec.Find(&rows).PageCount(&count).Err

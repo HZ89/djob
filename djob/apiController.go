@@ -199,6 +199,10 @@ func (a *Agent) Search(in interface{}, search *pb.Search) (out []interface{}, co
 			if err != nil {
 				return nil, 0, err
 			}
+			// reading data across regions does not support paging
+			search.PageSize = 0
+			search.PageNum = 0
+			search.Count = false
 			for _, r := range regions {
 				t.Region = r
 				var res []interface{}
@@ -216,6 +220,10 @@ func (a *Agent) Search(in interface{}, search *pb.Search) (out []interface{}, co
 			if err != nil {
 				return nil, 0, err
 			}
+			// reading data across regions does not support paging
+			search.PageSize = 0
+			search.PageNum = 0
+			search.Count = false
 			for _, r := range regions {
 				t.Region = r
 				var res []interface{}
