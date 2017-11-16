@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -250,8 +251,8 @@ func (k *KVStore) buildLockKey(obj interface{}, lockType LockType) (key string, 
 	if name == nil || region == nil {
 		log.FmdLoger.WithFields(logrus.Fields{
 			"ObjType":         util.GetType(obj),
-			"NameFieldType":   util.GetFieldType(obj, "Name"),
-			"RegionFieldType": util.GetFieldType(obj, "Region"),
+			"NameFieldType":   util.GetFieldKind(obj, "Name"),
+			"RegionFieldType": util.GetFieldKind(obj, "Region"),
 		}).Debug("Store: build lock key failed")
 		return "", errors.ErrType
 	}
@@ -585,6 +586,7 @@ type SQLStore struct {
 }
 
 func NewSQLStore(backend, dsn string) (*SQLStore, error) {
+
 	db, err := gorm.Open(backend, dsn)
 	if err != nil {
 		return nil, err
@@ -592,10 +594,19 @@ func NewSQLStore(backend, dsn string) (*SQLStore, error) {
 
 	db.DB().SetMaxOpenConns(sqlMaxOpenConnect)
 	db.DB().SetMaxIdleConns(sqlMaxIdleConnect)
-	db.LogMode(false)
+
+	if log.FmdLoger.Logger.Level.String() == "debug" {
+		db.LogMode(true)
+	}
+
 	return &SQLStore{
 		db: db,
 	}, nil
+}
+
+func (s *SQLStore) clone() *SQLStore {
+	store := SQLStore{db: s.db, sqlCondition: s.sqlCondition, pageSize: s.pageSize, pageNum: s.pageNum, Err: s.Err, count: s.count}
+	return &store
 }
 
 func (s *SQLStore) Close() error {
@@ -613,19 +624,22 @@ func (s *SQLStore) Migrate(drop bool, valus ...interface{}) error {
 }
 
 func (s *SQLStore) Model(obj interface{}) *SQLStore {
-	n := s.clone()
-	n.db = s.db.Model(obj)
-	return n
+	s.db = s.db.Model(obj)
+	return s
 }
 
 func (s *SQLStore) Where(obj interface{}) *SQLStore {
 	n := s.clone()
 	switch t := obj.(type) {
 	case *SearchCondition:
-		condition := newSQLCondition(t)
-		n.db = s.db.Where(condition.condition, condition.values)
+		condition, err := newSQLCondition(t, n.db.Value)
+		if err != nil {
+			n.Err = err
+			return n
+		}
+		n.db = n.db.Where(condition.condition, condition.values...)
 	default:
-		n.db = s.db.Where(obj)
+		n.db = n.db.Where(obj)
 	}
 	return n
 }
@@ -646,17 +660,19 @@ func (s *SQLStore) PageNum(i int) *SQLStore {
 	}
 	offSet := (i - 1) * n.pageSize
 	limit := n.pageSize
-	n.db = s.db.Limit(limit).Offset(offSet)
+	n.db = n.db.Limit(limit).Offset(offSet)
 	return n
 }
 
 func (s *SQLStore) PageCount(out interface{}) *SQLStore {
-	if s.Err != nil {
-		return s
-	}
 	n := s.clone()
+	n.Err = n.db.Offset(0).Count(&s.count).Error
 
-	rf := math.Ceil(float64(n.count) / float64(n.pageSize))
+	if n.Err != nil {
+		return n
+	}
+
+	rf := math.Ceil(float64(s.count) / float64(s.pageSize))
 	typ := util.IndirectType(reflect.TypeOf(out))
 	val := util.Indirect(reflect.ValueOf(out))
 	kind := typ.Kind()
@@ -669,11 +685,11 @@ func (s *SQLStore) PageCount(out interface{}) *SQLStore {
 }
 
 func (s *SQLStore) Find(out interface{}) *SQLStore {
-	if s.Err != nil {
-		return s
-	}
 	n := s.clone()
-	e := s.db.Find(out).Count(&n.count).Error
+	if n.Err != nil {
+		return n
+	}
+	e := n.db.Find(out).Error
 	if e == gorm.ErrRecordNotFound {
 		n.Err = errors.ErrNotExist
 	} else {
@@ -687,13 +703,13 @@ func (s *SQLStore) Create(obj interface{}) *SQLStore {
 	old := reflect.New(util.IndirectType(reflect.TypeOf(obj))).Interface()
 	// should use primary key build where condition but just Job can be modify, so just copy Name and Region
 	util.CopyField(old, obj, "Name", "Region")
-	err := s.db.Where(old).First(old).Error
+	err := n.db.Where(old).First(old).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
 		n.Err = err
 		return n
 	}
 	if err == gorm.ErrRecordNotFound {
-		n.Err = s.db.Create(obj).Error
+		n.Err = n.db.Create(obj).Error
 		return n
 	}
 	n.Err = errors.ErrRepetition
@@ -706,7 +722,7 @@ func (s *SQLStore) Modify(obj interface{}) *SQLStore {
 	//oldslice := reflect.SliceOf(util.IndirectType(reflect.TypeOf(obj)))
 	// should use primary key build where condition but just Job can be modify, so just copy Name and Region
 	util.CopyField(old, obj, "Name", "Region")
-	err := s.db.Where(old).Find(old).Error
+	err := n.db.Where(old).Find(old).Error
 	if err == gorm.ErrRecordNotFound {
 		n.Err = errors.ErrNotExist
 		return n
@@ -716,28 +732,23 @@ func (s *SQLStore) Modify(obj interface{}) *SQLStore {
 		return n
 	}
 
-	n.Err = s.db.Model(obj).Updates(obj).Error
+	n.Err = n.db.Model(obj).Updates(obj).Error
 	return n
 }
 
 func (s *SQLStore) Delete(obj interface{}) *SQLStore {
 	n := s.clone()
 	out := reflect.New(util.IndirectType(reflect.TypeOf(obj))).Interface()
-	err := s.db.Where(obj).First(out).Error
+	err := n.db.Where(obj).First(out).Error
 	if err != nil {
 		n.Err = err
 		return n
 	}
-	n.Err = s.db.Delete(out).Error
+	n.Err = n.db.Delete(out).Error
 	if n.Err == nil {
 		obj = out
 	}
 	return n
-}
-
-func (s *SQLStore) clone() *SQLStore {
-	store := SQLStore{db: s.db, sqlCondition: s.sqlCondition, pageSize: s.pageSize, pageNum: s.pageNum, Err: s.Err, count: s.count}
-	return &store
 }
 
 type SearchCondition struct {
@@ -751,11 +762,8 @@ func NewSearchCondition(conditions, links []string) (*SearchCondition, error) {
 		return nil, errors.ErrLinkNum
 	}
 
-	regex := `$(?P<column>\w+)\s*(?P<symbol>=|>=|>|<=|<|<>)\s*(?P<value>\w+)^`
-	s := SearchCondition{
-		conditions: make([]map[string]string, len(conditions)),
-		linkSymbol: make([]LogicSymbol, len(links)),
-	}
+	regex := `^(?P<column>\w+)\s*(?P<symbol>=|>=|>|<=|<|<>|=)\s*(?P<value>\w+)$`
+	s := new(SearchCondition)
 
 	for _, condition := range conditions {
 		if !util.RegexpMatch(regex, condition) {
@@ -771,7 +779,7 @@ func NewSearchCondition(conditions, links []string) (*SearchCondition, error) {
 			return nil, errors.ErrNotSupportSymbol
 		}
 	}
-	return &s, nil
+	return s, nil
 }
 
 type LogicSymbol int
@@ -811,22 +819,41 @@ func StringToLogicSymbol(s string) (LogicSymbol, bool) {
 
 type sqlCondition struct {
 	condition string
-	values    []string
+	values    []interface{}
 }
 
-func newSQLCondition(search *SearchCondition) *sqlCondition {
-	s := sqlCondition{
-		condition: "",
-		values:    make([]string, len(search.linkSymbol)),
-	}
+func newSQLCondition(search *SearchCondition, obj interface{}) (*sqlCondition, error) {
+	s := new(sqlCondition)
 	for n, condition := range search.conditions {
-		if n == len(search.conditions)-1 {
-			s.condition += fmt.Sprintf("%s %s ?", condition["column"], condition["symbol"])
+		s.condition += fmt.Sprintf("%s %s ?", condition["column"], condition["symbol"])
+		fieldKind := util.GetFieldKind(obj, condition["column"])
+		switch fieldKind {
+		case reflect.Int32:
+			v, err := strconv.ParseInt(condition["value"], 10, 32)
+			if err != nil {
+				return nil, errors.New(95236, err.Error())
+			}
+			s.values = append(s.values, v)
+		case reflect.Int64:
+			v, err := strconv.ParseInt(condition["value"], 10, 64)
+			if err != nil {
+				return nil, errors.New(95236, err.Error())
+			}
+			s.values = append(s.values, v)
+		case reflect.String:
 			s.values = append(s.values, condition["value"])
-			break
+		case reflect.Bool:
+			v, err := strconv.ParseBool(condition["value"])
+			if err != nil {
+				return nil, errors.New(95236, err.Error())
+			}
+			s.values = append(s.values, v)
+		default:
+			return nil, errors.New(95236, "not support feild type")
 		}
-		s.condition += fmt.Sprintf("%s %s ? %s ", condition["column"], condition["symbol"], search.linkSymbol[n])
-		s.values = append(s.values, condition["value"])
+		if n < len(search.linkSymbol) {
+			s.condition += fmt.Sprintf(" %s ", search.linkSymbol[n])
+		}
 	}
-	return &s
+	return s, nil
 }

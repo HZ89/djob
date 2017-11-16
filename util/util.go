@@ -330,16 +330,16 @@ func GetFieldValue(obj interface{}, name string) interface{} {
 	return nil
 }
 
-func GetFieldType(obj interface{}, name string) string {
+func GetFieldKind(obj interface{}, name string) reflect.Kind {
 	t := IndirectType(reflect.TypeOf(obj))
 
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		if f.Name == name {
-			return f.Type.Name()
+			return f.Type.Kind()
 		}
 	}
-	return ""
+	return reflect.Invalid
 }
 
 func Intersect(a, b []string) []string {

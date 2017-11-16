@@ -129,6 +129,10 @@ func (a *APIServer) listExecutions(c *gin.Context) {
 		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: err.Error()}, c)
 		return
 	}
+	if eqs.Execution == nil {
+		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: "no input execution obj"}, c)
+		return
+	}
 	s := &pb.Search{
 		Count:    eqs.Pageing.OutMaxPage,
 		PageSize: eqs.Pageing.PageSize,
@@ -140,7 +144,7 @@ func (a *APIServer) listExecutions(c *gin.Context) {
 		return
 	}
 	resp := &pb.ApiExecutionResponse{Succeed: true, Message: "Succeed", Data: outs, MaxPageNum: count}
-	c.Render(http.StatusOK, pbjson{data: &resp})
+	c.Render(http.StatusOK, pbjson{data: resp})
 }
 
 func (a *APIServer) jobSearch(c *gin.Context) {
@@ -153,7 +157,7 @@ func (a *APIServer) executionSearch(c *gin.Context) {
 
 func (a *APIServer) search(obj interface{}, c *gin.Context) {
 	var searchQuery pb.ApiSearchQueryString
-	if err := c.Bind(&searchQuery); err != nil {
+	if err := c.MustBindWith(&searchQuery, jsonpbBinding{}); err != nil {
 		a.respondWithError(http.StatusInternalServerError, &pb.ApiStringResponse{Succeed: false, Message: err.Error()}, c)
 		return
 	}
@@ -185,7 +189,8 @@ func (a *APIServer) search(obj interface{}, c *gin.Context) {
 		}
 		resp.MaxPageNum = int32(count)
 		resp.Succeed = true
-		c.Render(http.StatusOK, pbjson{data: &resp})
+		resp.Message = "Succeed"
+		c.Render(http.StatusOK, pbjson{data: resp})
 		return
 	case *pb.Execution:
 		resp := &pb.ApiExecutionResponse{}
@@ -200,7 +205,8 @@ func (a *APIServer) search(obj interface{}, c *gin.Context) {
 		}
 		resp.MaxPageNum = int32(count)
 		resp.Succeed = true
-		c.Render(http.StatusOK, pbjson{data: &resp})
+		resp.Message = "Succeed"
+		c.Render(http.StatusOK, pbjson{data: resp})
 		return
 	default:
 		a.respondWithError(http.StatusInternalServerError, &pb.ApiStringResponse{Succeed: false, Message: errors.ErrType.Error()}, c)
@@ -246,6 +252,10 @@ func (a *APIServer) listJobs(c *gin.Context) {
 	var jqs pb.ApiJobQueryString
 	if err := c.MustBindWith(&jqs, jsonpbBinding{}); err != nil {
 		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: err.Error()}, c)
+		return
+	}
+	if jqs.Job == nil {
+		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: "no input job obj"}, c)
 		return
 	}
 	s := &pb.Search{

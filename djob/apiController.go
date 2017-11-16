@@ -177,7 +177,7 @@ func (a *Agent) ListExecutions(in *pb.Execution, search *pb.Search) (out []*pb.E
 		return out, 0, nil
 	}
 	var res []interface{}
-	res, _, err = a.operationMiddleLayer(in, pb.Ops_READ, search)
+	res, count, err = a.operationMiddleLayer(in, pb.Ops_READ, search)
 	if err != nil {
 		return
 	}
@@ -192,6 +192,42 @@ func (a *Agent) ListExecutions(in *pb.Execution, search *pb.Search) (out []*pb.E
 }
 
 func (a *Agent) Search(in interface{}, search *pb.Search) (out []interface{}, count int32, err error) {
+	switch t := in.(type) {
+	case *pb.Job:
+		if t.Region == "" {
+			regions, err := a.ListRegions()
+			if err != nil {
+				return nil, 0, err
+			}
+			for _, r := range regions {
+				t.Region = r
+				var res []interface{}
+				res, _, err := a.Search(t, search)
+				if err != nil {
+					return nil, 0, err
+				}
+				out = append(out, res...)
+			}
+			return out, 0, nil
+		}
+	case *pb.Execution:
+		if t.Region == "" {
+			regions, err := a.ListRegions()
+			if err != nil {
+				return nil, 0, err
+			}
+			for _, r := range regions {
+				t.Region = r
+				var res []interface{}
+				res, _, err := a.Search(t, search)
+				if err != nil {
+					return nil, 0, err
+				}
+				out = append(out, res...)
+			}
+			return out, 0, nil
+		}
+	}
 	out, count, err = a.operationMiddleLayer(in, pb.Ops_READ, search)
 	return
 }
