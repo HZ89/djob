@@ -29,6 +29,7 @@ import (
 	pb "github.com/HZ89/djob/message"
 )
 
+// list all available regions
 func (a *Agent) ListRegions() (regions []string, err error) {
 	err = a.memStore.Get("regions_cache", &regions)
 	if err != nil && err != errors.ErrNotExist {
@@ -56,6 +57,7 @@ func (a *Agent) ListRegions() (regions []string, err error) {
 	return
 }
 
+// add job
 func (a *Agent) AddJob(in *pb.Job) (out *pb.Job, err error) {
 	var res []interface{}
 	res, _, err = a.operationMiddleLayer(in, pb.Ops_ADD, nil)
@@ -71,6 +73,7 @@ func (a *Agent) AddJob(in *pb.Job) (out *pb.Job, err error) {
 	return nil, errors.ErrNotExpectation
 }
 
+// modify job
 func (a *Agent) ModifyJob(in *pb.Job) (out *pb.Job, err error) {
 	var res []interface{}
 	res, _, err = a.operationMiddleLayer(in, pb.Ops_MODIFY, nil)
@@ -85,6 +88,7 @@ func (a *Agent) ModifyJob(in *pb.Job) (out *pb.Job, err error) {
 	return nil, errors.ErrNotExpectation
 }
 
+// delete job
 func (a *Agent) DeleteJob(in *pb.Job) (out *pb.Job, err error) {
 	var res []interface{}
 	res, _, err = a.operationMiddleLayer(in, pb.Ops_DELETE, nil)
@@ -99,6 +103,7 @@ func (a *Agent) DeleteJob(in *pb.Job) (out *pb.Job, err error) {
 	return nil, errors.ErrNotExpectation
 }
 
+// find a job
 // TODO: use concurrency instead of recursion
 func (a *Agent) ListJob(in *pb.Job, search *pb.Search) (jobs []*pb.Job, count int32, err error) {
 	if in.Region == "" {
@@ -139,6 +144,7 @@ func (a *Agent) ListJob(in *pb.Job, search *pb.Search) (jobs []*pb.Job, count in
 	return
 }
 
+// get job status from kv store
 func (a *Agent) GetStatus(name, region string) (out *pb.JobStatus, err error) {
 	in := &pb.JobStatus{Name: name, Region: region}
 	var res []interface{}
@@ -154,6 +160,7 @@ func (a *Agent) GetStatus(name, region string) (out *pb.JobStatus, err error) {
 	return nil, errors.ErrNotExpectation
 }
 
+// get job executions
 func (a *Agent) ListExecutions(in *pb.Execution, search *pb.Search) (out []*pb.Execution, count int32, err error) {
 	if in.Region == "" {
 		regions, err := a.ListRegions()
@@ -191,6 +198,7 @@ func (a *Agent) ListExecutions(in *pb.Execution, search *pb.Search) (out []*pb.E
 	return
 }
 
+// searhc job or execution
 // TODO: use concurrency instead of recursion
 func (a *Agent) Search(in interface{}, search *pb.Search) (out []interface{}, count int32, err error) {
 	switch t := in.(type) {

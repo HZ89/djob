@@ -82,6 +82,7 @@ const (
 
 type loadJobPolicy int
 
+// load job policy
 const (
 	LOADNOTHING = 1 + iota // load nothing
 	LOADOWN                // load all the jobs belong to this server
@@ -111,6 +112,7 @@ func stringToLoadJobPolicy(k string) (loadJobPolicy, bool) {
 	return 0, false
 }
 
+// prepare the default value in the configure
 func newConfig(args []string, version string) (*Config, error) {
 
 	cmdFlags := flag.NewFlagSet("agent", flag.ContinueOnError)
@@ -143,6 +145,7 @@ func newConfig(args []string, version string) (*Config, error) {
 	return ReadConfig(version)
 }
 
+// read the configuration file
 func ReadConfig(version string) (*Config, error) {
 	err := viper.ReadInConfig()
 	if err != nil {
@@ -273,6 +276,7 @@ func ReadConfig(version string) (*Config, error) {
 	}, nil
 }
 
+// base64 encode encrypt key
 func (c *Config) EncryptKey() ([]byte, error) {
 	return base64.StdEncoding.DecodeString(c.encryptKey)
 }
@@ -283,6 +287,7 @@ func handleAdvertise(oaddr string, daddr string) (string, int, error) {
 		oaddr = daddr
 	}
 	addr, err := net.ResolveTCPAddr("tcp", oaddr)
+	// if the gived ip port is invalid, get it from the local port
 	if err != nil {
 		var privateIp net.IP
 		var publicIp net.IP
@@ -325,6 +330,7 @@ func handleAdvertise(oaddr string, daddr string) (string, int, error) {
 
 }
 
+// if ip is a private network address, return true
 func isPrivate(x net.IP) bool {
 	if x.To4() != nil {
 		_, rfc1918_24BitBlock, _ := net.ParseCIDR("10.0.0.0/8")

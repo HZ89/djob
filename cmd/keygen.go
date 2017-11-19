@@ -54,8 +54,9 @@ type config struct {
 	caKey    string
 }
 
+// prepare config
 func newConfig(args []string) *config {
-	flags := flag.NewFlagSet("keygen", flag.ContinueOnError)
+	flags := flag.NewFlagSet("generate", flag.ContinueOnError)
 	var (
 		host     = flags.String("host", "", "Comma-separated hostnames and IPs to generate a certificate for")
 		validFor = flags.Duration("duration", 365*24, "Duration that certificate is valid for, unit is hour")
@@ -73,6 +74,7 @@ func newConfig(args []string) *config {
 	}
 }
 
+// generate tls certificate, if have no ca certificate it can generate new ca.
 func (c *KeygenCmd) genCert() int {
 	if len(c.config.host) == 0 {
 		c.Ui.Error("Missing required --host parameter")
@@ -241,6 +243,7 @@ func (c *KeygenCmd) createKeypair(selfSign bool, template *x509.Certificate, par
 	return
 }
 
+// generate serf encryption key
 func (c *KeygenCmd) genKey() int {
 	key := make([]byte, 16)
 	n, err := rand.Reader.Read(key)
@@ -262,11 +265,11 @@ func (c *KeygenCmd) Synopsis() string {
 
 func (c *KeygenCmd) Help() string {
 	helpText := `
-	Usage: djob keygen tls [options]
-	   djob keygen key
+	Usage: djob generate cert [options]
+	       djob generate key
 	  Generates a new encryption that can be used to configure the agent to encrypt traffic.
 	  The output of key command is already in the proper format that the agent expects.
-	  Tls command will generates tls files. Include ca pk, pub key.
+	  cert command will generates tls files. Include ca pk, pub key.
 	options:
 	  --help      This help
 	  --host      Comma-separated hostnames and IPs to generate a certificate for
@@ -280,7 +283,7 @@ func (c *KeygenCmd) Help() string {
 
 func (c *KeygenCmd) Run(args []string) int {
 	if len(args) > 0 {
-		if args[0] == "tls" {
+		if args[0] == "cert" {
 			c.config = newConfig(args[1:])
 			return c.genCert()
 		}

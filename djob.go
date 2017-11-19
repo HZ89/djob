@@ -53,6 +53,8 @@ func main() {
 				Ui:      ui,
 			}, nil
 		},
+		// use to
+		//
 		"keygen": func() (cli.Command, error) {
 			return &cmd.KeygenCmd{
 				Ui: ui,

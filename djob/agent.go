@@ -53,21 +53,21 @@ const (
 )
 
 type Agent struct {
-	lockerChain *store.LockerChain
-	config      *Config
-	serf        *serf.Serf
-	eventCh     chan serf.Event
-	ready       bool
-	rpcServer   *rpc.RpcServer
-	store       *store.KVStore
-	memStore    *store.MemStore
-	scheduler   *scheduler.Scheduler
-	apiServer   *api.APIServer
+	lockerChain *store.LockerChain   // a sync/map use to store obj locker
+	config      *Config              // configuration
+	serf        *serf.Serf           // serf obj
+	eventCh     chan serf.Event      // get serf event form this chan
+	rpcServer   *rpc.RpcServer       // grpc server
+	store       *store.KVStore       // key value store, it can be etcd, zookeeper etc.
+	memStore    *store.MemStore      // memory cache, use to cache some key value obj
+	scheduler   *scheduler.Scheduler // job scheduler, scheduling based on cron syntax
+	apiServer   *api.APIServer       // web api server, use gin
 	version     string
-	runJobCh    chan *pb.Job
-	sqlStore    *store.SQLStore
+	runJobCh    chan *pb.Job    // scheduler push the job ready to run into this chan
+	sqlStore    *store.SQLStore // sql store, use to persistent save job and execution obj
 }
 
+// prepare serf config
 func (a *Agent) setupSerf() *serf.Serf {
 	encryptKey, err := a.config.EncryptKey()
 	if err != nil {
@@ -124,6 +124,8 @@ func (a *Agent) serfJion(addrs []string, replay bool) (n int, err error) {
 	return
 }
 
+// listen to serf events and perform the corresponding actions
+// TODO: stripping serf, serf tags only supports string type, implement tags that support int, float, bool, string data type
 func (a *Agent) serfEventLoop() {
 	serfShutdownCh := a.serf.ShutdownCh()
 	log.FmdLoger.Info("Agent: Listen for event")
@@ -135,7 +137,7 @@ func (a *Agent) serfEventLoop() {
 			log.FmdLoger.WithFields(logrus.Fields{
 				"event": e.String(),
 			}).Debug("Agent: Received event")
-
+			// log all member event, member jion, update, leave etc.
 			if memberevent, ok := e.(serf.MemberEvent); ok {
 				for _, member := range memberevent.Members {
 					log.FmdLoger.WithFields(logrus.Fields{
@@ -194,6 +196,7 @@ func (a *Agent) Run() error {
 		log.FmdLoger.Fatalln(err)
 		return err
 	}
+	// start serf agent first
 	if a.serf = a.setupSerf(); a.serf == nil {
 		log.FmdLoger.Fatalln("Start serf failed!")
 		return errors.ErrStartSerf
@@ -204,6 +207,7 @@ func (a *Agent) Run() error {
 
 	go a.serfEventLoop()
 
+	// server start
 	if a.config.Server {
 		log.FmdLoger.Info("Agent: Init server")
 
@@ -291,12 +295,14 @@ func (a *Agent) Run() error {
 			"Tokens": a.config.APITokens,
 		}).Debug("Agent: API Server has been started")
 
+		// start takeover process
 		//		go a.takeOverJob()
 	}
 
 	return nil
 }
 
+// used to take over the unmanaged job
 func (a *Agent) takeOverJob() {
 	stopCh := make(chan struct{})
 	for {
@@ -352,6 +358,7 @@ func (a *Agent) takeOverJob() {
 	}
 }
 
+// listen to runJobCh and run a job
 func (a *Agent) runJob() {
 	for {
 		job := <-a.runJobCh
@@ -361,6 +368,7 @@ func (a *Agent) runJob() {
 			"cmd":      job.Command,
 			"Schedule": job.Schedule,
 		}).Debug("Agent: Job ready to run")
+		// if job disabled just pass it
 		if job.Disable {
 			log.FmdLoger.WithFields(logrus.Fields{
 				"Name":     job.Name,
@@ -382,6 +390,10 @@ func (a *Agent) runJob() {
 	}
 }
 
+// load jobs from database, support three load policy:
+// 1. LOADNOTHING just pass this process
+// 2. LOADOWN  just load which job belong to(job.SchedulerNodeName eq this.Nodename) this node
+// 3. LOADALL  just load all job and set it belong to this node
 func (a *Agent) loadJobs(region string) {
 	res, _, err := a.operationMiddleLayer(&pb.Job{Region: region}, pb.Ops_READ, nil)
 	if err != nil {
@@ -414,6 +426,7 @@ func (a *Agent) loadJobs(region string) {
 	}
 }
 
+// reload agent
 func (a *Agent) Reload(args []string) {
 	newConf, err := newConfig(args, a.version)
 	if err != nil {
@@ -425,6 +438,7 @@ func (a *Agent) Reload(args []string) {
 	a.serf.SetTags(a.config.Tags)
 }
 
+// stop this
 func (a *Agent) Stop(graceful bool) int {
 
 	if !graceful {
@@ -482,6 +496,7 @@ func (a *Agent) Stop(graceful bool) int {
 	}
 }
 
+// initialize a grpc client
 // TODO: use a rpc client pool
 func (a *Agent) newRPCClient(ip string, port int) *rpc.RpcClient {
 	var tls *rpc.TlsOpt
@@ -499,6 +514,7 @@ func (a *Agent) newRPCClient(ip string, port int) *rpc.RpcClient {
 	return client
 }
 
+// new agent
 func New(args []string, version string) *Agent {
 	config, err := newConfig(args, version)
 	if err != nil {
@@ -514,12 +530,14 @@ func New(args []string, version string) *Agent {
 
 }
 
+// used to sort the agent by job count
 type byCount []*pb.JobCountResp
 
 func (b byCount) Len() int           { return len(b) }
 func (b byCount) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
 func (b byCount) Less(i, j int) bool { return b[i].Count < b[j].Count }
 
+// find out the node with the fewest job
 func (a *Agent) minimalLoadServer(region string) (string, error) {
 
 	resCh := make(chan []*pb.JobCountResp)
@@ -550,6 +568,7 @@ func (a *Agent) minimalLoadServer(region string) (string, error) {
 	}
 }
 
+// find a available node randomly
 func (a *Agent) randomPickServer(region string) (string, error) {
 	p, err := a.createSerfQueryParam(fmt.Sprintf("server=='true'&&region=='%s'", region))
 	if err != nil {
@@ -558,6 +577,7 @@ func (a *Agent) randomPickServer(region string) (string, error) {
 	return p.FilterNodes[rand.Intn(len(p.FilterNodes))], nil
 }
 
+// constructed serf.QueryParam using expression
 func (a *Agent) createSerfQueryParam(expression string) (*serf.QueryParam, error) {
 	var queryParam serf.QueryParam
 	nodeNames, err := a.processFilteredNodes(expression)
@@ -576,6 +596,7 @@ func (a *Agent) createSerfQueryParam(expression string) (*serf.QueryParam, error
 	return nil, errors.ErrCanNotFoundNode
 }
 
+// find all the node that make the expression true
 func (a *Agent) processFilteredNodes(expression string) ([]string, error) {
 	exp, err := govaluate.NewEvaluableExpression(expression)
 	if err != nil {
@@ -610,6 +631,7 @@ func (a *Agent) processFilteredNodes(expression string) ([]string, error) {
 	return nodeNames, nil
 }
 
+// get grpc configuration information from tags
 func (a *Agent) getRPCConfig(nodeName string) (string, int, error) {
 	for _, member := range a.serf.Members() {
 		if member.Name == nodeName {

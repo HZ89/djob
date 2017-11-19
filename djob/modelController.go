@@ -39,24 +39,26 @@ func (a *Agent) operationMiddleLayer(obj interface{}, ops pb.Ops, search *pb.Sea
 	if !okr && !okn {
 		return nil, 0, errors.ErrType
 	}
+	// have a region at lest
 	if regionString == "" {
 		return nil, 0, errors.ErrNoReg
 	}
-
+	// have same region maybe can be a localops
 	if regionString == a.config.Region {
 		job, ok := obj.(*pb.Job)
+		// if this obj not a Job, or have no name, or this node have own lock, then it can be ops in this node
 		if nameString == "" || a.lockerChain.HaveIt(obj, store.OWN) || !ok {
 			log.FmdLoger.WithField("obj", obj).Debug("Agent: this obj localOps")
 			return a.localOps(obj, ops, search)
 		}
-		var jobHandler string
-		if job.SchedulerNodeName != "" {
-			// found me, do this ops
-			if job.SchedulerNodeName == a.config.Nodename {
-				return a.localOps(obj, ops, search)
-			}
-			jobHandler = job.SchedulerNodeName
-		} else {
+		// obj must be Job
+		// if job belong to this node, just go to localops
+		if job.SchedulerNodeName == a.config.Nodename {
+			return a.localOps(obj, ops, search)
+		}
+
+		// if have no schedulernode find a node
+		if job.SchedulerNodeName == "" {
 			// find who handler this job
 			owner := a.store.WhoLocked(job, store.OWN)
 			if owner == "" {
@@ -66,13 +68,13 @@ func (a *Agent) operationMiddleLayer(obj interface{}, ops pb.Ops, search *pb.Sea
 				if err != nil {
 					return nil, 0, err
 				}
-				job.SchedulerNodeName = owner
 			}
-			jobHandler = owner
+			job.SchedulerNodeName = owner
 		}
 
-		return a.remoteOps(obj, ops, search, jobHandler)
+		return a.remoteOps(obj, ops, search, job.SchedulerNodeName)
 	}
+	// find some node in this region, proxy this action to it
 	nextHandler, err := a.randomPickServer(regionString)
 	if err != nil {
 		return nil, 0, err
@@ -112,6 +114,7 @@ func (a *Agent) localOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]inte
 	return nil, 0, errors.ErrUnknownType
 }
 
+// jobstatus CRUD
 func (a *Agent) handleJobStatusOps(status *pb.JobStatus, ops pb.Ops) (out []interface{}, count int32, err error) {
 	log.FmdLoger.WithFields(logrus.Fields{
 		"status": status,
@@ -137,6 +140,7 @@ func (a *Agent) handleJobStatusOps(status *pb.JobStatus, ops pb.Ops) (out []inte
 	return
 }
 
+// execution CRUD
 func (a *Agent) handleExecutionOps(ex *pb.Execution, ops pb.Ops, search *pb.Search) ([]interface{}, int32, error) {
 	var count int32
 	var err error
@@ -194,6 +198,7 @@ func (a *Agent) handleExecutionOps(ex *pb.Execution, ops pb.Ops, search *pb.Sear
 	return nil, 0, errors.ErrUnknownOps
 }
 
+// Job CRUD
 func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]interface{}, int32, error) {
 	var err error
 	var count int32
