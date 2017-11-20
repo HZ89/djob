@@ -5,4 +5,7 @@ go:
 before_install:
   - curl https://glide.sh/get | sh
 script:
-  - go build -v -o ./djob $GOPATH/src/github.com/HZ89/djob/djob
+  - glide i
+  - rm -rf ./vendor/github.com/hashicorp/serf/vendor
+  - mkdir dist
+  - go build -i -o ./dist/djob .
