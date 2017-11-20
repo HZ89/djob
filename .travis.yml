@@ -2,7 +2,7 @@ language: go
 go:
   - 1.9.x
   - master
-before_install:
+install:
   - curl https://glide.sh/get | sh
   - glide i
   - rm -rf ./vendor/github.com/hashicorp/serf/vendor
