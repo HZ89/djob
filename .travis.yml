@@ -4,8 +4,8 @@ go:
   - master
 before_install:
   - curl https://glide.sh/get | sh
-script:
   - glide i
   - rm -rf ./vendor/github.com/hashicorp/serf/vendor
   - mkdir dist
+script:
   - go build -i -o ./dist/djob .
