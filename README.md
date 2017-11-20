@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/HZ89/djob.svg?branch=master)](https://travis-ci.org/HZ89/djob)
 # How to install
 * git clone
 * cd djob
