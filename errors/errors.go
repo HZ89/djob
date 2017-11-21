@@ -65,8 +65,8 @@ var (
 )
 
 type Error struct {
-	code    int
-	message string
+	code    int    // error code
+	message string // error message
 }
 
 func New(code int, text string) *Error {
@@ -76,6 +76,7 @@ func New(code int, text string) *Error {
 	}
 }
 
+// transform grcp error to this Error
 func NewFromGRPCErr(err error) (*Error, bool) {
 	if err == nil {
 		return ErrNil, true
@@ -94,6 +95,7 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("ErrCode=%d, ErrMessage=%s", e.code, e.message)
 }
 
+// generate grpc error
 func (e *Error) GenGRPCErr() error {
 	return status.Errorf(codes.Code(e.code), e.message)
 }
@@ -112,6 +114,7 @@ func (e *Error) NotEqual(err error) bool {
 	return !e.Equal(err)
 }
 
+// generate grpc error from any kind error
 func GenGRPCErr(err error) error {
 	if terr, ok := err.(*Error); ok {
 		return terr.GenGRPCErr()

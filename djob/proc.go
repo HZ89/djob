@@ -35,6 +35,7 @@ const (
 	maxLayTime = 300
 )
 
+// execute the command
 func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 	buf, _ := circbuf.NewBuffer(maxBufSize)
 	cmd := buildCmd(job)
@@ -88,6 +89,7 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 	ex.Output = buf.Bytes()
 	ex.RunNodeName = a.config.Nodename
 
+	// randomly select a server to receive the execution
 	serverNodeName, err := a.randomPickServer(ex.Region)
 	if err != nil {
 		return err
@@ -102,6 +104,8 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 	defer rpcClient.Shutdown()
 
 	log.FmdLoger.WithField("execution", ex).Debug("Proc: job done send back execution")
+	// send back execution
+	// TODO: retry this 3/5 times
 	if err = rpcClient.ExecDone(ex); err != nil {
 		log.FmdLoger.WithError(err).Debug("Proc: rpc call ExecDone failed")
 		return err

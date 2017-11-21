@@ -47,25 +47,29 @@ func init() {
 }
 
 type Operator interface {
+	// use to client get job
 	GetJob(name, region string) (*pb.Job, error)
+	// client send execution to server
 	SendBackExecution(execution *pb.Execution) error
+	// forwarding CRUD operation between servers
 	PerformOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int32, error)
+	// forwarding run job action between servers
 	RunJob(name, region string) (*pb.Execution, error)
 }
 
 type RpcServer struct {
-	bindIp    string
-	rpcPort   int
-	tlsopt    *TlsOpt
-	operator  Operator
-	rpcServer *grpc.Server
+	bindIp    string       // rpc server bind ip
+	rpcPort   int          // rpc server bind port
+	tlsopt    *TlsOpt      // tls options
+	operator  Operator     // operator interface
+	rpcServer *grpc.Server // grpc server
 }
 
 type TlsOpt struct {
-	CertFile   string
-	KeyFile    string
-	CaFile     string // Client use this root ca
-	ServerHost string // The server name use to verify the hostname returned by TLS handshake
+	CertFile   string // cert file path
+	KeyFile    string // private key file path
+	CaFile     string // client use this root ca
+	ServerHost string // the server name use to verify the hostname returned by TLS handshake
 }
 
 func NewRPCServer(bindIp string, port int, operator Operator, tlsopt *TlsOpt) *RpcServer {
@@ -77,6 +81,7 @@ func NewRPCServer(bindIp string, port int, operator Operator, tlsopt *TlsOpt) *R
 	}
 }
 
+// forwarding run job action
 func (s *RpcServer) ProxyJobRun(ctx context.Context, in *pb.Job) (*pb.Execution, error) {
 	exec, err := s.operator.RunJob(in.Name, in.Region)
 	if err != nil {
@@ -85,6 +90,7 @@ func (s *RpcServer) ProxyJobRun(ctx context.Context, in *pb.Job) (*pb.Execution,
 	return exec, nil
 }
 
+// get job info send to client
 func (s *RpcServer) GetJob(ctx context.Context, job *pb.Job) (*pb.Job, error) {
 	job, err := s.operator.GetJob(job.Name, job.Region)
 	if err != nil {
@@ -93,6 +99,7 @@ func (s *RpcServer) GetJob(ctx context.Context, job *pb.Job) (*pb.Job, error) {
 	return job, nil
 }
 
+// receive the execution result
 func (s *RpcServer) ExecDone(ctx context.Context, execution *pb.Execution) (*google_protobuf.Empty, error) {
 	if err := s.operator.SendBackExecution(execution); err != nil {
 		return nil, errors.GenGRPCErr(err)
@@ -100,6 +107,7 @@ func (s *RpcServer) ExecDone(ctx context.Context, execution *pb.Execution) (*goo
 	return &google_protobuf.Empty{}, nil
 }
 
+// receive job CRUD ops
 func (s *RpcServer) DoOps(ctx context.Context, p *pb.Params) (*pb.Result, error) {
 	class := strings.Split(p.Obj.TypeUrl, "/")[1]
 	log.FmdLoger.WithField("type", class).Debug("RPC: Server got a class")
@@ -157,6 +165,7 @@ func (s *RpcServer) listen() error {
 	return nil
 }
 
+// start grpc server process
 func (s *RpcServer) Run() error {
 	errCh := make(chan error, 1)
 	doneCh := make(chan struct{}, 1)
@@ -174,6 +183,7 @@ func (s *RpcServer) Run() error {
 	}
 }
 
+// shutdown grpc server
 func (s *RpcServer) Shutdown(timeout time.Duration) error {
 	timeoutCh := time.After(timeout)
 	var shutdownCh chan error
@@ -196,11 +206,11 @@ func (s *RpcServer) Shutdown(timeout time.Duration) error {
 }
 
 type RpcClient struct {
-	serverIp   string
-	serverPort int
-	tlsopt     *TlsOpt
-	client     pb.JobClient
-	conn       *grpc.ClientConn
+	serverIp   string           // rpc server ip
+	serverPort int              // rpc server port
+	tlsopt     *TlsOpt          // tls options
+	client     pb.JobClient     // grpc client interface
+	conn       *grpc.ClientConn // grpc client connection to an RPC server
 }
 
 func NewRpcClient(serveraddr string, serverport int, tlsopt *TlsOpt) (*RpcClient, error) {

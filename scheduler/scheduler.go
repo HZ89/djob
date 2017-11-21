@@ -113,6 +113,7 @@ func (s *Scheduler) runJob(job *pb.Job) {
 	s.RunJobCh <- job
 }
 
+// main running loop
 func (s *Scheduler) run() {
 	now := time.Now().Local()
 	for _, e := range s.entries {
@@ -120,12 +121,14 @@ func (s *Scheduler) run() {
 	}
 
 	for {
+		// sort by time
 		sort.Sort(byTime(s.entries))
 		for i, e := range s.entries {
 			s.nameToIndex[e.Job.Name] = i
 		}
 
 		var movement time.Time
+		// If there are no repeatable jobs, wait 10 years
 		if len(s.entries) == 0 || s.entries[0].Next.IsZero() {
 			movement = now.AddDate(10, 0, 0)
 		} else {
@@ -140,8 +143,10 @@ func (s *Scheduler) run() {
 				}
 				go s.runJob(e.Job)
 				e.Perv = e.Next
+				// get the next execution time point
 				e.Next = e.Analyzer.Next(movement)
 				if e.Next.IsZero() {
+					// delete non-repeatable job
 					s.deleteEntryByName(e.Job.Name)
 				}
 			}

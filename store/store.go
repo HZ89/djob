@@ -76,18 +76,19 @@ func (lt LockType) String() string {
 }
 
 type LockerChain struct {
-	lockerOwner string
-	chain       *sync.Map
-	lockStore   *KVStore
+	lockerOwner string    // the owner of this chain, node name
+	chain       *sync.Map // store objKey, this is the chain
+	lockStore   *KVStore  // a kv store, store lock
 	stopCh      chan struct{}
 }
 
 type objKey struct {
-	locker   libstore.Locker
-	renewCh  chan struct{}
-	bornTime time.Time
+	locker   libstore.Locker // locker obj
+	renewCh  chan struct{}   // lock renew chan
+	bornTime time.Time       // the time to create this lock
 }
 
+// new lockerchain
 func NewLockerChain(owner string, store *KVStore) *LockerChain {
 	chain := &LockerChain{
 		chain:       new(sync.Map),
@@ -95,15 +96,18 @@ func NewLockerChain(owner string, store *KVStore) *LockerChain {
 		lockStore:   store,
 		stopCh:      make(chan struct{}),
 	}
+	// start the lock renew process
 	chain.lockRenew()
 	return chain
 }
 
+// release all lock and stop renew process
 func (l *LockerChain) Stop() {
 	l.ReleaseAll()
 	l.stopCh <- struct{}{}
 }
 
+// lock renew process
 func (l *LockerChain) lockRenew() {
 	go func() {
 		log.FmdLoger.Debug("Store-Lock: start lockRenew goroutine")
@@ -118,6 +122,7 @@ func (l *LockerChain) lockRenew() {
 	}()
 }
 
+// traverse the chain to find out about the expired lock, renew it
 func (l *LockerChain) renew() {
 	now := time.Now()
 	l.chain.Range(func(key, value interface{}) bool {
@@ -140,14 +145,17 @@ func (l *LockerChain) renew() {
 	})
 }
 
+// check the lock is exist
 func (l *LockerChain) HaveIt(obj interface{}, lockType LockType) bool {
 	lockpath, _ := l.lockStore.buildLockKey(obj, lockType)
 	_, exist := l.chain.Load(lockpath)
 	return exist
 }
 
+// add a lock
 func (l *LockerChain) AddLocker(obj interface{}, lockType LockType) error {
 
+	// do not allow duplicate additions
 	if l.HaveIt(obj, lockType) {
 		return errors.ErrRepetition
 	}
@@ -179,6 +187,7 @@ func (l *LockerChain) AddLocker(obj interface{}, lockType LockType) error {
 	return nil
 }
 
+// release a lock
 func (l *LockerChain) ReleaseLocker(obj interface{}, lockType LockType) error {
 
 	lockpath, err := l.lockStore.buildLockKey(obj, lockType)
@@ -204,6 +213,7 @@ func (l *LockerChain) ReleaseLocker(obj interface{}, lockType LockType) error {
 	return nil
 }
 
+// release all lock
 func (l *LockerChain) ReleaseAll() {
 	l.chain.Range(func(key, v interface{}) bool {
 		t, ok := v.(*objKey)
@@ -437,10 +447,11 @@ func (k *KVStore) SetJobStatus(status *pb.JobStatus) (*pb.JobStatus, error) {
 
 // used to cache job in local memory
 type MemStore struct {
-	memBuf *memDbBuffer
+	memBuf *memDbBuffer // leveldb memory buffer
 	stopCh chan struct{}
 }
 
+// entry stored in memory cache
 type entry struct {
 	DeadTime time.Time
 	Data     []byte
@@ -499,6 +510,7 @@ func (m *MemStore) getEntry(key Key) (*entry, error) {
 	return &e, nil
 }
 
+// timeing seek and clear expired key
 func (m *MemStore) handleOverdueKey() {
 	go func() {
 		for true {
@@ -512,6 +524,7 @@ func (m *MemStore) handleOverdueKey() {
 	}()
 }
 
+// seek and clear
 func (m *MemStore) releaseOverdueKey() {
 	now := time.Now()
 	iter, err := m.memBuf.Seek(nil)
@@ -519,6 +532,7 @@ func (m *MemStore) releaseOverdueKey() {
 		log.FmdLoger.Fatalf("Store: memBuf Seek failed: %v", err)
 	}
 	defer iter.Close()
+	// seek
 	for ; iter.Valid(); iter.Next() {
 		key := iter.Key()
 		var e *entry
@@ -534,7 +548,7 @@ func (m *MemStore) releaseOverdueKey() {
 				"isOverdue": m.isOverdue(e, now),
 			}).Debug("Store: seek a key")
 		}
-
+		// clear
 		if e != nil && m.isOverdue(e, now) {
 			if err = m.memBuf.Delete(key); err != nil {
 				log.FmdLoger.WithField("key", string(key)).WithError(err).Fatal("Store: purge overdue key failed")
@@ -577,12 +591,12 @@ func NewMemStore() *MemStore {
 }
 
 type SQLStore struct {
-	db           *gorm.DB
-	sqlCondition *sqlCondition
-	pageSize     int
-	pageNum      int
-	count        int64
-	Err          error
+	db           *gorm.DB      // gorm db obj
+	sqlCondition *sqlCondition // sql where contition
+	pageSize     int           // page size
+	pageNum      int           // page num
+	count        int64         // max page num
+	Err          error         // error
 }
 
 func NewSQLStore(backend, dsn string) (*SQLStore, error) {
@@ -623,11 +637,13 @@ func (s *SQLStore) Migrate(drop bool, valus ...interface{}) error {
 	return nil
 }
 
+// set the model to be manipulated
 func (s *SQLStore) Model(obj interface{}) *SQLStore {
 	s.db = s.db.Model(obj)
 	return s
 }
 
+// where condition, can be a obj or SearchContion
 func (s *SQLStore) Where(obj interface{}) *SQLStore {
 	n := s.clone()
 	switch t := obj.(type) {
@@ -644,12 +660,14 @@ func (s *SQLStore) Where(obj interface{}) *SQLStore {
 	return n
 }
 
+// page size
 func (s *SQLStore) PageSize(i int) *SQLStore {
 	n := s.clone()
 	n.pageSize = i
 	return n
 }
 
+// which page need scan into result set
 func (s *SQLStore) PageNum(i int) *SQLStore {
 	n := s.clone()
 	if n.pageSize == 0 {
@@ -664,6 +682,7 @@ func (s *SQLStore) PageNum(i int) *SQLStore {
 	return n
 }
 
+// cal max page num
 func (s *SQLStore) PageCount(out interface{}) *SQLStore {
 	n := s.clone()
 	n.Err = n.db.Offset(0).Count(&s.count).Error
@@ -684,6 +703,7 @@ func (s *SQLStore) PageCount(out interface{}) *SQLStore {
 	return n
 }
 
+// perform find
 func (s *SQLStore) Find(out interface{}) *SQLStore {
 	n := s.clone()
 	if n.Err != nil {
@@ -698,6 +718,7 @@ func (s *SQLStore) Find(out interface{}) *SQLStore {
 	return n
 }
 
+// perform create
 func (s *SQLStore) Create(obj interface{}) *SQLStore {
 	n := s.clone()
 	old := reflect.New(util.IndirectType(reflect.TypeOf(obj))).Interface()
@@ -716,6 +737,7 @@ func (s *SQLStore) Create(obj interface{}) *SQLStore {
 	return n
 }
 
+// perform modify
 func (s *SQLStore) Modify(obj interface{}) *SQLStore {
 	n := s.clone()
 	old := reflect.New(util.IndirectType(reflect.TypeOf(obj))).Interface()
@@ -736,6 +758,7 @@ func (s *SQLStore) Modify(obj interface{}) *SQLStore {
 	return n
 }
 
+// perform delete
 func (s *SQLStore) Delete(obj interface{}) *SQLStore {
 	n := s.clone()
 	out := reflect.New(util.IndirectType(reflect.TypeOf(obj))).Interface()
@@ -752,10 +775,11 @@ func (s *SQLStore) Delete(obj interface{}) *SQLStore {
 }
 
 type SearchCondition struct {
-	conditions []map[string]string
-	linkSymbol []LogicSymbol
+	conditions []map[string]string // user input search condition,eg. a = 1 , b <> abc
+	linkSymbol []LogicSymbol       // user input link symbol, eg. AND
 }
 
+// Serialized user input generated SearchCondition
 func NewSearchCondition(conditions, links []string) (*SearchCondition, error) {
 
 	if len(conditions) != len(links)+1 {
@@ -818,10 +842,11 @@ func StringToLogicSymbol(s string) (LogicSymbol, bool) {
 }
 
 type sqlCondition struct {
-	condition string
-	values    []interface{}
+	condition string        // string of where condition eg. a = ? and b <> ?
+	values    []interface{} // value of where condition eg. 1,"avc"
 }
 
+// use SearchCondition generated sql where condition
 func newSQLCondition(search *SearchCondition, obj interface{}) (*sqlCondition, error) {
 	s := new(sqlCondition)
 	for n, condition := range search.conditions {

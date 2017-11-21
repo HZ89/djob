@@ -123,6 +123,8 @@ func newConfig(args []string, version string) (*Config, error) {
 	if err := cmdFlags.Parse(args); err != nil {
 		return nil, err
 	}
+	viper.SetEnvPrefix("djob")
+	viper.AutomaticEnv()
 	viper.SetConfigFile(cmdFlags.Lookup("config").Value.String())
 	viper.SetDefault("serf_bind_addr", fmt.Sprintf("%s:%d", "0.0.0.0", DefaultSerfPort))
 	viper.SetDefault("http_api_addr", fmt.Sprintf("%s:%d", "0.0.0.0", DefaultHttpPort))

@@ -1,4 +1,4 @@
-package: version.uuzu.com/zhuhuipeng/djob
+package: github.com/HZ89/djob
 import:
 - package: github.com/HZ89/libkv
   subpackages:

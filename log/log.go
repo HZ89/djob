@@ -29,6 +29,7 @@ import (
 
 var FmdLoger = logrus.NewEntry(logrus.New())
 
+// initalize logger
 func InitLogger(logLevel string, node string, file string) {
 	formattedLogger := logrus.New()
 	if file != "" {

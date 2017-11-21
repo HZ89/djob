@@ -21,10 +21,10 @@ import "message/job.proto";
 package message;
 
 message ApiJobResponse {
-    bool Succeed = 1;
-    string Message = 2;
-    int32 MaxPageNum = 3;
-    repeated Job Data = 4;
+    bool Succeed = 1; // api status
+    string Message = 2; // error message
+    int32 MaxPageNum = 3; // max page number
+    repeated Job Data = 4; // data
 }
 
 message ApiExecutionResponse {
