@@ -11,7 +11,7 @@ go:
   - master
 
 before_install:
-- docker run -d -p 4000:4000 tidb
+- docker run -d -p 4000:4000 pingcap/tidb
 - docker run -d -p 2379:2379 quay.io/coreos/etcd:v2.3.8
 - mysql -h127.0.0.1 -P4000 -e 'create database djob;'
 
