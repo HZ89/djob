@@ -23,8 +23,10 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/HZ89/djob/errors"
 	"github.com/HZ89/djob/log"
 	pb "github.com/HZ89/djob/message"
+	"github.com/Sirupsen/logrus"
 	"github.com/armon/circbuf"
 	"github.com/mattn/go-shellwords"
 )
@@ -89,26 +91,51 @@ func (a *Agent) execJob(job *pb.Job, ex *pb.Execution) error {
 	ex.Output = buf.Bytes()
 	ex.RunNodeName = a.config.Nodename
 
-	// randomly select a server to receive the execution
-	serverNodeName, err := a.randomPickServer(ex.Region)
-	if err != nil {
-		return err
-	}
+	var lastRpcServer string
+	// retry rpc call 4 times
+	for retryTimes := 0; retryTimes < 4; retryTimes++ {
+		var serverNodeName string
+		for lastRpcServer == serverNodeName || serverNodeName == "" {
+			// randomly select a server to receive the execution
+			serverNodeName, err = a.randomPickServer(ex.Region)
+			if err != nil {
+				return err
+			}
+		}
+		lastRpcServer = serverNodeName
 
-	ip, port, err := a.getRPCConfig(serverNodeName)
-	if err != nil {
-		return err
-	}
+		ip, port, err := a.getRPCConfig(serverNodeName)
+		if err != nil {
+			return err
+		}
 
-	rpcClient := a.newRPCClient(ip, port)
-	defer rpcClient.Shutdown()
+		rpcClient := a.newRPCClient(ip, port)
 
-	log.FmdLoger.WithField("execution", ex).Debug("Proc: job done send back execution")
-	// send back execution
-	// TODO: retry this 3/5 times
-	if err = rpcClient.ExecDone(ex); err != nil {
-		log.FmdLoger.WithError(err).Debug("Proc: rpc call ExecDone failed")
-		return err
+		log.FmdLoger.WithField("execution", ex).Debug("Proc: job done send back execution")
+		// send back execution
+		err = rpcClient.ExecDone(ex)
+		rpcClient.Shutdown()
+		if err != nil {
+			log.FmdLoger.WithFields(logrus.Fields{
+				"RpcServer":     serverNodeName,
+				"retrytimes":    retryTimes,
+				"exName":        ex.Name,
+				"exRegion":      ex.Region,
+				"exGroup":       ex.Group,
+				"exRunNodeName": ex.RunNodeName,
+			}).WithError(err).Error("Proc: grpc call failed")
+			if terr, ok := err.(*errors.Error); ok {
+				// error is a grpc error, retry
+				if terr.Less(errors.ErrNil) {
+					continue
+				} else {
+					// error is a djob error, give up
+					break
+				}
+			}
+		}
+		// succeed break
+		break
 	}
 
 	return nil

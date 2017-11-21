@@ -296,7 +296,7 @@ func (a *Agent) Run() error {
 		}).Debug("Agent: API Server has been started")
 
 		// start takeover process
-		//		go a.takeOverJob()
+		go a.takeOverJob()
 	}
 
 	return nil
@@ -308,7 +308,7 @@ func (a *Agent) takeOverJob() {
 	for {
 		watchCh, err := a.store.WatchLock(&pb.Job{Region: a.config.Region}, stopCh)
 		if err == errors.ErrNotExist {
-			//			log.FmdLoger.Debug("Agent: job lock path do not exist, sleep 5s retry")
+			log.FmdLoger.Debug("Agent: job lock path do not exist, sleep 5s retry")
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -317,9 +317,12 @@ func (a *Agent) takeOverJob() {
 		}
 		for {
 			jobName := <-watchCh
-
+			log.FmdLoger.Debugf("Agent: watch got a job: %s", jobName)
 			if !a.store.IsLocked(&pb.Job{Name: jobName, Region: a.config.Region}, store.OWN) {
 				res, _, err := a.operationMiddleLayer(&pb.Job{Name: jobName, Region: a.config.Region}, pb.Ops_READ, nil)
+				if err == errors.ErrNotExist {
+					continue
+				}
 				if err != nil {
 					log.FmdLoger.WithFields(logrus.Fields{
 						"name":   jobName,
@@ -342,6 +345,11 @@ func (a *Agent) takeOverJob() {
 						"name":   job.Name,
 						"region": job.Region,
 					}).WithError(err).Fatal("Agent: lock job failed")
+				}
+				job.SchedulerNodeName = a.config.Nodename
+				_, _, err = a.operationMiddleLayer(job, pb.Ops_MODIFY, nil)
+				if err != nil {
+					log.FmdLoger.WithError(err).Fatal("Agent: takeOver, modify job failed")
 				}
 
 				err = a.scheduler.AddJob(job)

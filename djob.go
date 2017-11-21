@@ -26,7 +26,7 @@ import (
 	"github.com/mitchellh/cli"
 )
 
-const VERSION = "0.1.0"
+const VERSION = "0.2.1"
 
 func main() {
 	args := os.Args[1:]
@@ -55,7 +55,7 @@ func main() {
 		},
 		// use to
 		//
-		"keygen": func() (cli.Command, error) {
+		"generate": func() (cli.Command, error) {
 			return &cmd.KeygenCmd{
 				Ui: ui,
 			}, nil

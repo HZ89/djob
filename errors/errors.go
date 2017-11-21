@@ -85,10 +85,8 @@ func NewFromGRPCErr(err error) (*Error, bool) {
 	if !ok {
 		return nil, false
 	}
-	if s.Code() > 95200 {
-		return &Error{code: int(s.Code()), message: s.Message()}, true
-	}
-	return nil, false
+
+	return &Error{code: int(s.Code()), message: s.Message()}, true
 }
 
 func (e *Error) Error() string {
@@ -106,6 +104,13 @@ func (e *Error) Equal(err error) bool {
 	}
 	if te, ok := err.(*Error); ok {
 		return te.code == e.code
+	}
+	return false
+}
+
+func (e *Error) Less(err error) bool {
+	if terr, ok := err.(*Error); ok {
+		return e.code < terr.code
 	}
 	return false
 }

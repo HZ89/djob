@@ -21,6 +21,7 @@ package store
 import (
 	"fmt"
 	"math"
+	"path"
 	"reflect"
 	"strconv"
 	"strings"
@@ -51,7 +52,7 @@ func init() {
 const (
 	sqlMaxOpenConnect = 100
 	sqlMaxIdleConnect = 20
-	LockTimeOut       = 60 * time.Second
+	LockTimeOut       = 2 * time.Second
 	defaultPageSize   = 10
 	separator         = "###"
 	lockTTL           = 60
@@ -133,6 +134,7 @@ func (l *LockerChain) renew() {
 		// remove expired lock
 		// TODO: Need to throw out the key expired
 		if now.After(t.bornTime.Add(lockTTL * time.Second)) {
+			log.FmdLoger.Warningf("Store-Lock: remove a expired key: %s", key)
 			l.chain.Delete(key)
 			return true
 		}
@@ -140,6 +142,7 @@ func (l *LockerChain) renew() {
 		if now.Sub(t.bornTime) < lockTTL*0.8*time.Second {
 			t.renewCh <- struct{}{}
 			t.bornTime = now
+			log.FmdLoger.Debugf("Store-Lock: has renew a lock: %s", key)
 		}
 		return true
 	})
@@ -296,10 +299,9 @@ func (k *KVStore) WatchLock(obj interface{}, stopCh chan struct{}) (chan string,
 				if len(kps) == 0 {
 					continue
 				}
-				log.FmdLoger.Debugf("Store: watch from %s got %v", watchPath, kps)
 				for _, kp := range kps {
 					v := strings.Split(kp.Key, "###")
-					outCh <- v[0]
+					outCh <- path.Base(v[0])
 				}
 			case <-stopCh:
 				stopWatchCh <- struct{}{}

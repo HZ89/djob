@@ -72,7 +72,6 @@ const (
 	DefaultSnapshotPath = "./snapshot"
 	DefaultConfigFile   = "./conf/djob.yml"
 	DefaultPidFile      = "./djob.pid"
-	DefaultLogFile      = "./djob.log"
 	DefaultKeySpeace    = "djob"
 	DefaultSQLPort      = 3306
 	DefaultSQLHost      = "localhost"
@@ -118,7 +117,7 @@ func newConfig(args []string, version string) (*Config, error) {
 	cmdFlags := flag.NewFlagSet("agent", flag.ContinueOnError)
 	cmdFlags.String("config", DefaultConfigFile, "config file path")
 	cmdFlags.String("pid", DefaultPidFile, "pid file path")
-	cmdFlags.String("logfile", DefaultLogFile, "log file path")
+	cmdFlags.String("logfile", "", "log file path")
 
 	if err := cmdFlags.Parse(args); err != nil {
 		return nil, err

@@ -30,6 +30,8 @@ import (
 	"github.com/HZ89/djob/util"
 )
 
+// TODO: CRUD need cache
+
 // separate local ops and remote ops
 func (a *Agent) operationMiddleLayer(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int32, error) {
 	objRegion := util.GetFieldValue(obj, "Region")
