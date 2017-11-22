@@ -1,8 +1,0 @@
-[Unit]
-Description=djob agent
-Documentation=https://github.com/hz89/djob 
-After=network.target
-
-[Service]
-LimitNOFILE=9999
-ExecStart=/usr/bin/djob agent 
