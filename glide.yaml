@@ -53,3 +53,5 @@ import:
   version: ^1.7.2
   subpackages:
   - credentials
+- package: github.com/facebookgo/pidfile
+- package: github.com/facebookgo/atomicfile

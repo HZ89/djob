@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"os"
 	"reflect"
 	"sort"
 	"strconv"
@@ -30,6 +31,7 @@ import (
 
 	"github.com/Knetic/govaluate"
 	"github.com/Sirupsen/logrus"
+	"github.com/facebookgo/pidfile"
 	"github.com/hashicorp/memberlist"
 	"github.com/hashicorp/serf/serf"
 
@@ -448,7 +450,6 @@ func (a *Agent) Reload(args []string) {
 
 // stop this
 func (a *Agent) Stop(graceful bool) int {
-
 	if !graceful {
 		return 0
 	}
@@ -508,6 +509,7 @@ func (a *Agent) Stop(graceful bool) int {
 // TODO: use a rpc client pool
 func (a *Agent) newRPCClient(ip string, port int) *rpc.RpcClient {
 	var tls *rpc.TlsOpt
+	// TODO: think about the certificate automatically issued
 	if a.config.RPCTls {
 		tls = &rpc.TlsOpt{
 			CertFile: a.config.CertFile,
@@ -659,4 +661,13 @@ func (a *Agent) getRPCConfig(nodeName string) (string, int, error) {
 		}
 	}
 	return "", 0, errors.ErrNotExist
+}
+
+func (a *Agent)WritePid() error {
+	pidfile.SetPidfilePath(a.config.PidFile)
+	return pidfile.Write()
+}
+
+func (a *Agent)RemovePid() error {
+	return os.Remove(pidfile.GetPidfilePath())
 }

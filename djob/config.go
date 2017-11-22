@@ -62,6 +62,7 @@ type Config struct {
 	SerfSnapshotPath  string //serf use this path to save snapshot of joined server
 	DSN               string
 	APITokens         map[string]string
+	PidFile string // pid file path
 }
 
 const (
@@ -274,6 +275,7 @@ func ReadConfig(version string) (*Config, error) {
 		SerfSnapshotPath:  viper.GetString("serf_snapshot_dir"),
 		DSN:               dsn,
 		APITokens:         tokens,
+		PidFile: viper.GetString("pid"),
 	}, nil
 }
 

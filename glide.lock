@@ -1,5 +1,5 @@
-hash: 6aa741e310fcb42fee9db11fa6e5072617bd0f883d17dc7d77ffde3d9ce6cd39
-updated: 2017-11-13T15:13:19.661484683+08:00
+hash: 1c28175d458b14911161d195440dfb7baf4e9a914d3449852e174bd421d15a8c
+updated: 2017-11-22T11:03:02.990377746+08:00
 imports:
 - name: github.com/armon/circbuf
   version: bbbad097214e2918d8543d5201d12bfd7bca254d
@@ -21,6 +21,10 @@ imports:
   version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
   subpackages:
   - semver
+- name: github.com/facebookgo/atomicfile
+  version: 2de1f203e7d5e386a6833233882782932729f27e
+- name: github.com/facebookgo/pidfile
+  version: f242e2999868dcd267a2b86e49ce1f9cf9e15b16
 - name: github.com/fsnotify/fsnotify
   version: 4da3e2cfbabc9f751898f250b49f2439785783a1
 - name: github.com/gin-contrib/gzip
@@ -206,12 +210,14 @@ imports:
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
-  version: 5ffe3083946d5603a0578721101dc8165b1d5b5f
+  version: 5a9f7b402fe85096d2e1d0383435ee1876e863d0
   subpackages:
   - balancer
+  - balancer/roundrobin
   - codes
   - connectivity
   - credentials
+  - encoding
   - grpclb/grpc_lb_v1/messages
   - grpclog
   - internal
@@ -220,6 +226,8 @@ imports:
   - naming
   - peer
   - resolver
+  - resolver/dns
+  - resolver/passthrough
   - stats
   - status
   - tap

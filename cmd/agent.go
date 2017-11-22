@@ -50,14 +50,20 @@ func (c *AgentCmd) Run(args []string) int {
 func (c *AgentCmd) handleSignals() int {
 	signalCh := make(chan os.Signal, 8)
 	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
-
+	if err := c.agent.WritePid(); err != nil {
+		c.Ui.Error(err.Error())
+		return 1
+	}
 	for {
 		switch sig := <-signalCh; sig {
 		case syscall.SIGHUP:
+			c.Ui.Info("Got OS SIGHUP reload")
 			c.reload()
 		case syscall.SIGTERM:
+			c.Ui.Info("Got OS SIGTERM stop")
 			return c.stop(false)
 		case syscall.SIGQUIT:
+			c.Ui.Info("Got OS SIGQUIT stop")
 			return c.stop(true)
 		case os.Interrupt:
 			c.Ui.Warn("Got OS Interrupt signal quit immediately")
@@ -75,7 +81,11 @@ func (c *AgentCmd) reload() {
 }
 
 func (c *AgentCmd) stop(graceful bool) int {
-	return c.agent.Stop(graceful)
+	i := c.agent.Stop(graceful)
+	if err := c.agent.RemovePid(); err != nil {
+		c.Ui.Warn(err.Error())
+	}
+	return i
 }
 
 func (c *AgentCmd) Synopsis() string {
@@ -87,7 +97,7 @@ func (c *AgentCmd) Help() string {
 	Usage: djob agent [options]
 	    Run djob agent
 	Options:
-	    --config=./config     config file path
+	    --config              config file path
 	    --pid                 pid file path
 	    --logfile             log file path
 	`
