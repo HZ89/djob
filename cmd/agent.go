@@ -36,6 +36,7 @@ type AgentCmd struct {
 }
 
 func (c *AgentCmd) Run(args []string) int {
+	c.args = make([]string, len(args))
 	copy(c.args, args)
 	c.agent = djob.New(c.args, c.Version)
 	err := c.agent.Run()

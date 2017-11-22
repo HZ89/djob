@@ -7,6 +7,7 @@ After=network.target
 [Service]
 Type=simple
 LimitNOFILE=9999
+WorkingDirectory=/run/djob
 PIDFile=/run/djob/djob.pid
 ExecStart=/usr/bin/djob agent --pid /run/djob/djob.pid --config /etc/djob/djob.yml
 ExecReload=/bin/kill -s SIGHUP $MAINPID
