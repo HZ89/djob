@@ -62,7 +62,7 @@ type Config struct {
 	SerfSnapshotPath  string //serf use this path to save snapshot of joined server
 	DSN               string
 	APITokens         map[string]string
-	PidFile string // pid file path
+	PidFile           string // pid file path
 }
 
 const (
@@ -129,8 +129,8 @@ func newConfig(args []string, version string) (*Config, error) {
 	viper.SetDefault("serf_bind_addr", fmt.Sprintf("%s:%d", "0.0.0.0", DefaultSerfPort))
 	viper.SetDefault("http_api_addr", fmt.Sprintf("%s:%d", "0.0.0.0", DefaultHttpPort))
 	viper.SetDefault("rpc_bind_addr", fmt.Sprintf("%s:%d", "0.0.0.0", DefaultRPCPort))
-	viper.SetDefault("job_store", "etcd")
-	viper.SetDefault("job_store_keyspeace", DefaultKeySpeace)
+	viper.SetDefault("kv_store", "etcd")
+	viper.SetDefault("kv_store_keyspeace", DefaultKeySpeace)
 	viper.SetDefault("log_level", "info")
 	viper.SetDefault("rpc_tls", false)
 	viper.SetDefault("region", DefaultRegion)
@@ -266,16 +266,16 @@ func ReadConfig(version string) (*Config, error) {
 		CertFile:          certFile,
 		KeyFile:           keyFile,
 		RPCTls:            withTls,
-		JobStore:          viper.GetString("job_store"),
-		JobStoreServers:   viper.GetStringSlice("job_store_servers"),
-		JobStoreKeyspace:  viper.GetString("job_store_keyspeace"),
+		JobStore:          viper.GetString("kv_store"),
+		JobStoreServers:   viper.GetStringSlice("kv_store_servers"),
+		JobStoreKeyspace:  viper.GetString("kv_store_keyspeace"),
 		SerfJoin:          viper.GetStringSlice("join"),
 		Nodename:          nodeName,
 		encryptKey:        viper.GetString("encrypt_key"),
 		SerfSnapshotPath:  viper.GetString("serf_snapshot_dir"),
 		DSN:               dsn,
 		APITokens:         tokens,
-		PidFile: viper.GetString("pid"),
+		PidFile:           viper.GetString("pid"),
 	}, nil
 }
 
