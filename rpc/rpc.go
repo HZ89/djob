@@ -249,10 +249,7 @@ func NewRpcClient(serveraddr string, serverport int, tlsopt *TlsOpt) (*RpcClient
 }
 
 func (c *RpcClient) Shutdown() error {
-	if err := c.conn.Close(); err != nil {
-		return err
-	}
-	return nil
+	return c.conn.Close()
 }
 
 func (c *RpcClient) ProxyJobRun(name, region string) (*pb.Execution, error) {
