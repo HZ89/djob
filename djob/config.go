@@ -85,9 +85,9 @@ type loadJobPolicy int
 
 // load job policy
 const (
-	LOADNOTHING = 1 + iota // load nothing
-	LOADOWN                // load all the jobs belong to this server
-	LOADALL                // load all unassigned jobs
+	LOADNOTHING loadJobPolicy = 1 + iota // load nothing
+	LOADOWN                              // load all the jobs belong to this server
+	LOADALL                              // load all unassigned jobs
 )
 
 var policyValueName = map[int]string{
