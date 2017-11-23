@@ -27,6 +27,7 @@ It has these top-level messages:
 	GetRPCConfigResp
 	JobCountResp
 	QueryResult
+	QueryJobRunParams
 	Search
 	Params
 	Result

@@ -342,7 +342,9 @@ func (k *KVStore) WhoLocked(obj interface{}, lockType lockType) (v string) {
 // create a obj's lock with timeout
 func (k *KVStore) lock(obj interface{}, lockType lockType, lockOpt *libstore.LockOptions) (locker libstore.Locker, err error) {
 	var key string
-
+	if k.IsLocked(obj, lockType) {
+		return nil, errors.ErrLockTimeout
+	}
 	key, err = k.buildLockKey(obj, lockType)
 	if err != nil {
 		return

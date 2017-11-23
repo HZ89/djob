@@ -145,15 +145,15 @@ func (a *Agent) serfEventLoop() {
 				"event": e.String(),
 			}).Debug("Agent: Received event")
 			// log all member event, member jion, update, leave etc.
-			if memberevent, ok := e.(serf.MemberEvent); ok {
-				for _, member := range memberevent.Members {
-					log.FmdLoger.WithFields(logrus.Fields{
-						"node":    a.config.Nodename,
-						"members": member.Name,
-						"event":   e.EventType(),
-					}).Debug("Agent: Member event got")
-				}
-			}
+			//if memberevent, ok := e.(serf.MemberEvent); ok {
+			//	for _, member := range memberevent.Members {
+			//		log.FmdLoger.WithFields(logrus.Fields{
+			//			"node":    a.config.Nodename,
+			//			"members": member.Name,
+			//			"event":   e.EventType(),
+			//		}).Debug("Agent: Member event got")
+			//	}
+			//}
 
 			// handle custom query event
 			if e.EventType() == serf.EventQuery {
@@ -323,28 +323,13 @@ func (a *Agent) takeOverJob() {
 			log.FmdLoger.WithError(err).Fatal("Agent: try to watch lock path failed")
 		}
 		for {
-			jobName := <-watchCh
-			log.FmdLoger.Debugf("Agent: watch got a job: %s", jobName)
-			if !a.store.IsLocked(&pb.Job{Name: jobName, Region: a.config.Region}, store.OWN) {
-				res, _, err := a.operationMiddleLayer(&pb.Job{Name: jobName, Region: a.config.Region}, pb.Ops_READ, nil)
-				if err == errors.ErrNotExist {
-					continue
-				}
-				if err != nil {
-					log.FmdLoger.WithFields(logrus.Fields{
-						"name":   jobName,
-						"region": a.config.Region,
-					}).WithError(err).Fatal("Agent: get job info failed")
-				}
-				job, ok := res[0].(*pb.Job)
-				if !ok {
-					log.FmdLoger.WithFields(logrus.Fields{
-						"name":   jobName,
-						"region": a.config.Region}).Fatalf("Agent: want a Job buf got a %v", res)
-				}
-
+			select {
+			case jobName := <-watchCh:
+				log.FmdLoger.Debugf("Agent: watch got a job: %s", jobName)
+				job := &pb.Job{Name: jobName, Region: a.config.Region}
+				// try to lock this job
 				err = a.lockerChain.AddLocker(job, store.OWN)
-				if err == errors.ErrLockTimeout {
+				if err == errors.ErrLockTimeout || err == errors.ErrRepetition {
 					continue
 				}
 				if err != nil {
@@ -353,12 +338,17 @@ func (a *Agent) takeOverJob() {
 						"region": job.Region,
 					}).WithError(err).Fatal("Agent: lock job failed")
 				}
+				res, _, err := a.operationMiddleLayer(job, pb.Ops_READ, nil)
+				if err == errors.ErrNotExist {
+					continue
+				}
+				job = res[0].(*pb.Job)
+
 				job.SchedulerNodeName = a.config.Nodename
 				_, _, err = a.operationMiddleLayer(job, pb.Ops_MODIFY, nil)
 				if err != nil {
 					log.FmdLoger.WithError(err).Fatal("Agent: takeOver, modify job failed")
 				}
-
 				err = a.scheduler.AddJob(job)
 				if err != nil {
 					log.FmdLoger.WithFields(logrus.Fields{
@@ -368,6 +358,12 @@ func (a *Agent) takeOverJob() {
 					}).WithError(err).Fatal("Agent: add job to scheduler failed")
 				}
 
+				if err != nil {
+					log.FmdLoger.WithFields(logrus.Fields{
+						"name":   jobName,
+						"region": a.config.Region,
+					}).WithError(err).Fatal("Agent: get job info failed")
+				}
 			}
 		}
 	}
@@ -621,33 +617,34 @@ func (a *Agent) processFilteredNodes(expression string, needAlievd bool) ([]serf
 	if err != nil {
 		return nil, err
 	}
-	wt := exp.Vars()
-	sort.Sort(sort.StringSlice(wt))
 	var fitMembers []serf.Member
 	for _, member := range a.serf.Members() {
-		var mtks []string
-		for k := range member.Tags {
-			mtks = append(mtks, k)
-		}
-		intersection := util.Intersect([]string(mtks), wt)
-		sort.Sort(sort.StringSlice(intersection))
-		if reflect.DeepEqual(wt, intersection) {
-			parameters := make(map[string]interface{})
-			for _, tk := range wt {
-				parameters[tk] = member.Tags[tk]
-			}
-			result, err := exp.Evaluate(parameters)
-			if err != nil {
-				return nil, err
-			}
-			if result.(bool) {
-				if needAlievd == false || member.Status == serf.StatusAlive {
-					fitMembers = append(fitMembers, member)
-				}
-			}
+		if a.isWantedMember(exp, member) {
+			fitMembers = append(fitMembers, member)
 		}
 	}
 	return fitMembers, nil
+}
+
+// if the member is wanted, return true
+func (a *Agent) isWantedMember(expression *govaluate.EvaluableExpression, member serf.Member) bool {
+	wt := expression.Vars()
+	sort.Sort(sort.StringSlice(wt))
+	var mks []string
+	for k := range member.Tags {
+		mks = append(mks, k)
+	}
+	intersection := util.Intersect(mks, wt)
+	sort.Sort(sort.StringSlice(intersection))
+	if !reflect.DeepEqual(wt, intersection) {
+		return false
+	}
+	parameters := make(map[string]interface{})
+	for _, tk := range wt {
+		parameters[tk] = member.Tags[tk]
+	}
+	result, _ := expression.Evaluate(parameters)
+	return result.(bool)
 }
 
 // get grpc configuration information from tags

@@ -17,6 +17,7 @@
  */
 
 syntax = "proto3";
+import "message/job.proto";
 package message;
 
 message JobQueryParams {
@@ -40,4 +41,9 @@ message QueryResult {
     int32 Status = 1;
     string Node = 2;
     string Message = 3;
+}
+
+message QueryJobRunParams {
+    Execution Execution = 1;
+    string exp = 2;
 }
