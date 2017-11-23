@@ -48,6 +48,13 @@ message ApiStringResponse {
     repeated string Data = 4;
 }
 
+message ApiNodeResponse {
+    bool Succeed = 1;
+    string Message = 2;
+    int32 MaxPageNum = 3;
+    repeated Node Data = 4;
+}
+
 message Pageing {
     // @inject_tag: form:"pagenum"
     int32 PageNum = 1;
@@ -73,7 +80,7 @@ message ApiJobQueryString {
 
 message ApiJobStatusQueryString {
     // @inject_tag: form:"status"
-    JobStatus status = 1;
+    JobStatus Status = 1;
     // @inject_tag: form:"pageing"
     Pageing Pageing = 2;
 }
@@ -88,6 +95,13 @@ message ApiExecutionQueryString {
 message ApiSearchQueryString {
     // @inject_tag: form:"q"
     SearchCondition SearchCondition = 1;
+    // @inject_tag: form:"pageing"
+    Pageing Pageing = 2;
+}
+
+message ApiNodeQueryString {
+    // @inject_tag: form:"node"
+    Node Node = 1;
     // @inject_tag: form:"pageing"
     Pageing Pageing = 2;
 }

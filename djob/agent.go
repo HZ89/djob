@@ -54,6 +54,8 @@ const (
 	APITimeOut   = 1 * time.Second
 )
 
+var RESERVEDTAGS = [...]string{"RPCADIP", "RPCADPORT", "NODE", "REGION", "SERVER", "VERSION"}
+
 type Agent struct {
 	lockerChain *store.LockerChain   // a sync/map use to store obj locker
 	config      *Config              // configuration
@@ -580,7 +582,7 @@ func (a *Agent) minimalLoadServer(region string) (string, error) {
 
 // find a available node randomly
 func (a *Agent) randomPickServer(region string) (string, error) {
-	p, err := a.createSerfQueryParam(fmt.Sprintf("server=='true'&&region=='%s'", region))
+	p, err := a.createSerfQueryParam(fmt.Sprintf("SERVER=='true'&&REGION=='%s'", region))
 	if err != nil {
 		return "", err
 	}
@@ -590,14 +592,18 @@ func (a *Agent) randomPickServer(region string) (string, error) {
 // constructed serf.QueryParam using expression
 func (a *Agent) createSerfQueryParam(expression string) (*serf.QueryParam, error) {
 	var queryParam serf.QueryParam
-	nodeNames, err := a.processFilteredNodes(expression)
+	fitMembers, err := a.processFilteredNodes(expression, true)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(nodeNames) > 0 {
+	if len(fitMembers) > 0 {
+		var names []string
+		for _, m := range fitMembers {
+			names = append(names, m.Name)
+		}
 		queryParam = serf.QueryParam{
-			FilterNodes: nodeNames,
+			FilterNodes: names,
 			RequestAck:  true,
 		}
 		return &queryParam, nil
@@ -607,38 +613,38 @@ func (a *Agent) createSerfQueryParam(expression string) (*serf.QueryParam, error
 }
 
 // find all the node that make the expression true
-func (a *Agent) processFilteredNodes(expression string) ([]string, error) {
+func (a *Agent) processFilteredNodes(expression string, needAlievd bool) ([]serf.Member, error) {
 	exp, err := govaluate.NewEvaluableExpression(expression)
 	if err != nil {
 		return nil, err
 	}
 	wt := exp.Vars()
 	sort.Sort(sort.StringSlice(wt))
-	var nodeNames []string
+	var fitMembers []serf.Member
 	for _, member := range a.serf.Members() {
-		if member.Status == serf.StatusAlive {
-			var mtks []string
-			for k := range member.Tags {
-				mtks = append(mtks, k)
+		var mtks []string
+		for k := range member.Tags {
+			mtks = append(mtks, k)
+		}
+		intersection := util.Intersect([]string(mtks), wt)
+		sort.Sort(sort.StringSlice(intersection))
+		if reflect.DeepEqual(wt, intersection) {
+			parameters := make(map[string]interface{})
+			for _, tk := range wt {
+				parameters[tk] = member.Tags[tk]
 			}
-			intersection := util.Intersect([]string(mtks), wt)
-			sort.Sort(sort.StringSlice(intersection))
-			if reflect.DeepEqual(wt, intersection) {
-				parameters := make(map[string]interface{})
-				for _, tk := range wt {
-					parameters[tk] = member.Tags[tk]
-				}
-				result, err := exp.Evaluate(parameters)
-				if err != nil {
-					return nil, err
-				}
-				if result.(bool) {
-					nodeNames = append(nodeNames, member.Name)
+			result, err := exp.Evaluate(parameters)
+			if err != nil {
+				return nil, err
+			}
+			if result.(bool) {
+				if needAlievd == false || member.Status == serf.StatusAlive {
+					fitMembers = append(fitMembers, member)
 				}
 			}
 		}
 	}
-	return nodeNames, nil
+	return fitMembers, nil
 }
 
 // get grpc configuration information from tags
@@ -663,11 +669,11 @@ func (a *Agent) getRPCConfig(nodeName string) (string, int, error) {
 	return "", 0, errors.ErrNotExist
 }
 
-func (a *Agent)WritePid() error {
+func (a *Agent) WritePid() error {
 	pidfile.SetPidfilePath(a.config.PidFile)
 	return pidfile.Write()
 }
 
-func (a *Agent)RemovePid() error {
+func (a *Agent) RemovePid() error {
 	return os.Remove(pidfile.GetPidfilePath())
 }

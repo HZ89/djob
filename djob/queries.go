@@ -35,7 +35,7 @@ const (
 
 func (a *Agent) sendJobCountQuery(region string) ([]*pb.JobCountResp, error) {
 
-	params, err := a.createSerfQueryParam(fmt.Sprintf("server=='true'&&region=='%s'", region))
+	params, err := a.createSerfQueryParam(fmt.Sprintf("SERVER=='true'&&REGION=='%s'", region))
 	if err != nil {
 		return nil, err
 	}

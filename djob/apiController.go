@@ -19,15 +19,127 @@
 package djob
 
 import (
+	"fmt"
+	"math"
+	"sort"
+	"strings"
 	"time"
-
-	"github.com/HZ89/djob/util"
-	"github.com/hashicorp/serf/serf"
 
 	"github.com/HZ89/djob/errors"
 	"github.com/HZ89/djob/log"
 	pb "github.com/HZ89/djob/message"
+	"github.com/HZ89/djob/util"
+	"github.com/hashicorp/serf/serf"
 )
+
+// get node info
+func (a *Agent) ListNode(node *pb.Node, search *pb.Search) (nodes []*pb.Node, count int32, err error) {
+	var expression string
+	var res []*pb.Node
+	var members []serf.Member
+	if node == nil {
+		members = a.serf.Members()
+	} else {
+		if node.Name != "" {
+			expression += fmt.Sprintf("NAME == '%s' && ", node.Name)
+		}
+		if node.Region != "" {
+			expression += fmt.Sprintf("REGION == '%s' && ", node.Region)
+		}
+		if node.Role == "server" {
+			expression += fmt.Sprintf("SERVER == 'true' && ")
+		}
+		if node.Role == "agent" {
+			expression += fmt.Sprintf("SERVER == 'false' && ")
+		}
+		for k, v := range node.Tags {
+			expression += fmt.Sprintf("%s == '%s' && ", k, v)
+		}
+		expression = strings.TrimRight(expression, "&& ")
+		log.FmdLoger.Debugf("Agent: listNode use expression %s", expression)
+		members, err = a.processFilteredNodes(expression, node.Alived)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+
+	for _, m := range members {
+		n := &pb.Node{Name: m.Name, Region: m.Tags["REGION"]}
+		n.Tags = make(map[string]string)
+		for k, v := range m.Tags {
+			var found bool
+			// pass reserved tags
+			for _, i := range RESERVEDTAGS {
+				if k == i {
+					found = true
+				}
+			}
+			if !found {
+				n.Tags[k] = v
+			}
+		}
+
+		if m.Tags["SERVER"] == "true" {
+			n.Role = "server"
+		} else {
+			n.Role = "agent"
+		}
+
+		if m.Status == serf.StatusAlive {
+			n.Alived = true
+		}
+		res = append(res, n)
+	}
+
+	nodes = res
+	// paging
+	var pageNum int32 = 1
+	var pageSize int32 = 10
+
+	if search != nil {
+		sort.Sort(sortNodes(res))
+		if search.PageSize != 0 {
+			pageSize = search.PageSize
+		}
+		if search.PageNum != 0 {
+			pageNum = search.PageNum
+		}
+		end := pageNum * pageSize
+		start := end - pageSize
+
+		if start > int32(len(res)) {
+			return nil, 0, errors.ErrNotExist
+		}
+
+		if end > int32(len(res)) {
+			nodes = res[start:]
+		} else {
+			nodes = res[start:end]
+		}
+
+		if search.Count {
+			count = int32(math.Ceil(float64(len(res)) / float64(pageSize)))
+		}
+	}
+	return
+}
+
+type sortNodes []*pb.Node
+
+func (s sortNodes) Len() int {
+	return len(s)
+}
+
+func (s sortNodes) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
+func (s sortNodes) Less(i, j int) bool {
+	if s[i].Region != s[j].Region {
+		return s[i].Region < s[j].Region
+	}
+	return s[i].Name < s[j].Name
+}
 
 // list all available regions
 func (a *Agent) ListRegions() (regions []string, err error) {

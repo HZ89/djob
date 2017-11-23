@@ -115,7 +115,7 @@ func (m *memDbBuffer) Set(k Key, v []byte) error {
 
 // Delete removes the entry from buffer with provided key.
 func (m *memDbBuffer) Delete(k Key) error {
-	err := m.db.Put(k, nil)
+	err := m.db.Delete(k)
 	return errors.Trace(err)
 }
 

@@ -120,3 +120,11 @@ message Execution {
     // @inject_tag: gorm:"type:varchar(64);primary_key;not null" form:"NodeName"
     string RunNodeName = 10; // name of the node on which this execution is running
 }
+
+message Node {
+    string Name = 1; // node name
+    string Region = 2; // region of this node
+    bool Alived = 3; // node alive status
+    string Role = 4; // is server or agent
+    map<string, string> Tags = 5; // node tags
+}

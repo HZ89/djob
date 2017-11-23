@@ -173,7 +173,7 @@ func ReadConfig(version string) (*Config, error) {
 		if !ok {
 			policyType = LOADOWN
 		}
-		tags["server"] = "true"
+		tags["SERVER"] = "true"
 		tokens = viper.GetStringMapString("tokens")
 		if len(tokens) == 0 {
 			tokens = map[string]string{
@@ -182,9 +182,9 @@ func ReadConfig(version string) (*Config, error) {
 		}
 	}
 
-	tags["version"] = version
-	tags["node"] = nodeName
-	tags["region"] = viper.GetString("region")
+	tags["VERSION"] = version
+	tags["NODE"] = nodeName
+	tags["REGION"] = viper.GetString("region")
 
 	withTls := viper.GetBool("rpc_tls")
 	keyFile := viper.GetString("rpc_key_file")
@@ -248,7 +248,7 @@ func ReadConfig(version string) (*Config, error) {
 	return &Config{
 		Server:            server,
 		LoadJobPolicy:     policyType,
-		Region:            tags["region"],
+		Region:            tags["REGION"],
 		Tags:              tags,
 		SerfBindIP:        SerfBindIP,
 		SerfBindPort:      serfBindport,

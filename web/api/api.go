@@ -37,6 +37,7 @@ import (
 
 type ApiController interface {
 	ListRegions() ([]string, error)
+	ListNode(*pb.Node, *pb.Search) ([]*pb.Node, int32, error)
 	AddJob(*pb.Job) (*pb.Job, error)
 	ModifyJob(*pb.Job) (*pb.Job, error)
 	DeleteJob(*pb.Job) (*pb.Job, error)
@@ -106,6 +107,7 @@ func (a *APIServer) prepareGin() *gin.Engine {
 	web := r.Group("/api")
 	web.Use(gzip.Gzip(gzip.DefaultCompression))
 	web.GET("/region", a.listRegions)
+	web.GET("/node", a.listNodes)
 
 	jobAPI := web.Group("/job")
 	jobAPI.POST("/", a.addJob)
@@ -123,8 +125,32 @@ func (a *APIServer) prepareGin() *gin.Engine {
 	return r
 }
 
+func (a *APIServer) listNodes(c *gin.Context) {
+	var nqs pb.ApiNodeQueryString
+	var s *pb.Search
+	if err := c.MustBindWith(&nqs, jsonpbBinding{}); err != nil {
+		a.respondWithError(http.StatusBadRequest, &pb.ApiNodeResponse{Succeed: false, Message: err.Error()}, c)
+		return
+	}
+	if nqs.Pageing != nil {
+		s = &pb.Search{
+			Count:    nqs.Pageing.OutMaxPage,
+			PageSize: nqs.Pageing.PageSize,
+			PageNum:  nqs.Pageing.PageNum,
+		}
+	}
+	nodes, count, err := a.mc.ListNode(nqs.Node, s)
+	if err != nil {
+		a.respondWithError(http.StatusInternalServerError, &pb.ApiStringResponse{Succeed: false, Message: err.Error()}, c)
+		return
+	}
+	resp := &pb.ApiNodeResponse{Succeed: true, Message: "Succeed", Data: nodes, MaxPageNum: count}
+	c.Render(http.StatusOK, pbjson{data: resp})
+}
+
 func (a *APIServer) listExecutions(c *gin.Context) {
 	var eqs pb.ApiExecutionQueryString
+	var s *pb.Search
 	if err := c.MustBindWith(&eqs, jsonpbBinding{}); err != nil {
 		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: err.Error()}, c)
 		return
@@ -133,11 +159,14 @@ func (a *APIServer) listExecutions(c *gin.Context) {
 		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: "no input execution obj"}, c)
 		return
 	}
-	s := &pb.Search{
-		Count:    eqs.Pageing.OutMaxPage,
-		PageSize: eqs.Pageing.PageSize,
-		PageNum:  eqs.Pageing.PageNum,
+	if eqs.Pageing != nil {
+		s = &pb.Search{
+			Count:    eqs.Pageing.OutMaxPage,
+			PageSize: eqs.Pageing.PageSize,
+			PageNum:  eqs.Pageing.PageNum,
+		}
 	}
+
 	outs, count, err := a.mc.ListExecutions(eqs.Execution, s)
 	if err != nil {
 		a.respondWithError(http.StatusInternalServerError, &pb.ApiStringResponse{Succeed: false, Message: err.Error()}, c)
@@ -161,12 +190,18 @@ func (a *APIServer) search(obj interface{}, c *gin.Context) {
 		a.respondWithError(http.StatusInternalServerError, &pb.ApiStringResponse{Succeed: false, Message: err.Error()}, c)
 		return
 	}
+	if searchQuery.SearchCondition == nil {
+		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: "no input query condition"}, c)
+		return
+	}
 	search := &pb.Search{
 		Conditions: searchQuery.SearchCondition.Conditions,
 		Links:      searchQuery.SearchCondition.Links,
-		Count:      searchQuery.Pageing.OutMaxPage,
-		PageNum:    searchQuery.Pageing.PageNum,
-		PageSize:   searchQuery.Pageing.PageSize,
+	}
+	if searchQuery.Pageing != nil {
+		search.Count = searchQuery.Pageing.OutMaxPage
+		search.PageNum = searchQuery.Pageing.PageNum
+		search.PageSize = searchQuery.Pageing.PageSize
 	}
 	outs, count, err := a.mc.Search(obj, search)
 
@@ -250,6 +285,7 @@ func (a *APIServer) modifyJob(c *gin.Context) {
 
 func (a *APIServer) listJobs(c *gin.Context) {
 	var jqs pb.ApiJobQueryString
+	var s *pb.Search
 	if err := c.MustBindWith(&jqs, jsonpbBinding{}); err != nil {
 		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: err.Error()}, c)
 		return
@@ -258,11 +294,14 @@ func (a *APIServer) listJobs(c *gin.Context) {
 		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: "no input job obj"}, c)
 		return
 	}
-	s := &pb.Search{
-		Count:    jqs.Pageing.OutMaxPage,
-		PageSize: jqs.Pageing.PageSize,
-		PageNum:  jqs.Pageing.PageNum,
+	if jqs.Pageing != nil {
+		s = &pb.Search{
+			Count:    jqs.Pageing.OutMaxPage,
+			PageSize: jqs.Pageing.PageSize,
+			PageNum:  jqs.Pageing.PageNum,
+		}
 	}
+
 	a.jobCRUD(jqs.Job, pb.Ops_READ, s, c)
 }
 
