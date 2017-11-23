@@ -49,7 +49,7 @@ type ApiController interface {
 	Search(interface{}, *pb.Search) ([]interface{}, int32, error)
 }
 
-// tls cert key pair
+// KayPair tls cert key pair
 type KayPair struct {
 	Key  string
 	Cert string
@@ -68,7 +68,7 @@ type APIServer struct {
 	server    *http.Server      // http server obj
 }
 
-// Initialize APIServer
+// NewAPIServer initialize APIServer
 func NewAPIServer(ip string, port int,
 	tokens map[string]string, tls bool, pair *KayPair, backend ApiController) (*APIServer, error) {
 	if len(tokens) == 0 {
@@ -476,7 +476,7 @@ func (a *APIServer) Run() {
 	return
 }
 
-// stop APIServer
+// Stop APIServer
 func (a *APIServer) Stop(wait time.Duration) error {
 	a.loger.Infof("API-server: shutdown in %d second", wait)
 	ctx, cancel := context.WithTimeout(context.Background(), wait)

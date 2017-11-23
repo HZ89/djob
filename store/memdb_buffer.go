@@ -1,4 +1,3 @@
-// Port from TiDB
 // Copyright 2015 PingCAP, Inc.
 //
 // Copyright 2015 Wenbin Xiao
@@ -50,6 +49,7 @@ type memDbIter struct {
 	reverse bool
 }
 
+// Key type
 type Key []byte
 
 // NewMemDbBuffer creates a new memDbBuffer.

@@ -61,10 +61,7 @@ func (j jsonpbBinding) getBind(req *http.Request, obj interface{}) error {
 		return err
 	}
 	req.ParseMultipartForm(32 << 10) // 32 MB
-	if err := j.objForm(obj, req.Form); err != nil {
-		return err
-	}
-	return nil
+	return j.objForm(obj, req.Form)
 }
 
 func (jsonpbBinding) objForm(ptr interface{}, form map[string][]string) error {
@@ -130,10 +127,7 @@ func (jsonpbBinding) objForm(ptr interface{}, form map[string][]string) error {
 func (jsonpbBinding) postBind(req *http.Request, obj interface{}) error {
 	jsondec := json.NewDecoder(req.Body)
 	unmarshaler := &jsonpb.Unmarshaler{AllowUnknownFields: false}
-	if err := unmarshaler.UnmarshalNext(jsondec, obj.(proto.Message)); err != nil {
-		return err
-	}
-	return nil
+	return unmarshaler.UnmarshalNext(jsondec, obj.(proto.Message))
 }
 
 func setWithProperType(valueKind reflect.Kind, val string, structField reflect.Value) error {

@@ -113,7 +113,7 @@ func (a *Agent) SendBackExecution(ex *pb.Execution) (err error) {
 	return nil
 }
 
-// get Job object
+// GetJob func use name and region search a job
 func (a *Agent) GetJob(name, region string) (*pb.Job, error) {
 	out, _, err := a.operationMiddleLayer(&pb.Job{Name: name, Region: region}, pb.Ops_READ, nil)
 	if err != nil {
@@ -142,7 +142,7 @@ func (a *Agent) GetJob(name, region string) (*pb.Job, error) {
 	return nil, errors.ErrType
 }
 
-// forwarding ops to remote or perform it in local
+// PerformOps func forwarding ops to remote or perform it in local
 func (a *Agent) PerformOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int32, error) {
 	log.FmdLoger.Debugf("RPC: Server got a %v, ops: %s, search: %v", obj, ops, search)
 	return a.operationMiddleLayer(obj, ops, search)

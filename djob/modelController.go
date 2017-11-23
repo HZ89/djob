@@ -364,6 +364,7 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 	return nil, 0, errors.ErrUnknownOps
 }
 
+// RunJob implement api interface
 func (a *Agent) RunJob(name, region string) (*pb.Execution, error) {
 	in := &pb.Job{Name: name, Region: region}
 	// proxy job run action to the right region

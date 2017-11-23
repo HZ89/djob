@@ -51,14 +51,14 @@ func init() {
 
 const (
 	gracefulTime = 5 * time.Second
-	// API max execution time
+	// APITimeOut max api execution time
 	APITimeOut = 1 * time.Second
 )
 
 // RESERVEDTAGS store protected tag that is not allowed to be modified
 var RESERVEDTAGS = [...]string{"RPCADIP", "RPCADPORT", "NODE", "REGION", "SERVER", "VERSION"}
 
-// djob agent struct
+// Agent djob agent struct
 type Agent struct {
 	lockerChain *store.LockerChain   // a sync/map use to store obj locker
 	config      *Config              // configuration

@@ -28,6 +28,7 @@ import (
 	"github.com/hashicorp/serf/serf"
 )
 
+// string of serf query mark
 const (
 	QueryRunJob   = "job:run"
 	QueryJobCount = "job:count"

@@ -27,7 +27,7 @@ type oncespec struct {
 	Date time.Time
 }
 
-// Just store the given time for this schedule.
+// At func just store the given time for this schedule.
 func At(date time.Time) oncespec {
 	return oncespec{
 		Date: date,

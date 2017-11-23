@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// djob errors list
 var (
 	ErrNil                   = New(95200, "everything is fine")
 	ErrNotExist              = New(95201, "object not exist")
@@ -64,11 +65,13 @@ var (
 	ErrBlankTimeFormat       = New(95235, "Blank time format")
 )
 
+// Error custom error type
 type Error struct {
 	code    int    // error code
 	message string // error message
 }
 
+// New a new error
 func New(code int, text string) *Error {
 	return &Error{
 		code:    code,
@@ -76,7 +79,7 @@ func New(code int, text string) *Error {
 	}
 }
 
-// transform grcp error to this Error
+// NewFromGRPCErr func transform grcp error to this Error
 func NewFromGRPCErr(err error) (*Error, bool) {
 	if err == nil {
 		return ErrNil, true
@@ -89,15 +92,17 @@ func NewFromGRPCErr(err error) (*Error, bool) {
 	return &Error{code: int(s.Code()), message: s.Message()}, true
 }
 
+// Error func implement the standard error interface
 func (e *Error) Error() string {
 	return fmt.Sprintf("ErrCode=%d, ErrMessage=%s", e.code, e.message)
 }
 
-// generate grpc error
+// GenGRPCErr used to generate grpc error
 func (e *Error) GenGRPCErr() error {
 	return status.Errorf(codes.Code(e.code), e.message)
 }
 
+// Equal return true when errors code equal
 func (e *Error) Equal(err error) bool {
 	if err == nil {
 		return false
@@ -108,6 +113,7 @@ func (e *Error) Equal(err error) bool {
 	return false
 }
 
+// Less error code less
 func (e *Error) Less(err error) bool {
 	if terr, ok := err.(*Error); ok {
 		return e.code < terr.code
@@ -115,15 +121,15 @@ func (e *Error) Less(err error) bool {
 	return false
 }
 
+// NotEqual return true when errors code not equal
 func (e *Error) NotEqual(err error) bool {
 	return !e.Equal(err)
 }
 
-// generate grpc error from any kind error
+// GenGRPCErr used to generate grpc error from any kind error
 func GenGRPCErr(err error) error {
 	if terr, ok := err.(*Error); ok {
 		return terr.GenGRPCErr()
-	} else {
-		return New(100000, err.Error()).GenGRPCErr()
 	}
+	return New(100000, err.Error()).GenGRPCErr()
 }

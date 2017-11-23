@@ -28,6 +28,7 @@ import (
 	"github.com/mitchellh/cli"
 )
 
+// AgentCmd implementation cli interface
 type AgentCmd struct {
 	Ui      cli.Ui
 	agent   *djob.Agent
@@ -35,6 +36,7 @@ type AgentCmd struct {
 	Version string
 }
 
+// Run run the actual command with the given CLI instance and command-line arguments.
 func (c *AgentCmd) Run(args []string) int {
 	c.args = make([]string, len(args))
 	copy(c.args, args)
@@ -89,10 +91,12 @@ func (c *AgentCmd) stop(graceful bool) int {
 	return i
 }
 
+// Synopsis should return a one-line, short synopsis of the command.
 func (c *AgentCmd) Synopsis() string {
 	return "Run djob agent"
 }
 
+// Help return custom help info
 func (c *AgentCmd) Help() string {
 	helpText := `
 	Usage: djob agent [options]

@@ -27,7 +27,7 @@ import (
 	//	"github.com/rifflock/lfshook"
 )
 
-// store logger
+// FmdLoger store logger
 var FmdLoger = logrus.NewEntry(logrus.New())
 
 // InitLogger used to  initialization logger

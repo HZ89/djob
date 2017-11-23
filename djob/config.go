@@ -31,7 +31,7 @@ import (
 	"github.com/HZ89/djob/log"
 )
 
-// agent config
+// Config struct store agent config
 type Config struct {
 	Server            bool              // start as server or just agent
 	LoadJobPolicy     loadJobPolicy     // the policy for loading jobs from the database at server startup
@@ -65,6 +65,7 @@ type Config struct {
 	PidFile           string // pid file path
 }
 
+// default values
 const (
 	DefaultRegion       = "MARS"
 	DefaultSerfPort     = 8998
@@ -147,7 +148,7 @@ func newConfig(args []string, version string) (*Config, error) {
 	return ReadConfig(version)
 }
 
-// read the configuration file
+// ReadConfig func read the configuration file
 func ReadConfig(version string) (*Config, error) {
 	err := viper.ReadInConfig()
 	if err != nil {
@@ -279,7 +280,7 @@ func ReadConfig(version string) (*Config, error) {
 	}, nil
 }
 
-// base64 encode encrypt key
+// EncryptKey func base64 encode encrypt key
 func (c *Config) EncryptKey() ([]byte, error) {
 	return base64.StdEncoding.DecodeString(c.encryptKey)
 }

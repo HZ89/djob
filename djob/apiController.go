@@ -32,7 +32,8 @@ import (
 	"github.com/hashicorp/serf/serf"
 )
 
-// get node info
+// ListNode get node info, support paging
+// TODO: Need more elegant realization
 func (a *Agent) ListNode(node *pb.Node, search *pb.Search) (nodes []*pb.Node, count int32, err error) {
 	var expression string
 	var res []*pb.Node
@@ -141,7 +142,8 @@ func (s sortNodes) Less(i, j int) bool {
 	return s[i].Name < s[j].Name
 }
 
-// list all available regions
+// ListRegions list all available regions
+// search in memory cache first, if no cache, set it with 120s ttl
 func (a *Agent) ListRegions() (regions []string, err error) {
 	err = a.memStore.Get("regions_cache", &regions)
 	if err != nil && err != errors.ErrNotExist {
@@ -169,7 +171,7 @@ func (a *Agent) ListRegions() (regions []string, err error) {
 	return
 }
 
-// add job
+// AddJob add job
 func (a *Agent) AddJob(in *pb.Job) (out *pb.Job, err error) {
 	var res []interface{}
 	res, _, err = a.operationMiddleLayer(in, pb.Ops_ADD, nil)
@@ -185,7 +187,7 @@ func (a *Agent) AddJob(in *pb.Job) (out *pb.Job, err error) {
 	return nil, errors.ErrNotExpectation
 }
 
-// modify job
+// ModifyJob func modify job
 func (a *Agent) ModifyJob(in *pb.Job) (out *pb.Job, err error) {
 	var res []interface{}
 	res, _, err = a.operationMiddleLayer(in, pb.Ops_MODIFY, nil)
@@ -215,7 +217,7 @@ func (a *Agent) DeleteJob(in *pb.Job) (out *pb.Job, err error) {
 	return nil, errors.ErrNotExpectation
 }
 
-// find a job
+// ListJob find a job
 // TODO: use concurrency instead of recursion
 func (a *Agent) ListJob(in *pb.Job, search *pb.Search) (jobs []*pb.Job, count int32, err error) {
 	if in.Region == "" {
@@ -256,7 +258,7 @@ func (a *Agent) ListJob(in *pb.Job, search *pb.Search) (jobs []*pb.Job, count in
 	return
 }
 
-// get job status from kv store
+// GetStatus get job status from kv store
 func (a *Agent) GetStatus(name, region string) (out *pb.JobStatus, err error) {
 	in := &pb.JobStatus{Name: name, Region: region}
 	var res []interface{}
@@ -272,7 +274,7 @@ func (a *Agent) GetStatus(name, region string) (out *pb.JobStatus, err error) {
 	return nil, errors.ErrNotExpectation
 }
 
-// get job executions
+// ListExecutions get job executions
 func (a *Agent) ListExecutions(in *pb.Execution, search *pb.Search) (out []*pb.Execution, count int32, err error) {
 	if in.Region == "" {
 		regions, err := a.ListRegions()
@@ -310,7 +312,7 @@ func (a *Agent) ListExecutions(in *pb.Execution, search *pb.Search) (out []*pb.E
 	return
 }
 
-// searhc job or execution
+// Search job or execution
 // TODO: use concurrency instead of recursion
 func (a *Agent) Search(in interface{}, search *pb.Search) (out []interface{}, count int32, err error) {
 	switch t := in.(type) {

@@ -28,7 +28,7 @@ import (
 	"time"
 )
 
-// This func return a new analyzer by spec
+// Prepare This func return a new analyzer by spec
 // spec can be:
 // - crontab specs, e.g. "* * * * * *"
 //   (second) (minute) (hour) (day of month) (month) (day of week)
@@ -86,11 +86,11 @@ func getRange(expr string, r section) uint64 {
 		singleDigit      = len(lowAndHigh) == 1
 	)
 
-	var extra_star uint64
+	var extraStar uint64
 	if lowAndHigh[0] == "*" || lowAndHigh[0] == "?" {
 		start = r.min
 		end = r.max
-		extra_star = starBit
+		extraStar = starBit
 	} else {
 		start = parseIntOrName(lowAndHigh[0], r.names)
 		switch len(lowAndHigh) {
@@ -127,7 +127,7 @@ func getRange(expr string, r section) uint64 {
 		log.Panicf("Beginning of range (%d) beyond end of range (%d): %s", start, end, expr)
 	}
 
-	return getBits(start, end, step) | extra_star
+	return getBits(start, end, step) | extraStar
 }
 
 // parseIntOrName returns the (possibly-named) integer contained in expr.

@@ -49,6 +49,7 @@ func init() {
 	zookeeper.Register()
 }
 
+// some sonst
 const (
 	sqlMaxOpenConnect = 100
 	sqlMaxIdleConnect = 20
@@ -58,10 +59,10 @@ const (
 	lockTTL           = 60
 )
 
-type LockType int
+type lockType int
 
 const (
-	OWN LockType = 1 + iota
+	OWN lockType = 1 + iota
 	RW
 	W
 )
@@ -72,7 +73,7 @@ var lockTypes = []string{
 	"WRITE",
 }
 
-func (lt LockType) String() string {
+func (lt lockType) String() string {
 	return lockTypes[lt-1]
 }
 
@@ -148,15 +149,15 @@ func (l *LockerChain) renew() {
 	})
 }
 
-// check the lock is exist
-func (l *LockerChain) HaveIt(obj interface{}, lockType LockType) bool {
+// HaveIt, return true if find the obj's Locker in LockerChain
+func (l *LockerChain) HaveIt(obj interface{}, lockType lockType) bool {
 	lockpath, _ := l.lockStore.buildLockKey(obj, lockType)
 	_, exist := l.chain.Load(lockpath)
 	return exist
 }
 
-// add a lock
-func (l *LockerChain) AddLocker(obj interface{}, lockType LockType) error {
+// AddLocker, lock a obj and save locker into LockerChain
+func (l *LockerChain) AddLocker(obj interface{}, lockType lockType) error {
 
 	// do not allow duplicate additions
 	if l.HaveIt(obj, lockType) {
@@ -190,8 +191,8 @@ func (l *LockerChain) AddLocker(obj interface{}, lockType LockType) error {
 	return nil
 }
 
-// release a lock
-func (l *LockerChain) ReleaseLocker(obj interface{}, lockType LockType) error {
+// ReleaseLocker release a lock
+func (l *LockerChain) ReleaseLocker(obj interface{}, lockType lockType) error {
 
 	lockpath, err := l.lockStore.buildLockKey(obj, lockType)
 	if err != nil {
@@ -216,7 +217,7 @@ func (l *LockerChain) ReleaseLocker(obj interface{}, lockType LockType) error {
 	return nil
 }
 
-// release all lock
+// ReleaseAll release all lock
 func (l *LockerChain) ReleaseAll() {
 	l.chain.Range(func(key, v interface{}) bool {
 		t, ok := v.(*objKey)
@@ -229,12 +230,14 @@ func (l *LockerChain) ReleaseAll() {
 	})
 }
 
+// KVStore struct
 type KVStore struct {
-	client   libstore.Store
-	keyspace string
-	backend  string
+	client   libstore.Store // client of store backend
+	keyspace string         // perfix of key
+	backend  string         // backend, support etcd, zk etc...
 }
 
+// NewKVStore used to init a KVStore struct
 func NewKVStore(backend string, servers []string, keyspace string) (*KVStore, error) {
 	s, err := libkv.NewStore(libstore.Backend(backend), servers, nil)
 	if err != nil {
@@ -257,7 +260,8 @@ func NewKVStore(backend string, servers []string, keyspace string) (*KVStore, er
 	}, nil
 }
 
-func (k *KVStore) buildLockKey(obj interface{}, lockType LockType) (key string, err error) {
+// build lock key path
+func (k *KVStore) buildLockKey(obj interface{}, lockType lockType) (key string, err error) {
 
 	name := util.GetFieldValue(obj, "Name")
 	region := util.GetFieldValue(obj, "Region")
@@ -278,6 +282,7 @@ func (k *KVStore) buildLockKey(obj interface{}, lockType LockType) (key string, 
 	return
 }
 
+// WatchLock watch lock path, put any change key into chan
 func (k *KVStore) WatchLock(obj interface{}, stopCh chan struct{}) (chan string, error) {
 	stopWatchCh := make(chan struct{})
 	outCh := make(chan string, 7)
@@ -312,7 +317,8 @@ func (k *KVStore) WatchLock(obj interface{}, stopCh chan struct{}) (chan string,
 	return outCh, nil
 }
 
-func (k *KVStore) IsLocked(obj interface{}, lockType LockType) (r bool) {
+// IsLocked return true if have a lock key in kv store
+func (k *KVStore) IsLocked(obj interface{}, lockType lockType) (r bool) {
 	v := k.WhoLocked(obj, lockType)
 	if v != "" {
 		return true
@@ -320,7 +326,8 @@ func (k *KVStore) IsLocked(obj interface{}, lockType LockType) (r bool) {
 	return false
 }
 
-func (k *KVStore) WhoLocked(obj interface{}, lockType LockType) (v string) {
+// WhoLocked return the lock's value
+func (k *KVStore) WhoLocked(obj interface{}, lockType lockType) (v string) {
 	key, _ := k.buildLockKey(obj, lockType)
 	locker, err := k.client.Get(key)
 	if err != nil && err != libstore.ErrKeyNotFound {
@@ -332,7 +339,8 @@ func (k *KVStore) WhoLocked(obj interface{}, lockType LockType) (v string) {
 	return
 }
 
-func (k *KVStore) lock(obj interface{}, lockType LockType, lockOpt *libstore.LockOptions) (locker libstore.Locker, err error) {
+// create a obj's lock with timeout
+func (k *KVStore) lock(obj interface{}, lockType lockType, lockOpt *libstore.LockOptions) (locker libstore.Locker, err error) {
 	var key string
 
 	key, err = k.buildLockKey(obj, lockType)
@@ -380,6 +388,7 @@ func (k *KVStore) buildKey(obj interface{}) string {
 		util.GenerateSlug(nameString))
 }
 
+// DeleteJobStatus from kv store
 func (k *KVStore) DeleteJobStatus(status *pb.JobStatus) (out *pb.JobStatus, err error) {
 	out, err = k.GetJobStatus(status)
 	if err != nil {
@@ -391,7 +400,7 @@ func (k *KVStore) DeleteJobStatus(status *pb.JobStatus) (out *pb.JobStatus, err 
 	return
 }
 
-// Get JobStatus from KV store
+// GetJobStatus get JobStatus from KV store
 // if the job do not exists, return nil
 func (k *KVStore) GetJobStatus(in *pb.JobStatus) (out *pb.JobStatus, err error) {
 
@@ -423,7 +432,7 @@ func (k *KVStore) GetJobStatus(in *pb.JobStatus) (out *pb.JobStatus, err error) 
 	return out, nil
 }
 
-// set job status to kv store
+// SetJobStatus set job status to kv store
 // safely set jobstatus need lock it with RW locker first
 func (k *KVStore) SetJobStatus(status *pb.JobStatus) (*pb.JobStatus, error) {
 
@@ -447,16 +456,16 @@ func (k *KVStore) SetJobStatus(status *pb.JobStatus) (*pb.JobStatus, error) {
 	return status, nil
 }
 
-// used to cache job in local memory
+// MemStore used to cache job in local memory
 type MemStore struct {
 	memBuf *memDbBuffer // leveldb memory buffer
 	stopCh chan struct{}
 }
 
-// entry stored in memory cache
+// base struct save in MemStore
 type entry struct {
-	DeadTime time.Time
-	Data     []byte
+	DeadTime time.Time // the dead time of this entry
+	Data     []byte    // user save data
 }
 
 func (m *MemStore) Set(key string, in interface{}, ttl time.Duration) (err error) {
@@ -579,10 +588,12 @@ func (m *MemStore) buildKey(name string, ttl time.Duration) (Key, error) {
 	return Key(key), nil
 }
 
+// Release used to stop MemStore
 func (m *MemStore) Release() {
 	m.stopCh <- struct{}{}
 }
 
+// NewMemStore init a MemStore and start a goroutine handle expired key
 func NewMemStore() *MemStore {
 	ms := &MemStore{
 		memBuf: NewMemDbBuffer(),
@@ -592,6 +603,7 @@ func NewMemStore() *MemStore {
 	return ms
 }
 
+// SQLStore database obj
 type SQLStore struct {
 	db           *gorm.DB      // gorm db obj
 	sqlCondition *sqlCondition // sql where contition
@@ -601,6 +613,7 @@ type SQLStore struct {
 	Err          error         // error
 }
 
+// NewSQLStore init a SQLStore struct
 func NewSQLStore(backend, dsn string) (*SQLStore, error) {
 
 	db, err := gorm.Open(backend, dsn)
@@ -625,10 +638,12 @@ func (s *SQLStore) clone() *SQLStore {
 	return &store
 }
 
+// Close database connect
 func (s *SQLStore) Close() error {
 	return s.db.Close()
 }
 
+// Migrate auto migrate table struct
 func (s *SQLStore) Migrate(drop bool, valus ...interface{}) error {
 	if !drop {
 		if err := s.db.AutoMigrate(valus...).Error; err != nil {
@@ -639,13 +654,13 @@ func (s *SQLStore) Migrate(drop bool, valus ...interface{}) error {
 	return nil
 }
 
-// set the model to be manipulated
+// Model set the model to be manipulated
 func (s *SQLStore) Model(obj interface{}) *SQLStore {
 	s.db = s.db.Model(obj)
 	return s
 }
 
-// where condition, can be a obj or SearchContion
+// Where build where condition, can be a obj or SearchContion
 func (s *SQLStore) Where(obj interface{}) *SQLStore {
 	n := s.clone()
 	switch t := obj.(type) {
@@ -662,14 +677,14 @@ func (s *SQLStore) Where(obj interface{}) *SQLStore {
 	return n
 }
 
-// page size
+// PageSize set page size
 func (s *SQLStore) PageSize(i int) *SQLStore {
 	n := s.clone()
 	n.pageSize = i
 	return n
 }
 
-// which page need scan into result set
+// PageNum which page need scan into result set
 func (s *SQLStore) PageNum(i int) *SQLStore {
 	n := s.clone()
 	if n.pageSize == 0 {
@@ -684,7 +699,7 @@ func (s *SQLStore) PageNum(i int) *SQLStore {
 	return n
 }
 
-// cal max page num
+// PageCount func cal max page num
 func (s *SQLStore) PageCount(out interface{}) *SQLStore {
 	n := s.clone()
 	n.Err = n.db.Offset(0).Count(&s.count).Error
@@ -705,7 +720,7 @@ func (s *SQLStore) PageCount(out interface{}) *SQLStore {
 	return n
 }
 
-// perform find
+// Find func perform find in database
 func (s *SQLStore) Find(out interface{}) *SQLStore {
 	n := s.clone()
 	if n.Err != nil {
@@ -720,7 +735,7 @@ func (s *SQLStore) Find(out interface{}) *SQLStore {
 	return n
 }
 
-// perform create
+// Create func perform create in database
 func (s *SQLStore) Create(obj interface{}) *SQLStore {
 	n := s.clone()
 	old := reflect.New(util.IndirectType(reflect.TypeOf(obj))).Interface()
@@ -739,7 +754,7 @@ func (s *SQLStore) Create(obj interface{}) *SQLStore {
 	return n
 }
 
-// perform modify
+// Modify func perform modify
 func (s *SQLStore) Modify(obj interface{}) *SQLStore {
 	n := s.clone()
 	old := reflect.New(util.IndirectType(reflect.TypeOf(obj))).Interface()
@@ -760,7 +775,7 @@ func (s *SQLStore) Modify(obj interface{}) *SQLStore {
 	return n
 }
 
-// perform delete
+// Delete func perform delete
 func (s *SQLStore) Delete(obj interface{}) *SQLStore {
 	n := s.clone()
 	out := reflect.New(util.IndirectType(reflect.TypeOf(obj))).Interface()
@@ -776,12 +791,13 @@ func (s *SQLStore) Delete(obj interface{}) *SQLStore {
 	return n
 }
 
+// SearchCondition save search condition
 type SearchCondition struct {
 	conditions []map[string]string // user input search condition,eg. a = 1 , b <> abc
-	linkSymbol []LogicSymbol       // user input link symbol, eg. AND
+	linkSymbol []logicSymbol       // user input link symbol, eg. AND
 }
 
-// Serialized user input generated SearchCondition
+// NewSearchCondition serialized user input generated SearchCondition
 func NewSearchCondition(conditions, links []string) (*SearchCondition, error) {
 
 	if len(conditions) != len(links)+1 {
@@ -808,9 +824,9 @@ func NewSearchCondition(conditions, links []string) (*SearchCondition, error) {
 	return s, nil
 }
 
-type LogicSymbol int
+type logicSymbol int
 
-var LogicSymbolName = map[int]string{
+var logicSymbolNames = map[int]string{
 	1: "OR",
 	2: "AND",
 	3: "=",
@@ -821,7 +837,7 @@ var LogicSymbolName = map[int]string{
 	8: "<>",
 }
 
-var LogicSymbolValue = map[string]int{
+var logicSymbolValues = map[string]int{
 	"OR":  1,
 	"AND": 2,
 	"=":   3,
@@ -832,13 +848,14 @@ var LogicSymbolValue = map[string]int{
 	"<>":  8,
 }
 
-func (l LogicSymbol) String() string {
-	return LogicSymbolName[int(l)]
+func (l logicSymbol) String() string {
+	return logicSymbolNames[int(l)]
 }
 
-func StringToLogicSymbol(s string) (LogicSymbol, bool) {
-	if v, ok := LogicSymbolValue[s]; ok {
-		return LogicSymbol(v), true
+// StringToLogicSymbol used to conversion string to logicSymbol
+func StringToLogicSymbol(s string) (logicSymbol, bool) {
+	if v, ok := logicSymbolValues[s]; ok {
+		return logicSymbol(v), true
 	}
 	return 0, false
 }

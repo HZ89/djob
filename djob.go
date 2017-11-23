@@ -26,7 +26,7 @@ import (
 	"github.com/mitchellh/cli"
 )
 
-// global version
+// VERSION global version
 const VERSION = "0.2.1"
 
 func main() {
