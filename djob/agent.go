@@ -51,11 +51,14 @@ func init() {
 
 const (
 	gracefulTime = 5 * time.Second
-	APITimeOut   = 1 * time.Second
+	// API max execution time
+	APITimeOut = 1 * time.Second
 )
 
+// RESERVEDTAGS store protected tag that is not allowed to be modified
 var RESERVEDTAGS = [...]string{"RPCADIP", "RPCADPORT", "NODE", "REGION", "SERVER", "VERSION"}
 
+// djob agent struct
 type Agent struct {
 	lockerChain *store.LockerChain   // a sync/map use to store obj locker
 	config      *Config              // configuration
@@ -438,7 +441,7 @@ func (a *Agent) loadJobs(region string) {
 	}
 }
 
-// reload agent
+// Reload the agent
 func (a *Agent) Reload(args []string) {
 	newConf, err := newConfig(args, a.version)
 	if err != nil {
@@ -450,7 +453,7 @@ func (a *Agent) Reload(args []string) {
 	a.serf.SetTags(a.config.Tags)
 }
 
-// stop this
+// Stop this agent
 func (a *Agent) Stop(graceful bool) int {
 	if !graceful {
 		return 0
@@ -475,7 +478,7 @@ func (a *Agent) Stop(graceful bool) int {
 				a.rpcServer.Shutdown(gracefulTime)
 				wg.Done()
 			}()
-			// gracefull shutdown api server
+			// graceful shutdown api server
 			go func() {
 				wg.Add(1)
 				if err := a.apiServer.Stop(gracefulTime); err != nil {
@@ -526,7 +529,7 @@ func (a *Agent) newRPCClient(ip string, port int) *rpc.RpcClient {
 	return client
 }
 
-// new agent
+// New initialization agent, args is os.agrs list
 func New(args []string, version string) *Agent {
 	config, err := newConfig(args, version)
 	if err != nil {
@@ -669,11 +672,13 @@ func (a *Agent) getRPCConfig(nodeName string) (string, int, error) {
 	return "", 0, errors.ErrNotExist
 }
 
+// WritePid create pid file
 func (a *Agent) WritePid() error {
 	pidfile.SetPidfilePath(a.config.PidFile)
 	return pidfile.Write()
 }
 
+// RemovePid remove pid file
 func (a *Agent) RemovePid() error {
 	return os.Remove(pidfile.GetPidfilePath())
 }

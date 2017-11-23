@@ -41,6 +41,7 @@ import (
 	"github.com/mitchellh/cli"
 )
 
+// key command type, implementation Command interface
 type KeygenCmd struct {
 	Ui     cli.Ui
 	config *config
@@ -259,10 +260,12 @@ func (c *KeygenCmd) genKey() int {
 	return 0
 }
 
+// return help info
 func (c *KeygenCmd) Synopsis() string {
 	return "Generates tls files or encryption key"
 }
 
+// custom help info
 func (c *KeygenCmd) Help() string {
 	helpText := `
 	Usage: djob generate cert [options]
@@ -281,6 +284,7 @@ func (c *KeygenCmd) Help() string {
 	return strings.TrimSpace(helpText)
 }
 
+// exec this command
 func (c *KeygenCmd) Run(args []string) int {
 	if len(args) > 0 {
 		if args[0] == "cert" {

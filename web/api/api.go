@@ -35,6 +35,7 @@ import (
 	pb "github.com/HZ89/djob/message"
 )
 
+// ApiController is interface used to operate all objs
 type ApiController interface {
 	ListRegions() ([]string, error)
 	ListNode(*pb.Node, *pb.Search) ([]*pb.Node, int32, error)
@@ -48,23 +49,26 @@ type ApiController interface {
 	Search(interface{}, *pb.Search) ([]interface{}, int32, error)
 }
 
+// tls cert key pair
 type KayPair struct {
 	Key  string
 	Cert string
 }
 
+// APIServer body structure
 type APIServer struct {
-	bindIP    string
-	bindPort  int
-	tokenList map[string]string
-	mc        ApiController
-	loger     *logrus.Entry
-	keyPair   *KayPair
-	tls       bool
-	router    *gin.Engine
-	server    *http.Server
+	bindIP    string            // listen to the ip
+	bindPort  int               // listen to the port
+	tokenList map[string]string // store auth token
+	mc        ApiController     // api interface
+	loger     *logrus.Entry     // custom logger
+	keyPair   *KayPair          // tls key pair
+	tls       bool              // use tls or not
+	router    *gin.Engine       // gin obj
+	server    *http.Server      // http server obj
 }
 
+// Initialize APIServer
 func NewAPIServer(ip string, port int,
 	tokens map[string]string, tls bool, pair *KayPair, backend ApiController) (*APIServer, error) {
 	if len(tokens) == 0 {
@@ -392,6 +396,7 @@ func (a *APIServer) tlsHeaderMiddleware() gin.HandlerFunc {
 	}
 }
 
+// logger middleware
 func (a *APIServer) logMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -418,11 +423,13 @@ func (a *APIServer) logMiddleware() gin.HandlerFunc {
 	}
 }
 
+// render error respond and quit
 func (a *APIServer) respondWithError(code int, pb interface{}, c *gin.Context) {
 	c.Render(code, pbjson{data: pb.(proto.Message)})
 	c.AbortWithStatus(code)
 }
 
+// auth middleware used in gin
 func (a *APIServer) tokenAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := c.Request.Header.Get("X-Auth-Token")
@@ -440,6 +447,7 @@ func (a *APIServer) tokenAuthMiddleware() gin.HandlerFunc {
 	}
 }
 
+// Run APIServer
 func (a *APIServer) Run() {
 	r := a.prepareGin()
 	a.server = &http.Server{
@@ -468,6 +476,7 @@ func (a *APIServer) Run() {
 	return
 }
 
+// stop APIServer
 func (a *APIServer) Stop(wait time.Duration) error {
 	a.loger.Infof("API-server: shutdown in %d second", wait)
 	ctx, cancel := context.WithTimeout(context.Background(), wait)

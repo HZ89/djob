@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/HZ89/djob.svg?branch=master)](https://travis-ci.org/HZ89/djob)
+[![Go Report Card](https://goreportcard.com/badge/github.com/hz89/djob)](https://goreportcard.com/report/github.com/hz89/djob)
 
 # Summary description
 djob supports cron syntax (second-level supported) for scheduled and one-time job. Select the

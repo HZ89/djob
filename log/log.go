@@ -27,9 +27,10 @@ import (
 	//	"github.com/rifflock/lfshook"
 )
 
+// store logger
 var FmdLoger = logrus.NewEntry(logrus.New())
 
-// initalize logger
+// InitLogger used to  initialization logger
 func InitLogger(logLevel string, node string, file string) {
 	formattedLogger := logrus.New()
 	if file != "" {

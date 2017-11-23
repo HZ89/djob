@@ -248,20 +248,16 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		}
 
 		// set own locker on the job
-		if !a.lockerChain.HaveIt(job, store.OWN) {
-			if err = a.lockerChain.AddLocker(job, store.OWN); err != nil {
-				a.sqlStore.Delete(job)
-				return nil, count, err
-			}
+		if err = a.lockerChain.AddLocker(job, store.OWN); err != nil {
+			a.sqlStore.Delete(job)
+			return nil, count, err
 		}
 
-		if !a.scheduler.JobExist(job) {
-			log.FmdLoger.WithField("job", job).Debug("Agent: add job to scheduler")
-			if err = a.scheduler.AddJob(job); err != nil {
-				a.sqlStore.Delete(job)
-				a.lockerChain.ReleaseLocker(job, store.OWN)
-				return nil, count, err
-			}
+		log.FmdLoger.WithField("job", job).Debug("Agent: add job to scheduler")
+		if err = a.scheduler.AddJob(job); err != nil {
+			a.sqlStore.Delete(job)
+			a.lockerChain.ReleaseLocker(job, store.OWN)
+			return nil, count, err
 		}
 
 		out := make([]interface{}, 1)

@@ -177,7 +177,7 @@ func ReadConfig(version string) (*Config, error) {
 		tokens = viper.GetStringMapString("tokens")
 		if len(tokens) == 0 {
 			tokens = map[string]string{
-				"defualt": "djob-token",
+				"default": "djob-token",
 			}
 		}
 	}

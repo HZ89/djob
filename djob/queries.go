@@ -98,9 +98,9 @@ func (a *Agent) receiveJobCountQuery(query *serf.Query) {
 		"name":   resp.Name,
 		"count":  resp.Count,
 		"respPb": string(respPb),
-	}).Debug("Agent: respone of job:count")
+	}).Debug("Agent: response of job:count")
 	if err := query.Respond(respPb); err != nil {
-		log.FmdLoger.WithError(err).Fatal("Agent: serf quert Responed failed")
+		log.FmdLoger.WithError(err).Fatal("Agent: serf quert Respond failed")
 	}
 	return
 }

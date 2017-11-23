@@ -32,6 +32,7 @@ import (
 	"github.com/HZ89/djob/util"
 )
 
+// decode json into protobuf obj
 type jsonpbBinding struct{}
 
 func (j jsonpbBinding) Name() string {
