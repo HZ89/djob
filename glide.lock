@@ -94,7 +94,7 @@ imports:
   - coordinate
   - serf
 - name: github.com/HZ89/libkv
-  version: f3ced62fd5c8c21da9900d6f6a84faa82c460789
+  version: 7154e44785709680b5054b6db39eaca43bbc76ab
   subpackages:
   - store
   - store/consul

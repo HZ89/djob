@@ -286,7 +286,6 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		if err = a.sqlStore.Model(&pb.Job{}).Where(&pb.Job{Name: job.Name, Region: job.Region}).Find(&oldJob).Err; err != nil {
 			return nil, count, err
 		}
-		job.SchedulerNodeName = oldJob.SchedulerNodeName
 
 		if err = a.sqlStore.Model(&pb.Job{}).Modify(job).Err; err != nil {
 			return nil, count, err

@@ -189,6 +189,17 @@ func (a *Agent) AddJob(in *pb.Job) (out *pb.Job, err error) {
 
 // ModifyJob func modify job
 func (a *Agent) ModifyJob(in *pb.Job) (out *pb.Job, err error) {
+
+	old, _, err := a.operationMiddleLayer(&pb.Job{Name: in.Name, Region: in.Region}, pb.Ops_READ, nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(old) != 1 {
+		return nil, errors.ErrNotExist
+	}
+
+	in.SchedulerNodeName = old[0].(*pb.Job).SchedulerNodeName
+
 	var res []interface{}
 	res, _, err = a.operationMiddleLayer(in, pb.Ops_MODIFY, nil)
 	if err != nil {
