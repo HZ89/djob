@@ -339,8 +339,8 @@ func (a *Agent) takeOverJob() {
 					}).WithError(err).Fatal("Agent: lock job failed")
 				}
 				res, _, err := a.operationMiddleLayer(job, pb.Ops_READ, nil)
-				if err == errors.ErrNotExist {
-					continue
+				if err != nil || len(res) == 0 {
+					log.FmdLoger.WithField("jobName", job.Name).WithError(err).Fatal("Agent: takeOver, read job filed")
 				}
 				job = res[0].(*pb.Job)
 
