@@ -159,10 +159,6 @@ func (a *APIServer) listExecutions(c *gin.Context) {
 		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: err.Error()}, c)
 		return
 	}
-	if eqs.Execution == nil {
-		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: "no input execution obj"}, c)
-		return
-	}
 	if eqs.Pageing != nil {
 		s = &pb.Search{
 			Count:    eqs.Pageing.OutMaxPage,
@@ -294,10 +290,7 @@ func (a *APIServer) listJobs(c *gin.Context) {
 		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: err.Error()}, c)
 		return
 	}
-	if jqs.Job == nil {
-		a.respondWithError(http.StatusBadRequest, &pb.ApiJobResponse{Succeed: false, Message: "no input job obj"}, c)
-		return
-	}
+
 	if jqs.Pageing != nil {
 		s = &pb.Search{
 			Count:    jqs.Pageing.OutMaxPage,
