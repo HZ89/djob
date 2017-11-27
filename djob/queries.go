@@ -122,7 +122,7 @@ func (a *Agent) sendRunJobQuery(ex *pb.Execution, job *pb.Job) {
 		params = &serf.QueryParam{
 			RequestAck: true,
 			FilterTags: map[string]string{
-				"VERSION": a.version,
+				"VERSION": a.mainVersion,
 				"REGION":  a.config.Region,
 			},
 		}

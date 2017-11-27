@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 
@@ -183,7 +184,10 @@ func ReadConfig(version string) (*Config, error) {
 		}
 	}
 
-	tags["VERSION"] = version
+	// set main version to tags
+	vs := strings.Split(version, ".")
+	tags["VERSION"] = fmt.Sprintf("%s.%s", vs[0], vs[1])
+
 	tags["NODE"] = nodeName
 	tags["REGION"] = viper.GetString("region")
 

@@ -27,7 +27,7 @@ import (
 )
 
 // VERSION global version
-const VERSION = "0.2.2"
+const VERSION = "0.2.3"
 
 func main() {
 	args := os.Args[1:]
