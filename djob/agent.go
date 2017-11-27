@@ -26,6 +26,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -70,6 +71,7 @@ type Agent struct {
 	scheduler   *scheduler.Scheduler // job scheduler, scheduling based on cron syntax
 	apiServer   *api.APIServer       // web api server, use gin
 	version     string
+	mainVersion string
 	runJobCh    chan *pb.Job    // scheduler push the job ready to run into this chan
 	sqlStore    *store.SQLStore // sql store, use to persistent save job and execution obj
 }
@@ -531,12 +533,14 @@ func New(args []string, version string) *Agent {
 	if err != nil {
 		log.FmdLoger.WithError(err).Fatal("Agent:init failed")
 	}
+	vs := strings.Split(version, ".")
 	return &Agent{
-		eventCh:  make(chan serf.Event, 64),
-		runJobCh: make(chan *pb.Job),
-		memStore: store.NewMemStore(),
-		config:   config,
-		version:  version,
+		eventCh:     make(chan serf.Event, 64),
+		runJobCh:    make(chan *pb.Job),
+		memStore:    store.NewMemStore(),
+		config:      config,
+		version:     version,
+		mainVersion: fmt.Sprintf("%s.%s", vs[0], vs[1]),
 	}
 
 }

@@ -124,7 +124,8 @@ message Execution {
 message Node {
     string Name = 1; // node name
     string Region = 2; // region of this node
-    bool Alived = 3; // node alive status
-    string Role = 4; // is server or agent
-    map<string, string> Tags = 5; // node tags
+    string Version = 3; // agent version
+    bool Alived = 4; // node alive status
+    string Role = 5; // is server or agent
+    map<string, string> Tags = 6; // node tags
 }

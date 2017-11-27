@@ -65,7 +65,7 @@ func (a *Agent) ListNode(node *pb.Node, search *pb.Search) (nodes []*pb.Node, co
 	}
 
 	for _, m := range members {
-		n := &pb.Node{Name: m.Name, Region: m.Tags["REGION"]}
+		n := &pb.Node{Name: m.Name, Region: m.Tags["REGION"], Version: a.version}
 		n.Tags = make(map[string]string)
 		for k, v := range m.Tags {
 			var found bool
