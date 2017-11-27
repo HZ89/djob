@@ -27,7 +27,7 @@ import (
 )
 
 // VERSION global version
-const VERSION = "0.2.3"
+const VERSION = "0.2.4"
 
 func main() {
 	args := os.Args[1:]
@@ -54,8 +54,6 @@ func main() {
 				Ui:      ui,
 			}, nil
 		},
-		// use to
-		//
 		"generate": func() (cli.Command, error) {
 			return &cmd.KeygenCmd{
 				Ui: ui,

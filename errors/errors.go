@@ -63,6 +63,7 @@ var (
 	ErrNodeDead              = New(95233, "found node is not alive")
 	ErrNodeNoRPC             = New(95234, "found node have no completed rpc config")
 	ErrBlankTimeFormat       = New(95235, "Blank time format")
+	ErrKeyModified           = New(95236, "key modify failed")
 )
 
 // Error custom error type

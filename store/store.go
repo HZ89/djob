@@ -39,7 +39,6 @@ import (
 
 	"github.com/HZ89/djob/errors"
 	"github.com/HZ89/djob/log"
-	pb "github.com/HZ89/djob/message"
 	"github.com/HZ89/djob/util"
 )
 
@@ -341,10 +340,8 @@ func (k *KVStore) WhoLocked(obj interface{}, lockType lockType) (v string) {
 
 // create a obj's lock with timeout
 func (k *KVStore) lock(obj interface{}, lockType lockType, lockOpt *libstore.LockOptions) (locker libstore.Locker, err error) {
+
 	var key string
-	if k.IsLocked(obj, lockType) {
-		return nil, errors.ErrLockTimeout
-	}
 	key, err = k.buildLockKey(obj, lockType)
 	if err != nil {
 		return
@@ -390,72 +387,69 @@ func (k *KVStore) buildKey(obj interface{}) string {
 		util.GenerateSlug(nameString))
 }
 
-// DeleteJobStatus from kv store
-func (k *KVStore) DeleteJobStatus(status *pb.JobStatus) (out *pb.JobStatus, err error) {
-	out, err = k.GetJobStatus(status)
-	if err != nil {
-		return
+// Delete from kv store
+func (k *KVStore) Delete(obj interface{}) (err error) {
+	key := k.buildKey(obj)
+	if err := k.client.Delete(key); err != nil {
+		if err == libstore.ErrKeyNotFound {
+			return errors.ErrNotExist
+		}
+		return err
 	}
-	if err = k.client.Delete(k.buildKey(out)); err != nil {
-		return nil, err
-	}
-	return
+	return nil
 }
 
-// GetJobStatus get JobStatus from KV store
-// if the job do not exists, return nil
-func (k *KVStore) GetJobStatus(in *pb.JobStatus) (out *pb.JobStatus, err error) {
+// Get obj from kv store, fill found data into give obj and return lastIndex
+func (k *KVStore) Get(in interface{}) (lastIndex uint64, err error) {
 
-	out = &pb.JobStatus{
-		Name:   in.Name,
-		Region: in.Region,
-	}
-	key := k.buildKey(out)
+	key := k.buildKey(in)
 	res, err := k.client.Get(key)
 	if err != nil && err != libstore.ErrKeyNotFound {
-		return nil, err
+		return 0, err
 	}
 
 	// fill data to status
 	if res == nil {
-		return nil, errors.ErrNotExist
+		return 0, errors.ErrNotExist
 	}
-	if err = util.JsonToPb(res.Value, out); err != nil {
-		return nil, err
+	if err = util.JsonToPb(res.Value, in); err != nil {
+		return 0, err
 	}
-	log.FmdLoger.WithFields(logrus.Fields{
-		"Name":         out.Name,
-		"Region":       out.Region,
-		"SuccessCount": out.SuccessCount,
-		"ErrorCount":   out.ErrorCount,
-		"LastError":    out.LastError,
-		"OrginData":    string(res.Value),
-	}).Debug("Store: get jobstatus from kv store")
-	return out, nil
+	return res.LastIndex, nil
 }
 
-// SetJobStatus set job status to kv store
-// safely set jobstatus need lock it with RW locker first
-func (k *KVStore) SetJobStatus(status *pb.JobStatus) (*pb.JobStatus, error) {
+// Set obj to kv store, if lastIndex and previousObj is not nil, it will use atomicPut
+func (k *KVStore) Set(currentObj interface{}, lastIndex uint64, previousObj interface{}) error {
 
-	e, err := util.PbToJSON(status)
+	e, err := util.PbToJSON(currentObj)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	log.FmdLoger.WithFields(logrus.Fields{
-		"Name":         status.Name,
-		"Region":       status.Region,
-		"SuccessCount": status.SuccessCount,
-		"ErrorCount":   status.ErrorCount,
-		"LastSuccess":  status.LastSuccess,
-		"LastError":    status.LastError,
-		"OriginData":   string(e),
-	}).Debug("Store: save job status to kv store")
-
-	if err = k.client.Put(k.buildKey(status), e, nil); err != nil {
-		return nil, err
+	key := k.buildKey(currentObj)
+	if lastIndex != 0 && previousObj != nil {
+		pe, err := util.PbToJSON(previousObj)
+		if err != nil {
+			return nil
+		}
+		pkp := &libstore.KVPair{
+			Key:       key,
+			Value:     pe,
+			LastIndex: lastIndex,
+		}
+		ok, _, err := k.client.AtomicPut(key, e, pkp, nil)
+		if !ok {
+			if err == libstore.ErrKeyExists {
+				return errors.ErrNotExist
+			}
+			if err == libstore.ErrKeyModified {
+				return errors.ErrKeyModified
+			}
+			return err
+		}
+	} else {
+		return k.client.Put(key, e, nil)
 	}
-	return status, nil
+	return nil
 }
 
 // MemStore used to cache job in local memory

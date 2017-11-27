@@ -19,23 +19,19 @@
 package djob
 
 import (
-	"fmt"
 	"reflect"
-	"sync"
-	"time"
-
-	"github.com/Sirupsen/logrus"
 
 	"github.com/HZ89/djob/errors"
 	"github.com/HZ89/djob/log"
 	pb "github.com/HZ89/djob/message"
-	"github.com/HZ89/djob/store"
+	"github.com/Sirupsen/logrus"
 )
 
 // implementation of Operator interface
 
 // SendBackExecution handle job exec return
 func (a *Agent) SendBackExecution(ex *pb.Execution) (err error) {
+
 	log.FmdLoger.WithFields(logrus.Fields{
 		"JobName":     ex.Name,
 		"Region":      ex.Region,
@@ -54,61 +50,6 @@ func (a *Agent) SendBackExecution(ex *pb.Execution) (err error) {
 		return
 	}
 	log.FmdLoger.Debug("RPC: Execution has been saved, start modfiy jobstatus")
-	status := &pb.JobStatus{
-		Name:   ex.Name,
-		Region: ex.Region,
-	}
-	var mutex = &sync.Mutex{}
-	{
-		mutex.Lock()
-		if err = a.lockerChain.AddLocker(status, store.RW); err != nil {
-			return err
-		}
-		defer a.lockerChain.ReleaseLocker(status, store.RW)
-		log.FmdLoger.WithFields(logrus.Fields{
-			"name":   status.Name,
-			"region": status.Region,
-		}).Debug("RPC: succeed lock jobstatus")
-
-		out, _, err := a.operationMiddleLayer(status, pb.Ops_READ, nil)
-		if err != nil && err != errors.ErrNotExist {
-			return err
-		}
-
-		if len(out) != 0 {
-			es, ok := out[0].(*pb.JobStatus)
-			if !ok {
-				log.FmdLoger.Fatal(fmt.Sprintf("RPC: SendBackExecution want a JobStatus, but %v", reflect.TypeOf(out[0])))
-			}
-
-			status.LastError = es.LastError
-			status.LastSuccess = es.LastSuccess
-			status.SuccessCount = es.SuccessCount
-			status.ErrorCount = es.ErrorCount
-		}
-
-		status.LastHandleAgent = ex.RunNodeName
-
-		if ex.Succeed {
-			status.SuccessCount += 1
-			status.LastSuccess = time.Unix(0, ex.FinishTime).String()
-		} else {
-			status.ErrorCount += 1
-			status.LastError = time.Unix(0, ex.FinishTime).String()
-		}
-
-		_, _, err = a.operationMiddleLayer(status, pb.Ops_MODIFY, nil)
-		if err != nil {
-			log.FmdLoger.WithError(err).WithFields(logrus.Fields{
-				"JobName":     status.Name,
-				"Region":      status.Region,
-				"Group":       ex.Group,
-				"RunNodeName": ex.RunNodeName,
-			}).Error("RPC: set JobStatus to kv store failed")
-			return err
-		}
-		mutex.Unlock()
-	}
 
 	return nil
 }
