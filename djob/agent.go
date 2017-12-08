@@ -288,7 +288,7 @@ func (a *Agent) Run() error {
 		}
 
 		// run job
-		go a.runJob()
+		go a.handleJobRun()
 
 		// start api server
 		a.apiServer, err = api.NewAPIServer(a.config.APIBindIP, a.config.APIBindPort, a.config.APITokens,
@@ -372,7 +372,7 @@ func (a *Agent) takeOverJob() {
 }
 
 // listen to runJobCh and run a job
-func (a *Agent) runJob() {
+func (a *Agent) handleJobRun() {
 	for {
 		job := <-a.runJobCh
 		log.FmdLoger.WithFields(logrus.Fields{

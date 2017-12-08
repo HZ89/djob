@@ -30,6 +30,10 @@ service job {
     }
     rpc ProxyJobRun (Job) returns (Execution) {
     }
+    rpc AcquireToken (string) returns (bool) {
+    }
+    rpc RecedeToken (string) returns (google.protobuf.Empty) {
+    }
 }
 
 enum Ops {
@@ -86,6 +90,8 @@ message Job {
     double Threshold = 12; // If the success rate of the parent job to achieve this value will trigger the sub-job execution
     // @inject_tag: gorm:"type:bigint(21);not null;default:'3600'"
     int32 MaxRunTime = 13; // Execution time limit
+    // @inject_tag: gorm:"type:int;not null;default:'-1'"
+    int32 Concurrency = 14; // The maximum number of agents running the job at the same time
 }
 
 message JobStatus {
