@@ -55,6 +55,7 @@ type Operator interface {
 	PerformOps(obj interface{}, ops pb.Ops, search *pb.Search) ([]interface{}, int32, error)
 	// forwarding run job action between servers
 	RunJob(name, region string) (*pb.Execution, error)
+	//
 }
 
 type RpcServer struct {
@@ -79,6 +80,16 @@ func NewRPCServer(bindIp string, port int, operator Operator, tlsopt *TlsOpt) *R
 		operator: operator,
 		tlsopt:   tlsopt,
 	}
+}
+
+// AcquireToken issue token to agent, if have no token left, give agent a wait time duration
+func (s *RpcServer) AcquireToken(ctx context.Context, req *pb.TokenReqMessage) (*pb.TokenRespMessage, error) {
+
+}
+
+// RecedeToken agent recede a token
+func (s *RpcServer) RecedeToken(ctx context.Context, req *pb.TokenReqMessage) (*pb.TokenRespMessage, error) {
+
 }
 
 // forwarding run job action

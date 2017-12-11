@@ -22,7 +22,7 @@ type JobQueryParams struct {
 func (m *JobQueryParams) Reset()                    { *m = JobQueryParams{} }
 func (m *JobQueryParams) String() string            { return proto.CompactTextString(m) }
 func (*JobQueryParams) ProtoMessage()               {}
-func (*JobQueryParams) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{0} }
+func (*JobQueryParams) Descriptor() ([]byte, []int) { return fileDescriptor2, []int{0} }
 
 func (m *JobQueryParams) GetName() string {
 	if m != nil {
@@ -60,7 +60,7 @@ type GetRPCConfigResp struct {
 func (m *GetRPCConfigResp) Reset()                    { *m = GetRPCConfigResp{} }
 func (m *GetRPCConfigResp) String() string            { return proto.CompactTextString(m) }
 func (*GetRPCConfigResp) ProtoMessage()               {}
-func (*GetRPCConfigResp) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{1} }
+func (*GetRPCConfigResp) Descriptor() ([]byte, []int) { return fileDescriptor2, []int{1} }
 
 func (m *GetRPCConfigResp) GetIp() string {
 	if m != nil {
@@ -84,7 +84,7 @@ type JobCountResp struct {
 func (m *JobCountResp) Reset()                    { *m = JobCountResp{} }
 func (m *JobCountResp) String() string            { return proto.CompactTextString(m) }
 func (*JobCountResp) ProtoMessage()               {}
-func (*JobCountResp) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{2} }
+func (*JobCountResp) Descriptor() ([]byte, []int) { return fileDescriptor2, []int{2} }
 
 func (m *JobCountResp) GetName() string {
 	if m != nil {
@@ -109,7 +109,7 @@ type QueryResult struct {
 func (m *QueryResult) Reset()                    { *m = QueryResult{} }
 func (m *QueryResult) String() string            { return proto.CompactTextString(m) }
 func (*QueryResult) ProtoMessage()               {}
-func (*QueryResult) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{3} }
+func (*QueryResult) Descriptor() ([]byte, []int) { return fileDescriptor2, []int{3} }
 
 func (m *QueryResult) GetStatus() int32 {
 	if m != nil {
@@ -140,7 +140,7 @@ type QueryJobRunParams struct {
 func (m *QueryJobRunParams) Reset()                    { *m = QueryJobRunParams{} }
 func (m *QueryJobRunParams) String() string            { return proto.CompactTextString(m) }
 func (*QueryJobRunParams) ProtoMessage()               {}
-func (*QueryJobRunParams) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{4} }
+func (*QueryJobRunParams) Descriptor() ([]byte, []int) { return fileDescriptor2, []int{4} }
 
 func (m *QueryJobRunParams) GetExecution() *Execution {
 	if m != nil {
@@ -164,9 +164,9 @@ func init() {
 	proto.RegisterType((*QueryJobRunParams)(nil), "message.QueryJobRunParams")
 }
 
-func init() { proto.RegisterFile("message/serfQueryParams.proto", fileDescriptor1) }
+func init() { proto.RegisterFile("message/serfQueryParams.proto", fileDescriptor2) }
 
-var fileDescriptor1 = []byte{
+var fileDescriptor2 = []byte{
 	// 301 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x51, 0x5b, 0x4b, 0xf3, 0x40,
 	0x10, 0xa5, 0x77, 0x3a, 0x2d, 0xa5, 0x5d, 0x3e, 0x3e, 0x8a, 0x20, 0xc8, 0x3e, 0x88, 0x4f, 0x51,

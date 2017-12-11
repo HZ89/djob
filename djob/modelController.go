@@ -194,7 +194,7 @@ func (a *Agent) handleExecutionOps(ex *pb.Execution, ops pb.Ops, search *pb.Sear
 		out[0] = ex
 
 		// set JobStatus counter
-		var mux = sync.Mutex{}
+		var mux sync.Mutex
 		{
 			mux.Lock()
 			defer mux.Unlock()

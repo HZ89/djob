@@ -30,9 +30,9 @@ service job {
     }
     rpc ProxyJobRun (Job) returns (Execution) {
     }
-    rpc AcquireToken (string) returns (bool) {
+    rpc AcquireToken (TokenReqMessage) returns (TokenRespMessage) {
     }
-    rpc RecedeToken (string) returns (google.protobuf.Empty) {
+    rpc RecedeToken (TokenReqMessage) returns (TokenRespMessage) {
     }
 }
 
@@ -41,6 +41,17 @@ enum Ops {
     ADD = 1;
     MODIFY = 2;
     DELETE = 3;
+}
+
+message TokenReqMessage {
+    string NodeName = 1;
+    string JobName = 2;
+    string JobRegion = 3;
+}
+
+message TokenRespMessage {
+    bool Succeed = 1;
+    int64 duration = 2;
 }
 
 message Search {
