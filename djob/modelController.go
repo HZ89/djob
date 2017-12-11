@@ -202,8 +202,12 @@ func (a *Agent) handleExecutionOps(ex *pb.Execution, ops pb.Ops, search *pb.Sear
 			var pStatus = pb.JobStatus{Name: ex.Name, Region: ex.Region}
 
 			var tryTimes int
+			lockType := &store.LockOption{
+				Global:   false,
+				LockType: store.RW,
+			}
 		TRYLOCK:
-			err := a.lockerChain.AddLocker(pStatus, store.RW)
+			err := a.lockerChain.AddLocker(pStatus, lockType)
 			if err != nil {
 				if tryTimes < 3 {
 					log.FmdLoger.WithField("TryLockTiems", tryTimes).WithError(err).Debug("Agent: Modify JobStatus, try lock")
@@ -212,7 +216,7 @@ func (a *Agent) handleExecutionOps(ex *pb.Execution, ops pb.Ops, search *pb.Sear
 				}
 				return nil, 0, err
 			}
-			defer a.lockerChain.ReleaseLocker(pStatus, store.RW)
+			defer a.lockerChain.ReleaseLocker(pStatus, false, store.RW)
 
 			pIndex, err := a.store.Get(&pStatus)
 			if err != nil && err != errors.ErrNotExist {
@@ -289,7 +293,11 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		}
 
 		// set own locker on the job
-		if err = a.lockerChain.AddLocker(job, store.OWN); err != nil {
+		lockType := &store.LockOption{
+			Global:   true,
+			LockType: store.OWN,
+		}
+		if err = a.lockerChain.AddLocker(job, lockType); err != nil {
 			a.sqlStore.Delete(job)
 			return nil, count, err
 		}
@@ -298,14 +306,14 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		status := pb.JobStatus{Name: job.Name, Region: job.Region}
 		if err = a.store.Set(&status, 0, nil); err != nil {
 			a.sqlStore.Delete(job)
-			a.lockerChain.ReleaseLocker(job, store.OWN)
+			a.lockerChain.ReleaseLocker(job, true, store.OWN)
 			return nil, count, err
 		}
 
 		log.FmdLoger.WithField("job", job).Debug("Agent: add job to scheduler")
 		if err = a.scheduler.AddJob(job); err != nil {
 			a.sqlStore.Delete(job)
-			a.lockerChain.ReleaseLocker(job, store.OWN)
+			a.lockerChain.ReleaseLocker(job, true, store.OWN)
 			a.store.Delete(&status)
 			return nil, count, err
 		}
@@ -360,7 +368,7 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		if err = a.store.Delete(&pb.JobStatus{Name: job.Name, Region: job.Region}); err != nil {
 			return nil, count, err
 		}
-		a.lockerChain.ReleaseLocker(job, store.OWN)
+		a.lockerChain.ReleaseLocker(job, true, store.OWN)
 		out := make([]interface{}, 1)
 		out[0] = job
 		return out, count, err
