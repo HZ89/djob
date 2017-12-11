@@ -39,7 +39,6 @@ import (
 
 	"github.com/HZ89/djob/errors"
 	"github.com/HZ89/djob/log"
-	pb "github.com/HZ89/djob/message"
 	"github.com/HZ89/djob/util"
 )
 
@@ -49,14 +48,14 @@ func init() {
 	zookeeper.Register()
 }
 
-// some sonst
+// some const
 const (
 	sqlMaxOpenConnect = 100
 	sqlMaxIdleConnect = 20
-	LockTimeOut       = 2 * time.Second
-	defaultPageSize   = 10
-	separator         = "###"
-	lockTTL           = 60
+	//	LockTimeOut       = 2 * time.Second
+	defaultPageSize = 10
+	separator       = "###"
+	lockTTL         = 60
 )
 
 type lockType int
@@ -81,7 +80,6 @@ type LockerChain struct {
 	lockerOwner string    // the owner of this chain, node name
 	chain       *sync.Map // store objKey, this is the chain
 	lockStore   *KVStore  // a kv store, store lock
-	stopCh      chan struct{}
 }
 
 type objKey struct {
@@ -90,38 +88,26 @@ type objKey struct {
 	bornTime time.Time       // the time to create this lock
 }
 
+type LockOption struct {
+	Global   bool          // if true, the locker can access by any goroutine
+	LockType lockType      // lock type
+	TimeOut  time.Duration // if no lock in this time is successful return timeout
+}
+
 // new lockerchain
 func NewLockerChain(owner string, store *KVStore) *LockerChain {
 	chain := &LockerChain{
 		chain:       new(sync.Map),
 		lockerOwner: owner,
 		lockStore:   store,
-		stopCh:      make(chan struct{}),
 	}
-	// start the lock renew process
-	chain.lockRenew()
+
 	return chain
 }
 
 // release all lock and stop renew process
 func (l *LockerChain) Stop() {
 	l.ReleaseAll()
-	l.stopCh <- struct{}{}
-}
-
-// lock renew process
-func (l *LockerChain) lockRenew() {
-	go func() {
-		log.FmdLoger.Debug("Store-Lock: start lockRenew goroutine")
-		for {
-			select {
-			case <-time.After(lockTTL * 0.1 * time.Second):
-				l.renew()
-			case <-l.stopCh:
-				return
-			}
-		}
-	}()
 }
 
 // traverse the chain to find out about the expired lock, renew it
@@ -157,48 +143,67 @@ func (l *LockerChain) HaveIt(obj interface{}, lockType lockType) bool {
 }
 
 // AddLocker, lock a obj and save locker into LockerChain
-func (l *LockerChain) AddLocker(obj interface{}, lockType lockType) error {
+// if global is true, all goroutine can access this lock, if not only the goroutine created it can access it.
+func (l *LockerChain) AddLocker(obj interface{}, lockoption *LockOption) error {
+
+	var mapPath string
+	lockOpt := &libstore.LockOptions{
+		Value: []byte(l.lockerOwner),
+		TTL:   lockTTL * time.Second,
+	}
+
+	kvPath, err := l.lockStore.buildLockKey(obj, lockoption.LockType)
+	if err != nil {
+		return err
+	}
+
+	mapPath = kvPath
+	if !lockoption.Global {
+		mapPath += fmt.Sprintf("###%d", util.GoroutineID())
+	}
 
 	// do not allow duplicate additions
-	if l.HaveIt(obj, lockType) {
+	if l.HaveIt(obj, lockoption.LockType) {
 		return errors.ErrRepetition
 	}
 
-	renewCh := make(chan struct{})
-	lockOpt := &libstore.LockOptions{
-		Value:     []byte(l.lockerOwner),
-		TTL:       lockTTL * time.Second,
-		RenewLock: renewCh,
-	}
-	lockpath, err := l.lockStore.buildLockKey(obj, lockType)
+	locker, err := l.lockStore.lock(kvPath, lockoption.TimeOut, lockOpt)
 	if err != nil {
-		return err
-	}
-	locker, err := l.lockStore.lock(obj, lockType, lockOpt)
-	if err != nil {
+		log.FmdLoger.WithFields(logrus.Fields{
+			"mapPath": mapPath,
+			"kvPath":  kvPath,
+		}).WithError(err).Debug("Store-Lock: store a lock into kv failed")
 		return err
 	}
 	objlock := &objKey{
-		renewCh:  renewCh,
 		locker:   locker,
 		bornTime: time.Now(),
 	}
-	l.chain.Store(lockpath, objlock)
+	l.chain.Store(mapPath, objlock)
 	log.FmdLoger.WithFields(logrus.Fields{
-		"key":   lockpath,
-		"value": objlock,
-	}).Debug("Store-Lock: store a lock into map")
+		"mapPath": mapPath,
+		"kvPath":  kvPath,
+		"value":   objlock,
+	}).Debug("Store-Lock: store a lock into map succeed")
 	return nil
 }
 
 // ReleaseLocker release a lock
-func (l *LockerChain) ReleaseLocker(obj interface{}, lockType lockType) error {
+// if global is true, all goroutine can access this lock, if not only the goroutine created it can access it.
+func (l *LockerChain) ReleaseLocker(obj interface{}, global bool, lockType lockType) error {
 
-	lockpath, err := l.lockStore.buildLockKey(obj, lockType)
+	var mapPath string
+	kvPath, err := l.lockStore.buildLockKey(obj, lockType)
 	if err != nil {
 		return err
 	}
-	v, ok := l.chain.Load(lockpath)
+
+	mapPath = kvPath
+	if !global {
+		mapPath += fmt.Sprintf("###%d", util.GoroutineID())
+	}
+
+	v, ok := l.chain.Load(mapPath)
 	if !ok {
 		return errors.ErrNotExist
 	}
@@ -209,10 +214,11 @@ func (l *LockerChain) ReleaseLocker(obj interface{}, lockType lockType) error {
 	if err = t.locker.Unlock(); err != nil {
 		return err
 	}
-	l.chain.Delete(lockpath)
+	l.chain.Delete(mapPath)
 	log.FmdLoger.WithFields(logrus.Fields{
-		"key":   lockpath,
-		"value": t,
+		"mapPath": mapPath,
+		"kvPath":  kvPath,
+		"value":   t,
 	}).Debug("Store-Lock: delete a lock from map")
 	return nil
 }
@@ -339,44 +345,44 @@ func (k *KVStore) WhoLocked(obj interface{}, lockType lockType) (v string) {
 	return
 }
 
-// create a obj's lock with timeout
-func (k *KVStore) lock(obj interface{}, lockType lockType, lockOpt *libstore.LockOptions) (locker libstore.Locker, err error) {
-	var key string
-	if k.IsLocked(obj, lockType) {
-		return nil, errors.ErrLockTimeout
-	}
-	key, err = k.buildLockKey(obj, lockType)
-	if err != nil {
-		return
-	}
+// lock create a obj's lock with timeout
+func (k *KVStore) lock(key string, lockTimeOut time.Duration, lockOpt *libstore.LockOptions) (locker libstore.Locker, err error) {
+
 	locker, err = k.client.NewLock(key, lockOpt)
 	if err != nil {
 		log.FmdLoger.WithField("key", key).WithError(err).Fatal("Store: New lock failed")
 	}
 
-	errCh := make(chan error)
+	timeOutCh := time.After(lockTimeOut)
 	freeCh := make(chan struct{})
-	timeoutCh := time.After(LockTimeOut)
-	stoplockingCh := make(chan struct{})
+	errorCh := make(chan error)
+	stopLockCh := make(chan struct{})
 
+	// start a goroutine perform locking
 	go func() {
-		_, err = locker.Lock(stoplockingCh)
+		_, err = locker.Lock(stopLockCh)
 		if err != nil {
-			errCh <- err
+			errorCh <- err
 			return
 		}
 		freeCh <- struct{}{}
+		return
 	}()
 
-	select {
-	case <-freeCh:
-		return locker, nil
-	case err = <-errCh:
-		return nil, err
-	case <-timeoutCh:
-		stoplockingCh <- struct{}{}
-		return nil, errors.ErrLockTimeout
+	for {
+		select {
+		case <-freeCh:
+			return locker, nil
+		case err := <-errorCh:
+			return nil, err
+		case <-timeOutCh:
+			if lockTimeOut != 0 {
+				stopLockCh <- struct{}{}
+				return nil, errors.ErrLockTimeout
+			}
+		}
 	}
+
 }
 
 func (k *KVStore) buildKey(obj interface{}) string {
@@ -390,72 +396,69 @@ func (k *KVStore) buildKey(obj interface{}) string {
 		util.GenerateSlug(nameString))
 }
 
-// DeleteJobStatus from kv store
-func (k *KVStore) DeleteJobStatus(status *pb.JobStatus) (out *pb.JobStatus, err error) {
-	out, err = k.GetJobStatus(status)
-	if err != nil {
-		return
+// Delete from kv store
+func (k *KVStore) Delete(obj interface{}) (err error) {
+	key := k.buildKey(obj)
+	if err := k.client.Delete(key); err != nil {
+		if err == libstore.ErrKeyNotFound {
+			return errors.ErrNotExist
+		}
+		return err
 	}
-	if err = k.client.Delete(k.buildKey(out)); err != nil {
-		return nil, err
-	}
-	return
+	return nil
 }
 
-// GetJobStatus get JobStatus from KV store
-// if the job do not exists, return nil
-func (k *KVStore) GetJobStatus(in *pb.JobStatus) (out *pb.JobStatus, err error) {
+// Get obj from kv store, fill found data into give obj and return lastIndex
+func (k *KVStore) Get(in interface{}) (lastIndex uint64, err error) {
 
-	out = &pb.JobStatus{
-		Name:   in.Name,
-		Region: in.Region,
-	}
-	key := k.buildKey(out)
+	key := k.buildKey(in)
 	res, err := k.client.Get(key)
 	if err != nil && err != libstore.ErrKeyNotFound {
-		return nil, err
+		return 0, err
 	}
 
 	// fill data to status
 	if res == nil {
-		return nil, errors.ErrNotExist
+		return 0, errors.ErrNotExist
 	}
-	if err = util.JsonToPb(res.Value, out); err != nil {
-		return nil, err
+	if err = util.JsonToPb(res.Value, in); err != nil {
+		return 0, err
 	}
-	log.FmdLoger.WithFields(logrus.Fields{
-		"Name":         out.Name,
-		"Region":       out.Region,
-		"SuccessCount": out.SuccessCount,
-		"ErrorCount":   out.ErrorCount,
-		"LastError":    out.LastError,
-		"OrginData":    string(res.Value),
-	}).Debug("Store: get jobstatus from kv store")
-	return out, nil
+	return res.LastIndex, nil
 }
 
-// SetJobStatus set job status to kv store
-// safely set jobstatus need lock it with RW locker first
-func (k *KVStore) SetJobStatus(status *pb.JobStatus) (*pb.JobStatus, error) {
+// Set obj to kv store, if lastIndex and previousObj is not nil, it will use atomicPut
+func (k *KVStore) Set(currentObj interface{}, lastIndex uint64, previousObj interface{}) error {
 
-	e, err := util.PbToJSON(status)
+	e, err := util.PbToJSON(currentObj)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	log.FmdLoger.WithFields(logrus.Fields{
-		"Name":         status.Name,
-		"Region":       status.Region,
-		"SuccessCount": status.SuccessCount,
-		"ErrorCount":   status.ErrorCount,
-		"LastSuccess":  status.LastSuccess,
-		"LastError":    status.LastError,
-		"OriginData":   string(e),
-	}).Debug("Store: save job status to kv store")
-
-	if err = k.client.Put(k.buildKey(status), e, nil); err != nil {
-		return nil, err
+	key := k.buildKey(currentObj)
+	if lastIndex != 0 && previousObj != nil {
+		pe, err := util.PbToJSON(previousObj)
+		if err != nil {
+			return nil
+		}
+		pkp := &libstore.KVPair{
+			Key:       key,
+			Value:     pe,
+			LastIndex: lastIndex,
+		}
+		ok, _, err := k.client.AtomicPut(key, e, pkp, nil)
+		if !ok {
+			if err == libstore.ErrKeyExists {
+				return errors.ErrNotExist
+			}
+			if err == libstore.ErrKeyModified {
+				return errors.ErrKeyModified
+			}
+			return err
+		}
+	} else {
+		return k.client.Put(key, e, nil)
 	}
-	return status, nil
+	return nil
 }
 
 // MemStore used to cache job in local memory

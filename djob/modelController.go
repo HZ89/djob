@@ -19,15 +19,15 @@
 package djob
 
 import (
+	"sync"
 	"time"
-
-	"github.com/Sirupsen/logrus"
 
 	"github.com/HZ89/djob/errors"
 	"github.com/HZ89/djob/log"
 	pb "github.com/HZ89/djob/message"
 	"github.com/HZ89/djob/store"
 	"github.com/HZ89/djob/util"
+	"github.com/Sirupsen/logrus"
 )
 
 // TODO: CRUD need cache
@@ -122,14 +122,11 @@ func (a *Agent) handleJobStatusOps(status *pb.JobStatus, ops pb.Ops) (out []inte
 		"status": status,
 		"ops":    ops,
 	}).Debug("Agent: ops job status")
-	var res *pb.JobStatus
 	switch {
-	case ops == pb.Ops_MODIFY || ops == pb.Ops_ADD:
-		res, err = a.store.SetJobStatus(status)
 	case ops == pb.Ops_READ:
-		res, err = a.store.GetJobStatus(status)
+		_, err = a.store.Get(status)
 	case ops == pb.Ops_DELETE:
-		res, err = a.store.DeleteJobStatus(status)
+		err = a.store.Delete(status)
 	}
 	if err != nil {
 		log.FmdLoger.WithFields(logrus.Fields{
@@ -138,7 +135,7 @@ func (a *Agent) handleJobStatusOps(status *pb.JobStatus, ops pb.Ops) (out []inte
 		}).WithError(err).Debug("Agent: ops job status failed")
 		return
 	}
-	out = append(out, res)
+	out = append(out, status)
 	return
 }
 
@@ -195,6 +192,63 @@ func (a *Agent) handleExecutionOps(ex *pb.Execution, ops pb.Ops, search *pb.Sear
 		}
 		out := make([]interface{}, 1)
 		out[0] = ex
+
+		// set JobStatus counter
+		var mux = sync.Mutex{}
+		{
+			mux.Lock()
+			defer mux.Unlock()
+
+			var pStatus = pb.JobStatus{Name: ex.Name, Region: ex.Region}
+
+			var tryTimes int
+			lockType := &store.LockOption{
+				Global:   false,
+				LockType: store.RW,
+			}
+		TRYLOCK:
+			err := a.lockerChain.AddLocker(pStatus, lockType)
+			if err != nil {
+				if tryTimes < 3 {
+					log.FmdLoger.WithField("TryLockTiems", tryTimes).WithError(err).Debug("Agent: Modify JobStatus, try lock")
+					tryTimes++
+					goto TRYLOCK
+				}
+				return nil, 0, err
+			}
+			defer a.lockerChain.ReleaseLocker(pStatus, false, store.RW)
+
+			pIndex, err := a.store.Get(&pStatus)
+			if err != nil && err != errors.ErrNotExist {
+				return nil, 0, err
+			}
+			cStatus := pb.JobStatus{
+				Name:         pStatus.Name,
+				Region:       pStatus.Region,
+				LastError:    pStatus.LastError,
+				SuccessCount: pStatus.SuccessCount,
+				LastSuccess:  pStatus.LastSuccess,
+				ErrorCount:   pStatus.ErrorCount,
+			}
+			cStatus.LastHandleAgent = ex.RunNodeName
+			if ex.Succeed {
+				cStatus.SuccessCount += 1
+				cStatus.LastSuccess = time.Unix(0, ex.FinishTime).String()
+			} else {
+				cStatus.ErrorCount += 1
+				cStatus.LastError = time.Unix(0, ex.FinishTime).String()
+			}
+			if err == errors.ErrNotExist {
+				if err = a.store.Set(&cStatus, 0, nil); err != nil {
+					return out, count, err
+				}
+			} else {
+				if err = a.store.Set(&cStatus, pIndex, &pStatus); err != nil {
+					return out, count, err
+				}
+			}
+		}
+
 		return out, count, nil
 	}
 	return nil, 0, errors.ErrUnknownOps
@@ -233,30 +287,34 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 
 		job.SchedulerNodeName = a.config.Nodename
 
-		var oldJob pb.Job
-		if err = a.sqlStore.Model(&pb.Job{}).Where(&pb.Job{Name: job.Name, Region: job.Region}).Find(&oldJob).Err; err != nil && err != errors.ErrNotExist {
+		log.FmdLoger.WithField("job", job).Debug("Agent: ready to save job to SQL")
+		if err = a.sqlStore.Create(job).Err; err != nil {
 			return nil, count, err
 		}
 
-		if oldJob.Name == "" && oldJob.Region == "" {
-			log.FmdLoger.WithField("job", job).Debug("Agent: ready to save job to SQL")
-			if err = a.sqlStore.Create(job).Err; err != nil {
-				return nil, count, err
-			}
-		} else {
-			return nil, count, errors.ErrRepetition
+		// set own locker on the job
+		lockType := &store.LockOption{
+			Global:   true,
+			LockType: store.OWN,
+		}
+		if err = a.lockerChain.AddLocker(job, lockType); err != nil {
+			a.sqlStore.Delete(job)
+			return nil, count, err
 		}
 
-		// set own locker on the job
-		if err = a.lockerChain.AddLocker(job, store.OWN); err != nil {
+		// initialize a jobStatus to kv store
+		status := pb.JobStatus{Name: job.Name, Region: job.Region}
+		if err = a.store.Set(&status, 0, nil); err != nil {
 			a.sqlStore.Delete(job)
+			a.lockerChain.ReleaseLocker(job, true, store.OWN)
 			return nil, count, err
 		}
 
 		log.FmdLoger.WithField("job", job).Debug("Agent: add job to scheduler")
 		if err = a.scheduler.AddJob(job); err != nil {
 			a.sqlStore.Delete(job)
-			a.lockerChain.ReleaseLocker(job, store.OWN)
+			a.lockerChain.ReleaseLocker(job, true, store.OWN)
+			a.store.Delete(&status)
 			return nil, count, err
 		}
 
@@ -307,10 +365,10 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		if err = a.sqlStore.Delete(job).Err; err != nil {
 			return nil, count, err
 		}
-		if _, err = a.store.DeleteJobStatus(&pb.JobStatus{Name: job.Name, Region: job.Region}); err != nil {
+		if err = a.store.Delete(&pb.JobStatus{Name: job.Name, Region: job.Region}); err != nil {
 			return nil, count, err
 		}
-		a.lockerChain.ReleaseLocker(job, store.OWN)
+		a.lockerChain.ReleaseLocker(job, true, store.OWN)
 		out := make([]interface{}, 1)
 		out[0] = job
 		return out, count, err

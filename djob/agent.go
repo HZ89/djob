@@ -330,7 +330,12 @@ func (a *Agent) takeOverJob() {
 				log.FmdLoger.Debugf("Agent: watch got a job: %s", jobName)
 				job := &pb.Job{Name: jobName, Region: a.config.Region}
 				// try to lock this job
-				err = a.lockerChain.AddLocker(job, store.OWN)
+				lockType := &store.LockOption{
+					Global:   true,
+					LockType: store.OWN,
+					TimeOut:  2 * time.Second,
+				}
+				err = a.lockerChain.AddLocker(job, lockType)
 				if err == errors.ErrLockTimeout || err == errors.ErrRepetition {
 					continue
 				}
@@ -342,7 +347,8 @@ func (a *Agent) takeOverJob() {
 				}
 				res, _, err := a.operationMiddleLayer(job, pb.Ops_READ, nil)
 				if err != nil || len(res) == 0 {
-					log.FmdLoger.WithField("jobName", job.Name).WithError(err).Fatal("Agent: takeOver, read job filed")
+					log.FmdLoger.WithField("jobName", job.Name).WithError(err).Warn("Agent: takeOver, read job filed")
+					continue
 				}
 				job = res[0].(*pb.Job)
 
@@ -422,7 +428,11 @@ func (a *Agent) loadJobs(region string) {
 				load = false
 			}
 			if load {
-				if err := a.lockerChain.AddLocker(t, store.OWN); err != nil {
+				lockType := &store.LockOption{
+					Global:   true,
+					LockType: store.OWN,
+				}
+				if err := a.lockerChain.AddLocker(t, lockType); err != nil {
 					log.FmdLoger.WithError(err).Fatal("Agent: load job failed")
 				}
 				if err := a.scheduler.AddJob(t); err != nil {

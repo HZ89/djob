@@ -54,8 +54,6 @@ func main() {
 				Ui:      ui,
 			}, nil
 		},
-		// use to
-		//
 		"generate": func() (cli.Command, error) {
 			return &cmd.KeygenCmd{
 				Ui: ui,
