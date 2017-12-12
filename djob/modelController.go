@@ -19,7 +19,6 @@
 package djob
 
 import (
-	"sync"
 	"time"
 
 	"github.com/HZ89/djob/errors"
@@ -194,11 +193,10 @@ func (a *Agent) handleExecutionOps(ex *pb.Execution, ops pb.Ops, search *pb.Sear
 		out[0] = ex
 
 		// set JobStatus counter
-		var mux sync.Mutex
-		{
-			mux.Lock()
-			defer mux.Unlock()
 
+		{
+			a.mu.Lock()
+			defer a.mu.Unlock()
 			var pStatus = pb.JobStatus{Name: ex.Name, Region: ex.Region}
 
 			var tryTimes int

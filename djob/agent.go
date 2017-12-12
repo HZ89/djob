@@ -74,6 +74,7 @@ type Agent struct {
 	mainVersion string
 	runJobCh    chan *pb.Job    // scheduler push the job ready to run into this chan
 	sqlStore    *store.SQLStore // sql store, use to persistent save job and execution obj
+	mu          sync.Mutex      // mutex lock
 }
 
 // prepare serf config
