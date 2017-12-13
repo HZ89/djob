@@ -1,5 +1,5 @@
-hash: 1c28175d458b14911161d195440dfb7baf4e9a914d3449852e174bd421d15a8c
-updated: 2017-11-22T11:03:02.990377746+08:00
+hash: befd41ab2f698c312ba90c04b47549e8feeb4931b3ed84696eae99632a58a0f5
+updated: 2017-12-12T21:16:58.433753662+08:00
 imports:
 - name: github.com/armon/circbuf
   version: bbbad097214e2918d8543d5201d12bfd7bca254d
@@ -25,6 +25,8 @@ imports:
   version: 2de1f203e7d5e386a6833233882782932729f27e
 - name: github.com/facebookgo/pidfile
   version: f242e2999868dcd267a2b86e49ce1f9cf9e15b16
+- name: github.com/fatih/structs
+  version: a720dfa8df582c51dee1b36feabb906bde1588bd
 - name: github.com/fsnotify/fsnotify
   version: 4da3e2cfbabc9f751898f250b49f2439785783a1
 - name: github.com/gin-contrib/gzip
@@ -162,7 +164,7 @@ imports:
 - name: github.com/sean-/seed
   version: e2103e2c35297fb7e17febb81e49b312087a2372
 - name: github.com/Sirupsen/logrus
-  version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
+  version: d682213848ed68c0a260ca37d6dd5ace8423f5ba
 - name: github.com/spf13/afero
   version: 5660eeed305fe5f69c8fc6cf899132a459a97064
   subpackages:
@@ -210,7 +212,7 @@ imports:
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
-  version: 5a9f7b402fe85096d2e1d0383435ee1876e863d0
+  version: be077907e29fdb945d351e4284eb5361e7f8924e
   subpackages:
   - balancer
   - balancer/roundrobin

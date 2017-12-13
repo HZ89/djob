@@ -342,11 +342,16 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 		if err = a.sqlStore.Model(&pb.Job{}).Where(&pb.Job{Name: job.Name, Region: job.Region}).Find(&oldJob).Err; err != nil {
 			return nil, count, err
 		}
-
 		if err = a.sqlStore.Model(&pb.Job{}).Modify(job).Err; err != nil {
 			return nil, count, err
 		}
-		a.scheduler.AddJob(job)
+		if err = a.scheduler.AddJob(job); err != nil {
+			log.FmdLoger.WithError(err).Fatal("Agent: save job into scheduler failed")
+		}
+		ttl, _ := util.GetTimeInterval(job.Schedule)
+		if err = a.memStore.Set(job.Region+"/"+job.Name, job, ttl*2); err != nil {
+			log.FmdLoger.WithError(err).Fatal("Agent: set memory cache failed")
+		}
 		out := make([]interface{}, 1)
 		out[0] = job
 		return out, count, err
@@ -367,6 +372,9 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 			return nil, count, err
 		}
 		a.lockerChain.ReleaseLocker(job, true, store.OWN)
+		if err = a.memStore.Delete(job.Region + "/" + job.Name); err != nil {
+			log.FmdLoger.WithError(err).Fatal("Agent delete memory cache failed")
+		}
 		out := make([]interface{}, 1)
 		out[0] = job
 		return out, count, err
@@ -400,9 +408,25 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 				return nil, count, err
 			}
 		} else {
-			err = a.sqlStore.Model(&pb.Job{}).Where(job).Find(&rows).Err
-			if err != nil {
-				return nil, count, err
+			var cjob pb.Job
+			// if job have region and name look cache first
+			if job.Name != "" && job.Region != "" {
+				err = a.memStore.Get(job.Region+"/"+job.Name, &cjob)
+				if err != nil && err != errors.ErrNotExist {
+					return nil, count, err
+				}
+				// hit cache
+				if err == nil {
+					log.FmdLoger.WithField("job", cjob).Debug("Agent: get job from cache")
+					rows = append(rows, &cjob)
+				}
+			}
+			// if miss cache, search in database
+			if len(rows) == 0 {
+				err = a.sqlStore.Model(&pb.Job{}).Where(job).Find(&rows).Err
+				if err != nil {
+					return nil, count, err
+				}
 			}
 		}
 
@@ -416,6 +440,11 @@ func (a *Agent) handleJobOps(job *pb.Job, ops pb.Ops, search *pb.Search) ([]inte
 				}
 				row.ParentJob = &pjob
 				row.ParentJobName = ""
+			}
+			// set data cache into memory cache with double schedule time interval as cache ttl
+			ttl, _ := util.GetTimeInterval(row.Schedule)
+			if err = a.memStore.Set(row.Region+"/"+row.Name, row, ttl*2); err != nil {
+				log.FmdLoger.WithError(err).Fatal("Agent: set memory cache failed")
 			}
 			out[i] = row
 		}

@@ -55,3 +55,5 @@ import:
   - credentials
 - package: github.com/facebookgo/pidfile
 - package: github.com/facebookgo/atomicfile
+- package: github.com/fatih/structs
+  version: ~1.0.0

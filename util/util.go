@@ -29,6 +29,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/HZ89/djob/errors"
@@ -298,6 +299,22 @@ func VerifyJob(job *pb.Job) error {
 	}
 
 	return nil
+}
+
+func GetTimeInterval(spec string) (duration time.Duration, err error) {
+	analyzer, err := scheduler.Prepare(spec)
+	if err != nil {
+		return 0, err
+	}
+	now := time.Now()
+	t1 := analyzer.Next(now)
+	t2 := analyzer.Next(t1)
+	if t2.IsZero() {
+		duration = t1.Sub(now)
+	} else {
+		duration = t2.Sub(t1)
+	}
+	return
 }
 
 func GenerateSlug(str string) (slug string) {
