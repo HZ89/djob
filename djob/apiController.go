@@ -65,7 +65,7 @@ func (a *Agent) ListNode(node *pb.Node, search *pb.Search) (nodes []*pb.Node, co
 	}
 
 	for _, m := range members {
-		n := &pb.Node{Name: m.Name, Region: m.Tags["REGION"], Version: a.version}
+		n := &pb.Node{Name: m.Name, Region: m.Tags["REGION"], Version: m.Tags["VERSION"]}
 		n.Tags = make(map[string]string)
 		for k, v := range m.Tags {
 			var found bool
@@ -157,7 +157,7 @@ func (a *Agent) ListRegions() (regions []string, err error) {
 	regionList := make(map[string]bool)
 	for _, m := range a.serf.Members() {
 		if m.Status == serf.StatusAlive {
-			regionList[m.Tags["region"]] = true
+			regionList[m.Tags["REGION"]] = true
 		}
 
 	}
@@ -246,7 +246,7 @@ func (a *Agent) ListJob(in *pb.Job, search *pb.Search) (jobs []*pb.Job, count in
 			// reading data across regions does not support paging
 			res, _, err := a.ListJob(tj, nil)
 			if err != nil {
-				log.FmdLoger.WithField("region", r).Error("Agent: list job in this region failed")
+				log.FmdLoger.WithField("REGION", r).Error("Agent: list job in this region failed")
 				return nil, 0, err
 			}
 			jobs = append(jobs, res...)
@@ -301,7 +301,7 @@ func (a *Agent) ListExecutions(in *pb.Execution, search *pb.Search) (out []*pb.E
 			// reading data across regions does not support paging
 			res, _, err := a.ListExecutions(te, nil)
 			if err != nil {
-				log.FmdLoger.WithField("region", r).Error("Agent: list job in this region failed")
+				log.FmdLoger.WithField("REGION", r).Error("Agent: list job in this region failed")
 				return nil, 0, err
 			}
 			out = append(out, res...)

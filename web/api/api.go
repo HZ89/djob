@@ -298,6 +298,9 @@ func (a *APIServer) listJobs(c *gin.Context) {
 			PageNum:  jqs.Pageing.PageNum,
 		}
 	}
+	if jqs.Job == nil {
+		jqs.Job = new(pb.Job)
+	}
 
 	a.jobCRUD(jqs.Job, pb.Ops_READ, s, c)
 }

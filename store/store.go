@@ -34,6 +34,7 @@ import (
 	"github.com/HZ89/libkv/store/etcd"
 	"github.com/HZ89/libkv/store/zookeeper"
 	"github.com/Sirupsen/logrus"
+	"github.com/fatih/structs"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 
@@ -108,31 +109,6 @@ func NewLockerChain(owner string, store *KVStore) *LockerChain {
 // release all lock and stop renew process
 func (l *LockerChain) Stop() {
 	l.ReleaseAll()
-}
-
-// traverse the chain to find out about the expired lock, renew it
-func (l *LockerChain) renew() {
-	now := time.Now()
-	l.chain.Range(func(key, value interface{}) bool {
-		t, ok := value.(*objKey)
-		if !ok {
-			return false
-		}
-		// remove expired lock
-		// TODO: Need to throw out the key expired
-		if now.After(t.bornTime.Add(lockTTL * time.Second)) {
-			log.FmdLoger.Warningf("Store-Lock: remove a expired key: %s", key)
-			l.chain.Delete(key)
-			return true
-		}
-		// if the remaining ttl less than lockTTL * 0.8, renew it
-		if now.Sub(t.bornTime) < lockTTL*0.8*time.Second {
-			t.renewCh <- struct{}{}
-			t.bornTime = now
-			log.FmdLoger.Debugf("Store-Lock: has renew a lock: %s", key)
-		}
-		return true
-	})
 }
 
 // HaveIt, return true if find the obj's Locker in LockerChain
@@ -473,6 +449,10 @@ type entry struct {
 	Data     []byte    // user save data
 }
 
+func (m *MemStore) Delete(key string) error {
+	return m.memBuf.Delete(Key(key))
+}
+
 func (m *MemStore) Set(key string, in interface{}, ttl time.Duration) (err error) {
 	var value []byte
 	e := &entry{}
@@ -555,14 +535,6 @@ func (m *MemStore) releaseOverdueKey() {
 		e, err = m.getEntry(key)
 		if err != nil && err != errors.ErrNotExist {
 			log.FmdLoger.WithError(err).Fatalf("Store: memBuf Seek get key filed: key: %s, value: %v", string(key), e)
-		}
-
-		if e != nil {
-			log.FmdLoger.WithFields(logrus.Fields{
-				"key":       string(key),
-				"deadTime":  e.DeadTime.String(),
-				"isOverdue": m.isOverdue(e, now),
-			}).Debug("Store: seek a key")
 		}
 		// clear
 		if e != nil && m.isOverdue(e, now) {
@@ -775,8 +747,9 @@ func (s *SQLStore) Modify(obj interface{}) *SQLStore {
 		n.Err = err
 		return n
 	}
-
-	n.Err = n.db.Model(obj).Updates(obj).Error
+	// gorm only update non blank value in struct fields, so use a map to update.
+	m := structs.Map(obj)
+	n.Err = n.db.Model(obj).Updates(m).Error
 	return n
 }
 
