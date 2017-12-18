@@ -54,25 +54,49 @@ func (a *Agent) SendBackExecution(ex *pb.Execution) (err error) {
 	return nil
 }
 
-// GetJob func use name and region search a job
-func (a *Agent) GetJob(name, region string) (*pb.Job, error) {
-	out, _, err := a.operationMiddleLayer(&pb.Job{Name: name, Region: region}, pb.Ops_READ, nil)
+// GetJobAndToken get job data and issue a token
+func (a *Agent) GetJobAndToken(token *pb.RequestJobAndToken) (*pb.ResponseJobAndToken, error) {
+	out, _, err := a.operationMiddleLayer(&pb.Job{Name: token.JobName, Region: token.JobRegion}, pb.Ops_READ, nil)
 	if err != nil {
 		return nil, err
 	}
 	if len(out) == 0 {
 		log.FmdLoger.WithFields(logrus.Fields{
-			"Name":   name,
-			"Region": region,
+			"Name":   token.JobName,
+			"Region": token.JobRegion,
 		}).Warn("RPC: GetJob the return nothing")
 		return nil, errors.ErrNotExist
 	}
-	if len(out) != 1 {
-		log.FmdLoger.WithFields(logrus.Fields{
-			"Name":   name,
-			"Region": region,
-		}).Warn("RPC: GetJob return job object is not unique")
+
+	job := out[0].(*pb.Job)
+
+	// confer a token
+	confer := func(obj interface{}) error {
+		status, ok := obj.(*pb.JobStatus)
+		if !ok {
+			return errors.ErrType
+		}
+		c, exist := status.RunningStatus[token.ExecutionGroup]
+		if !exist {
+			status.RunningStatus[token.ExecutionGroup] = &pb.RunningStatus{LeftToken: job.Concurrency}
+		}
+		if c.LeftToken > 1 {
+			c.LeftToken -= 1
+			c.RunningNode = append(c.RunningNode, token.NodeName)
+			status.RunningStatus[token.ExecutionGroup] = c
+			return errors.ErrNil
+		}
+
+		return errors.ErrNoMoreToken
 	}
+
+	for err != errors.ErrNil {
+		err = a.store.AtomicSet(&pb.JobStatus{Name: token.JobName, Region: token.JobRegion}, confer)
+		if err != errors.ErrNoMoreToken {
+			log.FmdLoger.WithError(err).Fatal("Agent: confer token error")
+		}
+	}
+
 	if t, ok := out[0].(*pb.Job); ok {
 		return t, nil
 	}

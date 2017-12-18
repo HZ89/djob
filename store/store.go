@@ -312,10 +312,10 @@ func (k *KVStore) Set(currentObj interface{}, lastIndex uint64, previousObj inte
 	return nil
 }
 
-// AtomicOps picks a goroutine order of execution f
+// AtomicSet picks a goroutine order of execution f
 // for a key operation assigned to a fixed goroutine operation to avoid
 // generating concurrent operations on the kv backend
-func (k *KVStore) AtomicOps(targetObj interface{}, f func(value interface{}) error) error {
+func (k *KVStore) AtomicSet(targetObj interface{}, f func(value interface{}) error) error {
 
 	key := k.buildKey(targetObj)
 	// pick goroutine

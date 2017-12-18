@@ -22,17 +22,13 @@ import "google/protobuf/any.proto";
 
 package message;
 service job {
-    rpc GetJob (Job) returns (Job) {
+    rpc GetJobAndToken (RequestJobAndToken) returns (ResponseJobAndToken) {
     }
-    rpc ExecDone (Execution) returns (google.protobuf.Empty) {
+    rpc SendBackExecutionAndToken (Execution) returns (google.protobuf.Empty) {
     }
     rpc DoOps (Params) returns (Result) {
     }
     rpc ProxyJobRun (Job) returns (Execution) {
-    }
-    rpc AcquireToken (TokenReqMessage) returns (TokenRespMessage) {
-    }
-    rpc RecedeToken (TokenReqMessage) returns (TokenRespMessage) {
     }
 }
 
@@ -43,15 +39,17 @@ enum Ops {
     DELETE = 3;
 }
 
-message TokenReqMessage {
+message RequestJobAndToken {
     string NodeName = 1;
     string JobName = 2;
     string JobRegion = 3;
+    int64 ExecutionGroup = 4;
 }
 
-message TokenRespMessage {
+message ResponseJobAndToken {
     bool Succeed = 1;
-    int64 duration = 2;
+    int64 Duration = 2;
+    Job Job = 3;
 }
 
 message Search {
@@ -113,6 +111,12 @@ message JobStatus {
     string LastHandleAgent = 5; // The agent node name which exec the job last time
     string LastSuccess = 6; // Last time this jon executed successful in rfc 3339
     string LastError = 7; // Last time this job failed
+    map<int64, RunningStatus> RunningStatus = 8; // map key is execution.Group, value is RunningStatus in this group
+}
+
+message RunningStatus {
+    int32 LeftToken = 1; // Max value of token is job.Concurrency, when an agent in running it minus 1
+    repeated string RunningNode = 2; // a list of node name which this job is in running.
 }
 
 message Execution {

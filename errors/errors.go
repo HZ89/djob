@@ -64,6 +64,7 @@ var (
 	ErrNodeNoRPC             = New(95234, "found node have no completed rpc config")
 	ErrBlankTimeFormat       = New(95235, "Blank time format")
 	ErrKeyModified           = New(95236, "key modify failed")
+	ErrNoMoreToken           = New(95237, "no more token left")
 )
 
 // Error custom error type

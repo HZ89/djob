@@ -48,7 +48,7 @@ func init() {
 
 type Operator interface {
 	// use to client get job
-	GetJob(name, region string) (*pb.Job, error)
+	GetJobAndToken(token *pb.RequestJobAndToken) (*pb.ResponseJobAndToken, error)
 	// client send execution to server
 	SendBackExecution(execution *pb.Execution) error
 	// forwarding CRUD operation between servers
@@ -82,17 +82,7 @@ func NewRPCServer(bindIp string, port int, operator Operator, tlsopt *TlsOpt) *R
 	}
 }
 
-// AcquireToken issue token to agent, if have no token left, give agent a wait time duration
-func (s *RpcServer) AcquireToken(ctx context.Context, req *pb.TokenReqMessage) (*pb.TokenRespMessage, error) {
-
-}
-
-// RecedeToken agent recede a token
-func (s *RpcServer) RecedeToken(ctx context.Context, req *pb.TokenReqMessage) (*pb.TokenRespMessage, error) {
-
-}
-
-// forwarding run job action
+// ProxyJobRun forwarding run job action
 func (s *RpcServer) ProxyJobRun(ctx context.Context, in *pb.Job) (*pb.Execution, error) {
 	exec, err := s.operator.RunJob(in.Name, in.Region)
 	if err != nil {
@@ -101,17 +91,17 @@ func (s *RpcServer) ProxyJobRun(ctx context.Context, in *pb.Job) (*pb.Execution,
 	return exec, nil
 }
 
-// get job info send to client
-func (s *RpcServer) GetJob(ctx context.Context, job *pb.Job) (*pb.Job, error) {
-	job, err := s.operator.GetJob(job.Name, job.Region)
+// GetJobAndToken acquire job data and token to client
+func (s *RpcServer) GetJobAndToken(ctx context.Context, req *pb.RequestJobAndToken) (*pb.ResponseJobAndToken, error) {
+	resp, err := s.operator.GetJobAndToken(req)
 	if err != nil {
 		return nil, errors.GenGRPCErr(err)
 	}
-	return job, nil
+	return resp, nil
 }
 
 // receive the execution result
-func (s *RpcServer) ExecDone(ctx context.Context, execution *pb.Execution) (*google_protobuf.Empty, error) {
+func (s *RpcServer) SendBackExecutionAndToken(ctx context.Context, execution *pb.Execution) (*google_protobuf.Empty, error) {
 	if err := s.operator.SendBackExecution(execution); err != nil {
 		return nil, errors.GenGRPCErr(err)
 	}
@@ -264,6 +254,7 @@ func (c *RpcClient) Shutdown() error {
 }
 
 func (c *RpcClient) ProxyJobRun(name, region string) (*pb.Execution, error) {
+
 	exec, err := c.client.ProxyJobRun(context.Background(), &pb.Job{Name: name, Region: region})
 	if err != nil {
 		if terr, ok := errors.NewFromGRPCErr(err); ok {
@@ -275,9 +266,11 @@ func (c *RpcClient) ProxyJobRun(name, region string) (*pb.Execution, error) {
 	return exec, nil
 }
 
-func (c *RpcClient) GetJob(name, region string) (*pb.Job, error) {
-	p := pb.Job{Name: name, Region: region}
-	job, err := c.client.GetJob(context.Background(), &p)
+// GetJobAndToken make a rpc call to server, get job details and apply a token. it will block until token is available
+func (c *RpcClient) GetJobAndToken(token *pb.RequestJobAndToken) (*pb.Job, error) {
+
+	p := pb.Job{Name: token.JobName, Region: token.JobRegion}
+	job, err := c.client.GetJobAndToken(context.Background(), &p)
 	if err != nil {
 		if terr, ok := errors.NewFromGRPCErr(err); ok {
 			return nil, terr
@@ -289,8 +282,10 @@ func (c *RpcClient) GetJob(name, region string) (*pb.Job, error) {
 	return job, nil
 }
 
+// ExecDone make a rpc call, send back execution and give back token
 func (c *RpcClient) ExecDone(execution *pb.Execution) error {
-	_, err := c.client.ExecDone(context.Background(), execution)
+
+	_, err := c.client.SendBackExecutionAndToken(context.Background(), execution)
 	if err != nil {
 		if terr, ok := errors.NewFromGRPCErr(err); ok {
 			return terr
@@ -302,6 +297,7 @@ func (c *RpcClient) ExecDone(execution *pb.Execution) error {
 }
 
 func (c *RpcClient) DoOps(obj interface{}, ops pb.Ops, search *pb.Search) (instances []interface{}, count int32, err error) {
+
 	pbObj, err := ptypes.MarshalAny(obj.(proto.Message))
 	if err != nil {
 		return nil, 0, err

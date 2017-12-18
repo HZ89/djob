@@ -6,8 +6,8 @@ Package message is a generated protocol buffer package.
 
 It is generated from these files:
 	message/api.proto
-	message/job.proto
 	message/serfQueryParams.proto
+	message/job.proto
 
 It has these top-level messages:
 	ApiJobResponse
@@ -22,20 +22,21 @@ It has these top-level messages:
 	ApiExecutionQueryString
 	ApiSearchQueryString
 	ApiNodeQueryString
-	TokenReqMessage
-	TokenRespMessage
-	Search
-	Params
-	Result
-	Job
-	JobStatus
-	Execution
-	Node
 	JobQueryParams
 	GetRPCConfigResp
 	JobCountResp
 	QueryResult
 	QueryJobRunParams
+	RequestJobAndToken
+	ResponseJobAndToken
+	Search
+	Params
+	Result
+	Job
+	JobStatus
+	RunningStatus
+	Execution
+	Node
 */
 package message
 
